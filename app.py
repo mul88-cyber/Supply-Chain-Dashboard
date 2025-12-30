@@ -190,12 +190,14 @@ st.markdown("""
 def init_gsheet_connection():
     """Initialize Google Sheets connection"""
     try:
+        # PENTING: Pastikan st.secrets["gcp_service_account"] sudah di-set di Streamlit Cloud
         skey = st.secrets["gcp_service_account"]
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         credentials = Credentials.from_service_account_info(skey, scopes=scopes)
         return gspread.authorize(credentials)
     except Exception as e:
         st.error(f"❌ Connection Failed: {str(e)}")
+        st.info("💡 Tip: Pastikan kamu sudah copy-paste JSON Service Account ke bagian 'Secrets' di dashboard deployment Streamlit.")
         return None
 
 def parse_month_label(label):
@@ -330,7 +332,7 @@ class SupplyChainDataEngine:
         
         # Convert numeric columns
         numeric_cols = ['Min_Stock_Level_Month', 'Max_Stock_Level_Month', 
-                       'Unit_Price', 'Sales_Price_HET', 'Lead_Time_Days']
+                        'Unit_Price', 'Sales_Price_HET', 'Lead_Time_Days']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -344,7 +346,7 @@ class SupplyChainDataEngine:
             df = pd.DataFrame(ws.get_all_records())
             # Clean column names - handle spaces and special characters
             df.columns = [c.strip().replace(' ', '_').replace('%', 'Percent').replace('(', '').replace(')', '') 
-                         for c in df.columns]
+                          for c in df.columns]
             return df
         except Exception as e:
             st.warning(f"⚠️ Sheet '{sheet_name}' not found or empty: {str(e)}")
@@ -471,8 +473,8 @@ class SupplyChainAnalytics:
         
         # Merge with product data
         product_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Category', 
-                       'Unit_Price', 'Sales_Price_HET', 'Min_Stock_Level_Month', 
-                       'Max_Stock_Level_Month', 'Lead_Time_Days', 'ABC_Classification']
+                        'Unit_Price', 'Sales_Price_HET', 'Min_Stock_Level_Month', 
+                        'Max_Stock_Level_Month', 'Lead_Time_Days', 'ABC_Classification']
         product_cols = [col for col in product_cols if col in self.data['product'].columns]
         
         inv_df = pd.merge(
@@ -803,7 +805,6 @@ def main():
         client = init_gsheet_connection()
     
     if not client:
-        st.error("Failed to connect to data source. Please check credentials.")
         st.stop()
     
     # Load data
@@ -1062,11 +1063,11 @@ def main():
                 if 'Min_Stock_Level_Month' in inv_metrics.columns:
                     avg_min = inv_metrics['Min_Stock_Level_Month'].mean()
                     fig_cover.add_vline(x=avg_min, line_dash="dash", line_color="red", 
-                                       annotation_text=f"Avg Min: {avg_min:.1f}m")
+                                        annotation_text=f"Avg Min: {avg_min:.1f}m")
                 if 'Max_Stock_Level_Month' in inv_metrics.columns:
                     avg_max = inv_metrics['Max_Stock_Level_Month'].mean()
                     fig_cover.add_vline(x=avg_max, line_dash="dash", line_color="orange", 
-                                       annotation_text=f"Avg Max: {avg_max:.1f}m")
+                                        annotation_text=f"Avg Max: {avg_max:.1f}m")
                 fig_cover.update_layout(height=400)
                 st.plotly_chart(fig_cover, use_container_width=True)
             
@@ -1342,7 +1343,7 @@ def main():
                     labels={'Accuracy_%': 'Accuracy (%)', 'Month': 'Month'}
                 )
                 fig_accuracy.add_hline(y=80, line_dash="dash", line_color="red", 
-                                      annotation_text="Target: 80%")
+                                       annotation_text="Target: 80%")
                 fig_accuracy.update_layout(height=400)
                 st.plotly_chart(fig_accuracy, use_container_width=True)
         
