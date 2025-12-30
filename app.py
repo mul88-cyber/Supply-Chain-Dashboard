@@ -10,8 +10,6 @@ import warnings
 import io
 from typing import Dict, List, Optional, Tuple, Any
 import json
-from scipy import stats
-import calendar
 warnings.filterwarnings('ignore')
 
 # --- Konfigurasi Halaman ---
@@ -236,7 +234,6 @@ def parse_month_label(label):
         except:
             return datetime.now()
     except Exception as e:
-        st.warning(f"Warning parsing date '{label}': {str(e)}")
         return datetime.now()
 
 class SupplyChainDataEngine:
@@ -247,29 +244,46 @@ class SupplyChainDataEngine:
         self.gsheet_url = "https://docs.google.com/spreadsheets/d/1gek6SPgJcZzhOjN-eNOZbfCvmX2EKiHKbgk3c0gUxL4"
         
     def load_all_data(self):
-        """Load all supply chain data"""
+        """Load all supply chain data - ONLY ACTIVE SKUS"""
         data = {}
         
         try:
             # Open the spreadsheet
             spreadsheet = self.client.open_by_url(self.gsheet_url)
             
-            # 1. Product Master
+            # 1. Product Master - Filter hanya ACTIVE
             data['product'] = self._load_sheet(spreadsheet, "Product_Master")
             if not data['product'].empty:
                 data['product']['SKU_ID'] = data['product']['SKU_ID'].astype(str).str.strip()
-                # Clean column names for Min/Max Stock Level
+                # Filter hanya SKU dengan Status = 'Active'
+                data['product'] = data['product'][data['product']['Status'].str.upper() == 'ACTIVE']
+                
+                # Get active SKU IDs
+                data['active_skus'] = data['product']['SKU_ID'].tolist()
+                
+                # Clean product columns
                 data['product'] = self._clean_product_columns(data['product'])
             
-            # 2. Sales Data
-            data['sales'] = self._process_sales_data(spreadsheet, "Sales")
+            # 2. Sales Data - Filter hanya active SKUs
+            if 'active_skus' in data and data['active_skus']:
+                data['sales'] = self._process_sales_data(spreadsheet, "Sales", data['active_skus'])
+            else:
+                data['sales'] = pd.DataFrame()
             
-            # 3. Forecast Data (Rofo)
-            data['forecast'] = self._process_monthly_data(spreadsheet, "Rofo", "Forecast_Qty")
+            # 3. Forecast Data (Rofo) - Filter hanya active SKUs
+            if 'active_skus' in data and data['active_skus']:
+                data['forecast'] = self._process_monthly_data(spreadsheet, "Rofo", "Forecast_Qty", data['active_skus'])
+            else:
+                data['forecast'] = pd.DataFrame()
             
-            # 4. PO Data
+            # 4. PO Data - Filter hanya active SKUs
             data['po'] = self._load_sheet(spreadsheet, "PO")
             if not data['po'].empty:
+                data['po']['SKU_ID'] = data['po']['SKU_ID'].astype(str).str.strip()
+                # Filter hanya active SKUs
+                if 'active_skus' in data and data['active_skus']:
+                    data['po'] = data['po'][data['po']['SKU_ID'].isin(data['active_skus'])]
+                
                 # Convert date columns
                 date_cols = ['Order_Date', 'Expected_Delivery_Date', 'Actual_Delivery_Date']
                 for col in date_cols:
@@ -281,10 +295,14 @@ class SupplyChainDataEngine:
                     if col in data['po'].columns:
                         data['po'][col] = pd.to_numeric(data['po'][col], errors='coerce')
             
-            # 5. Stock Data
+            # 5. Stock Data - Filter hanya active SKUs
             data['stock'] = self._load_sheet(spreadsheet, "Stock_Onhand")
             if not data['stock'].empty:
                 data['stock']['SKU_ID'] = data['stock']['SKU_ID'].astype(str).str.strip()
+                # Filter hanya active SKUs
+                if 'active_skus' in data and data['active_skus']:
+                    data['stock'] = data['stock'][data['stock']['SKU_ID'].isin(data['active_skus'])]
+                
                 # Identify stock quantity column
                 stock_qty_cols = ['Stock_Qty', 'Stock Qty', 'Quantity_Available']
                 for col in stock_qty_cols:
@@ -297,24 +315,10 @@ class SupplyChainDataEngine:
             # 6. Supplier Master
             data['suppliers'] = self._load_sheet(spreadsheet, "Supplier_Master")
             
-            # 7. Customer Master (if exists)
-            try:
-                data['customers'] = self._load_sheet(spreadsheet, "Customer_Master")
-            except:
-                data['customers'] = pd.DataFrame()
-            
-            # Active SKUs
-            if not data['product'].empty and 'Status' in data['product'].columns:
-                data['active_skus'] = data['product'][data['product']['Status'].str.upper() == 'ACTIVE']['SKU_ID'].tolist()
-            else:
-                data['active_skus'] = []
-            
             return data
             
         except Exception as e:
             st.error(f"Error loading data: {str(e)}")
-            import traceback
-            st.error(f"Traceback: {traceback.format_exc()}")
             return {}
     
     def _clean_product_columns(self, df):
@@ -347,14 +351,18 @@ class SupplyChainDataEngine:
                          for c in df.columns]
             return df
         except Exception as e:
-            st.warning(f"⚠️ Sheet '{sheet_name}' not found or empty: {str(e)}")
             return pd.DataFrame()
     
-    def _process_sales_data(self, spreadsheet, sheet_name):
-        """Process sales data with specific column structure"""
+    def _process_sales_data(self, spreadsheet, sheet_name, active_skus):
+        """Process sales data with specific column structure - ONLY ACTIVE SKUS"""
         df = self._load_sheet(spreadsheet, sheet_name)
         if df.empty:
             return pd.DataFrame()
+        
+        # Filter hanya active SKUs
+        if 'SKU_ID' in df.columns:
+            df['SKU_ID'] = df['SKU_ID'].astype(str).str.strip()
+            df = df[df['SKU_ID'].isin(active_skus)]
         
         # Identify month columns (Jan 25, Feb 25, etc.) - exclude "Total 2025"
         month_cols = []
@@ -394,17 +402,18 @@ class SupplyChainDataEngine:
         if id_col != 'SKU_ID':
             df_long = df_long.rename(columns={id_col: 'SKU_ID'})
         
-        # Filter only active SKUs if available
-        if hasattr(self, 'active_skus') and self.active_skus:
-            df_long = df_long[df_long['SKU_ID'].isin(self.active_skus)]
-        
         return df_long
     
-    def _process_monthly_data(self, spreadsheet, sheet_name, value_col_name):
-        """Process monthly data sheets (Rofo, etc.)"""
+    def _process_monthly_data(self, spreadsheet, sheet_name, value_col_name, active_skus):
+        """Process monthly data sheets (Rofo, etc.) - ONLY ACTIVE SKUS"""
         df = self._load_sheet(spreadsheet, sheet_name)
         if df.empty:
             return pd.DataFrame()
+        
+        # Filter hanya active SKUs
+        if 'SKU_ID' in df.columns:
+            df['SKU_ID'] = df['SKU_ID'].astype(str).str.strip()
+            df = df[df['SKU_ID'].isin(active_skus)]
         
         # Identify month columns
         month_cols = []
@@ -443,10 +452,6 @@ class SupplyChainDataEngine:
         if id_col != 'SKU_ID':
             df_long = df_long.rename(columns={id_col: 'SKU_ID'})
         
-        # Filter only active SKUs if available
-        if hasattr(self, 'active_skus') and self.active_skus:
-            df_long = df_long[df_long['SKU_ID'].isin(self.active_skus)]
-        
         return df_long
 
 # --- 2. SUPPLY CHAIN ANALYTICS ENGINE ---
@@ -457,7 +462,7 @@ class SupplyChainAnalytics:
         self.data = data
         
     def calculate_inventory_metrics(self):
-        """Calculate comprehensive inventory metrics with updated logic"""
+        """Calculate comprehensive inventory metrics - ONLY ACTIVE SKUS"""
         if self.data['stock'].empty or self.data['product'].empty:
             return pd.DataFrame()
         
@@ -466,7 +471,6 @@ class SupplyChainAnalytics:
         
         # Ensure we have SKU_ID and Stock_Qty
         if 'SKU_ID' not in stock_df.columns or 'Stock_Qty' not in stock_df.columns:
-            st.warning("Stock data missing required columns")
             return pd.DataFrame()
         
         # Merge with product data
@@ -482,7 +486,7 @@ class SupplyChainAnalytics:
             how='left'
         )
         
-        # Calculate sales metrics
+        # Calculate Avg Sales 3 Months Terakhir
         if not self.data['sales'].empty:
             sales_df = self.data['sales'].copy()
             sales_df['Month'] = pd.to_datetime(sales_df['Month'])
@@ -495,47 +499,40 @@ class SupplyChainAnalytics:
                 if not recent_sales.empty:
                     avg_sales = recent_sales.groupby('SKU_ID')['Sales_Qty'].agg(['mean', 'std']).reset_index()
                     avg_sales.columns = ['SKU_ID', 'Avg_Sales_3M', 'Sales_Std']
-                    avg_sales['Sales_CV'] = np.where(
-                        avg_sales['Avg_Sales_3M'] > 0, 
-                        avg_sales['Sales_Std'] / avg_sales['Avg_Sales_3M'], 
-                        0
-                    )
                     
                     inv_df = pd.merge(inv_df, avg_sales, on='SKU_ID', how='left')
                 else:
                     inv_df['Avg_Sales_3M'] = 0
                     inv_df['Sales_Std'] = 0
-                    inv_df['Sales_CV'] = 0
             else:
                 # If less than 3 months, use all available
                 avg_sales = sales_df.groupby('SKU_ID')['Sales_Qty'].agg(['mean', 'std']).reset_index()
                 avg_sales.columns = ['SKU_ID', 'Avg_Sales_3M', 'Sales_Std']
-                avg_sales['Sales_CV'] = np.where(
-                    avg_sales['Avg_Sales_3M'] > 0, 
-                    avg_sales['Sales_Std'] / avg_sales['Avg_Sales_3M'], 
-                    0
-                )
                 inv_df = pd.merge(inv_df, avg_sales, on='SKU_ID', how='left')
         else:
             inv_df['Avg_Sales_3M'] = 0
-            inv_df['Sales_CV'] = 0
             inv_df['Sales_Std'] = 0
         
         # Calculate inventory metrics
         inv_df['Avg_Sales_3M'] = inv_df['Avg_Sales_3M'].fillna(0)
         inv_df['Sales_Std'] = inv_df['Sales_Std'].fillna(0)
         
-        # Calculate Cover Months (Stock in units / Average Monthly Sales)
+        # Calculate DOI (Days of Inventory) = Stock / Avg Daily Sales
+        inv_df['DOI'] = np.where(
+            inv_df['Avg_Sales_3M'] > 0,
+            (inv_df['Stock_Qty'] / (inv_df['Avg_Sales_3M'] / 30)).round(1),  # Convert monthly to daily
+            999
+        )
+        
+        # Calculate Cover Months = Stock / Avg Monthly Sales
         inv_df['Cover_Months'] = np.where(
             inv_df['Avg_Sales_3M'] > 0,
             inv_df['Stock_Qty'] / inv_df['Avg_Sales_3M'],
             999
         ).round(2)
         
-        # NEW LOGIC: Use Min/Max Stock Level from Product Master
-        # If Min_Stock_Level_Month exists, use it for Need Replenishment threshold
+        # Inventory classification based on Min/Max Stock Level
         if 'Min_Stock_Level_Month' in inv_df.columns and 'Max_Stock_Level_Month' in inv_df.columns:
-            # Use product-specific min/max levels
             conditions = [
                 inv_df['Cover_Months'] < inv_df['Min_Stock_Level_Month'],
                 (inv_df['Cover_Months'] >= inv_df['Min_Stock_Level_Month']) & 
@@ -559,34 +556,7 @@ class SupplyChainAnalytics:
         else:
             inv_df['Stock_Value'] = 0
         
-        # Calculate EOQ (Economic Order Quantity)
-        if 'Unit_Price' in inv_df.columns:
-            # D = annual demand (Avg_Sales_3M * 4)
-            # S = ordering cost (assume 100 for demo)
-            # H = holding cost (assume 25% of unit price)
-            D = inv_df['Avg_Sales_3M'] * 4
-            S = 100  # Fixed ordering cost
-            H = inv_df['Unit_Price'].fillna(0) * 0.25  # Holding cost per unit
-            
-            inv_df['EOQ'] = np.where(
-                (D > 0) & (H > 0),
-                np.sqrt((2 * D * S) / H),
-                0
-            ).round(0)
-            
-            # Calculate reorder point
-            if 'Lead_Time_Days' in inv_df.columns:
-                # Daily demand
-                daily_demand = inv_df['Avg_Sales_3M'] / 30
-                # Safety stock (95% service level)
-                z_score = 1.65
-                lead_time_days = inv_df['Lead_Time_Days'].fillna(30)
-                safety_stock = z_score * inv_df['Sales_Std'] * np.sqrt(lead_time_days / 30)
-                
-                inv_df['Reorder_Point'] = (daily_demand * lead_time_days + safety_stock).round(0)
-                inv_df['Safety_Stock'] = safety_stock.round(0)
-        
-        # Calculate Qty to Order/Reduce based on new logic
+        # Calculate Qty to Order/Reduce
         if 'Min_Stock_Level_Month' in inv_df.columns and 'Max_Stock_Level_Month' in inv_df.columns:
             # Qty to Order for Need Replenishment
             inv_df['Qty_to_Order'] = np.where(
@@ -603,98 +573,46 @@ class SupplyChainAnalytics:
                 0
             ).round(0)
             inv_df['Qty_to_Reduce'] = np.where(inv_df['Qty_to_Reduce'] < 0, 0, inv_df['Qty_to_Reduce'])
-        else:
-            # Default calculations
-            inv_df['Qty_to_Order'] = np.where(
-                inv_df['Inventory_Status'] == 'Need Replenishment',
-                (1.0 * inv_df['Avg_Sales_3M']) - inv_df['Stock_Qty'],
-                0
-            ).round(0)
-            inv_df['Qty_to_Reduce'] = np.where(
-                inv_df['Inventory_Status'] == 'High Stock',
-                inv_df['Stock_Qty'] - (1.5 * inv_df['Avg_Sales_3M']),
-                0
-            ).round(0)
         
         return inv_df
     
-    def calculate_supplier_performance(self):
-        """Calculate supplier performance metrics"""
-        if self.data['suppliers'].empty:
-            return pd.DataFrame()
-        
-        supplier_metrics = self.data['suppliers'].copy()
-        
-        # Clean numeric columns
-        if 'Lead_Time_Avg' in supplier_metrics.columns:
-            supplier_metrics['Lead_Time_Avg'] = pd.to_numeric(supplier_metrics['Lead_Time_Avg'], errors='coerce')
-        
-        return supplier_metrics
-    
-    def calculate_logistics_metrics(self):
-        """Calculate logistics and transportation metrics"""
-        if self.data['po'].empty:
-            return pd.DataFrame()
-        
-        po_df = self.data['po'].copy()
-        
-        # Calculate delivery performance
-        if 'Expected_Delivery_Date' in po_df.columns and 'Actual_Delivery_Date' in po_df.columns:
-            po_df['Delivery_Delay'] = (po_df['Actual_Delivery_Date'] - po_df['Expected_Delivery_Date']).dt.days
-            po_df['On_Time'] = po_df['Delivery_Delay'] <= 0
-        
-        # Carrier performance
-        if 'Carrier' in po_df.columns:
-            carrier_perf = po_df.groupby('Carrier').agg({
-                'PO_Number': 'count',
-                'Delivery_Delay': 'mean',
-                'Total_Value': 'sum'
-            }).reset_index()
-            
-            carrier_perf.columns = ['Carrier', 'Total_POs', 'Avg_Delivery_Delay', 'Total_Value']
-            
-            # Calculate on-time rate
-            if 'On_Time' in po_df.columns:
-                on_time_rate = po_df.groupby('Carrier')['On_Time'].mean() * 100
-                carrier_perf['On_Time_Rate'] = carrier_perf['Carrier'].map(on_time_rate)
-        
-        return carrier_perf if 'Carrier' in po_df.columns else pd.DataFrame()
-    
     def calculate_forecast_accuracy(self):
-        """Calculate forecast vs actual sales accuracy"""
-        if self.data['sales'].empty or self.data['forecast'].empty:
+        """Calculate forecast accuracy - Rofo vs PO"""
+        if self.data['forecast'].empty or self.data['po'].empty:
             return {}
         
-        # Get common months between sales and forecast
-        sales_months = set(self.data['sales']['Month'].unique())
-        forecast_months = set(self.data['forecast']['Month'].unique())
-        common_months = sales_months.intersection(forecast_months)
-        
-        if not common_months:
+        # Get PO data aggregated by month and SKU
+        po_df = self.data['po'].copy()
+        if 'Order_Date' not in po_df.columns or 'Order_Qty' not in po_df.columns:
             return {}
         
-        # Filter data for common months
-        sales_filtered = self.data['sales'][self.data['sales']['Month'].isin(common_months)]
-        forecast_filtered = self.data['forecast'][self.data['forecast']['Month'].isin(common_months)]
+        # Convert Order_Date to month
+        po_df['Order_Month'] = pd.to_datetime(po_df['Order_Date']).dt.to_period('M')
+        po_monthly = po_df.groupby(['SKU_ID', 'Order_Month'])['Order_Qty'].sum().reset_index()
+        po_monthly['Order_Month'] = po_monthly['Order_Month'].dt.to_timestamp()
         
-        # Merge sales and forecast
+        # Get forecast data
+        forecast_df = self.data['forecast'].copy()
+        
+        # Merge forecast with PO
         df_merged = pd.merge(
-            sales_filtered,
-            forecast_filtered,
-            on=['SKU_ID', 'Month'],
+            forecast_df,
+            po_monthly,
+            left_on=['SKU_ID', 'Month'],
+            right_on=['SKU_ID', 'Order_Month'],
             how='inner',
-            suffixes=('_Sales', '_Forecast')
+            suffixes=('_Forecast', '_PO')
         )
         
         if df_merged.empty:
             return {}
         
         # Calculate forecast error
-        df_merged['Forecast_Error'] = df_merged['Sales_Qty'] - df_merged['Forecast_Qty']
+        df_merged['Forecast_Error'] = df_merged['Order_Qty'] - df_merged['Forecast_Qty']
         df_merged['Absolute_Error'] = abs(df_merged['Forecast_Error'])
         df_merged['Absolute_Percentage_Error'] = np.where(
-            df_merged['Sales_Qty'] > 0,
-            (df_merged['Absolute_Error'] / df_merged['Sales_Qty']) * 100,
+            df_merged['Forecast_Qty'] > 0,
+            (df_merged['Absolute_Error'] / df_merged['Forecast_Qty']) * 100,
             0
         )
         
@@ -706,8 +624,8 @@ class SupplyChainAnalytics:
         
         # Calculate by month
         monthly_accuracy = df_merged.groupby('Month').agg({
-            'Sales_Qty': 'sum',
             'Forecast_Qty': 'sum',
+            'Order_Qty': 'sum',
             'Absolute_Percentage_Error': 'mean'
         }).reset_index()
         
@@ -720,8 +638,50 @@ class SupplyChainAnalytics:
             'detailed_data': df_merged
         }
     
+    def calculate_sales_performance(self):
+        """Calculate sales performance - Actual Sales vs Forecast vs PO"""
+        if self.data['sales'].empty or self.data['forecast'].empty or self.data['po'].empty:
+            return {}
+        
+        # Get last month for analysis
+        if not self.data['sales'].empty:
+            last_month = self.data['sales']['Month'].max()
+        else:
+            return {}
+        
+        # Get sales for last month
+        sales_last_month = self.data['sales'][self.data['sales']['Month'] == last_month]
+        
+        # Get forecast for last month
+        forecast_last_month = self.data['forecast'][self.data['forecast']['Month'] == last_month]
+        
+        # Get PO for last month (orders placed for that month)
+        po_df = self.data['po'].copy()
+        if 'Order_Date' in po_df.columns:
+            po_df['Order_Month'] = pd.to_datetime(po_df['Order_Date']).dt.to_period('M').dt.to_timestamp()
+            po_last_month = po_df[po_df['Order_Month'] == last_month]
+        else:
+            po_last_month = pd.DataFrame()
+        
+        # Merge all three
+        performance_data = {}
+        
+        # Calculate overall metrics
+        total_sales = sales_last_month['Sales_Qty'].sum() if not sales_last_month.empty else 0
+        total_forecast = forecast_last_month['Forecast_Qty'].sum() if not forecast_last_month.empty else 0
+        total_po = po_last_month['Order_Qty'].sum() if not po_last_month.empty else 0
+        
+        performance_data['total_sales'] = total_sales
+        performance_data['total_forecast'] = total_forecast
+        performance_data['total_po'] = total_po
+        performance_data['sales_vs_forecast'] = (total_sales / total_forecast * 100) if total_forecast > 0 else 0
+        performance_data['sales_vs_po'] = (total_sales / total_po * 100) if total_po > 0 else 0
+        performance_data['po_vs_forecast'] = (total_po / total_forecast * 100) if total_forecast > 0 else 0
+        
+        return performance_data
+    
     def calculate_scor_metrics(self):
-        """Calculate SCOR (Supply Chain Operations Reference) metrics"""
+        """Calculate SCOR metrics"""
         metrics = {}
         
         # 1. Reliability Metrics
@@ -730,29 +690,18 @@ class SupplyChainAnalytics:
             total_orders = len(self.data['po'])
             metrics['Perfect_Order_Fulfillment'] = (perfect_orders / total_orders * 100) if total_orders > 0 else 0
         
-        # 2. Responsiveness Metrics
-        if not self.data['po'].empty and 'Expected_Delivery_Date' in self.data['po'].columns and 'Actual_Delivery_Date' in self.data['po'].columns:
-            # Calculate average delivery time
-            po_df = self.data['po'].copy()
-            po_df = po_df.dropna(subset=['Expected_Delivery_Date', 'Actual_Delivery_Date'])
-            if not po_df.empty:
-                delivery_times = (po_df['Actual_Delivery_Date'] - po_df['Order_Date']).dt.days
-                metrics['Average_Delivery_Time'] = delivery_times.mean()
-        
-        # 3. Costs Metrics
+        # 2. Calculate inventory turnover
         inv_metrics = self.calculate_inventory_metrics()
         if not inv_metrics.empty and 'Stock_Value' in inv_metrics.columns:
             total_inv_value = inv_metrics['Stock_Value'].sum()
             metrics['Total_Inventory_Value'] = total_inv_value
-        
-        # 4. Calculate inventory turnover (simplified)
-        if not self.data['sales'].empty and 'Total_Inventory_Value' in metrics:
-            # Estimate COGS as 70% of sales value
-            total_sales = self.data['sales']['Sales_Qty'].sum()
-            avg_unit_price = self.data['product']['Unit_Price'].mean() if 'Unit_Price' in self.data['product'].columns else 1
-            estimated_cogs = total_sales * avg_unit_price * 0.7
-            avg_inventory = metrics['Total_Inventory_Value']
-            metrics['Inventory_Turnover'] = (estimated_cogs / avg_inventory) if avg_inventory > 0 else 0
+            
+            # Estimate COGS from sales
+            if not self.data['sales'].empty and 'Unit_Price' in self.data['product'].columns:
+                total_sales_qty = self.data['sales']['Sales_Qty'].sum()
+                avg_unit_price = self.data['product']['Unit_Price'].mean() if 'Unit_Price' in self.data['product'].columns else 1
+                estimated_cogs = total_sales_qty * avg_unit_price * 0.7  # Assume 70% COGS
+                metrics['Inventory_Turnover'] = (estimated_cogs / total_inv_value) if total_inv_value > 0 else 0
         
         return metrics
 
@@ -807,7 +756,7 @@ def main():
         st.stop()
     
     # Load data
-    with st.spinner("📥 Loading supply chain data..."):
+    with st.spinner("📥 Loading supply chain data (Active SKUs only)..."):
         data_engine = SupplyChainDataEngine(client)
         all_data = data_engine.load_all_data()
     
@@ -816,13 +765,13 @@ def main():
         st.stop()
     
     # Display data status
-    with st.expander("📊 Data Status", expanded=False):
+    with st.expander("📊 Data Status (Active SKUs Only)", expanded=False):
         col1, col2, col3 = st.columns(3)
         
         with col1:
             product_count = len(all_data.get('product', pd.DataFrame()))
             active_count = len(all_data.get('active_skus', []))
-            st.metric("Products", product_count)
+            st.metric("Active Products", product_count)
             st.metric("Active SKUs", active_count)
         
         with col2:
@@ -833,9 +782,9 @@ def main():
         
         with col3:
             supplier_count = len(all_data.get('suppliers', pd.DataFrame()))
-            customer_count = len(all_data.get('customers', pd.DataFrame()))
+            stock_count = len(all_data.get('stock', pd.DataFrame()))
             st.metric("Suppliers", supplier_count)
-            st.metric("Customers", customer_count)
+            st.metric("Stock Items", stock_count)
     
     # Initialize analytics
     analytics = SupplyChainAnalytics(all_data)
@@ -843,9 +792,8 @@ def main():
     # Calculate metrics
     with st.spinner("📊 Calculating metrics..."):
         inv_metrics = analytics.calculate_inventory_metrics()
-        supplier_metrics = analytics.calculate_supplier_performance()
-        logistics_metrics = analytics.calculate_logistics_metrics()
         forecast_accuracy = analytics.calculate_forecast_accuracy()
+        sales_performance = analytics.calculate_sales_performance()
         scor_metrics = analytics.calculate_scor_metrics()
     
     # Sidebar controls
@@ -880,15 +828,15 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs([
         "🏠 Executive Dashboard",
         "📦 Inventory Management",
-        "🚚 Logistics & Procurement",
-        "📈 Forecast & Sales"
+        "📈 Forecast Performance",
+        "📊 Sales Performance"
     ])
     
     # ==========================================
     # TAB 1: EXECUTIVE DASHBOARD
     # ==========================================
     with tab1:
-        st.subheader("🎯 Executive Supply Chain Dashboard")
+        st.subheader("🎯 Executive Supply Chain Dashboard (Active SKUs Only)")
         
         # Key Metrics Row 1
         col1, col2, col3, col4 = st.columns(4)
@@ -923,61 +871,65 @@ def main():
                 "Forecast Accuracy",
                 f"{forecast_accuracy_val:.1f}%",
                 trend=3.5,
-                subtitle="Mean Absolute % Error",
+                subtitle="Rofo vs PO",
                 icon="🎯"
             ), unsafe_allow_html=True)
         
         with col4:
-            # Delivery Performance
-            delivery_time = scor_metrics.get('Average_Delivery_Time', 0)
+            # Sales Performance
+            sales_vs_forecast = sales_performance.get('sales_vs_forecast', 0)
             st.markdown(components.kpi_card(
-                "Avg Delivery Time",
-                f"{delivery_time:.0f} days",
-                trend=-2.3,
-                subtitle="From Order to Delivery",
-                icon="🚚"
+                "Sales vs Forecast",
+                f"{sales_vs_forecast:.1f}%",
+                trend=2.3,
+                subtitle="Actual vs Planned",
+                icon="📈"
             ), unsafe_allow_html=True)
         
         # Inventory Overview
         st.markdown("---")
-        st.subheader("📦 Inventory Overview")
+        st.subheader("📦 Inventory Overview (Active SKUs)")
         
         if not inv_metrics.empty:
             col5, col6, col7, col8 = st.columns(4)
             
             with col5:
                 total_skus = len(inv_metrics)
+                total_stock = inv_metrics['Stock_Qty'].sum()
                 st.markdown(components.summary_card(
-                    "Total SKUs",
+                    "Active SKUs",
                     total_skus,
-                    "Inventory Items",
+                    f"{total_stock:,.0f} units",
                     "bg-primary"
                 ), unsafe_allow_html=True)
             
             with col6:
                 need_replenish = len(inv_metrics[inv_metrics['Inventory_Status'] == 'Need Replenishment'])
+                need_qty = inv_metrics[inv_metrics['Inventory_Status'] == 'Need Replenishment']['Stock_Qty'].sum()
                 st.markdown(components.summary_card(
                     "Need Replenishment",
                     need_replenish,
-                    "Below Min Stock Level",
+                    f"{need_qty:,.0f} units",
                     "bg-danger"
                 ), unsafe_allow_html=True)
             
             with col7:
                 ideal_stock = len(inv_metrics[inv_metrics['Inventory_Status'] == 'Ideal'])
+                ideal_qty = inv_metrics[inv_metrics['Inventory_Status'] == 'Ideal']['Stock_Qty'].sum()
                 st.markdown(components.summary_card(
                     "Ideal Stock",
                     ideal_stock,
-                    "Within Min-Max Range",
+                    f"{ideal_qty:,.0f} units",
                     "bg-success"
                 ), unsafe_allow_html=True)
             
             with col8:
                 high_stock = len(inv_metrics[inv_metrics['Inventory_Status'] == 'High Stock'])
+                high_qty = inv_metrics[inv_metrics['Inventory_Status'] == 'High Stock']['Stock_Qty'].sum()
                 st.markdown(components.summary_card(
                     "High Stock",
                     high_stock,
-                    "Above Max Stock Level",
+                    f"{high_qty:,.0f} units",
                     "bg-warning"
                 ), unsafe_allow_html=True)
         
@@ -998,40 +950,40 @@ def main():
         
         with col10:
             if not inv_metrics.empty:
-                high_stock_value = inv_metrics[inv_metrics['Inventory_Status'] == 'High Stock']['Stock_Value'].sum()
+                avg_doi = inv_metrics['DOI'].mean()
                 st.markdown(components.summary_card(
-                    "Excess Inventory",
-                    f"${high_stock_value:,.0f}",
-                    "Potential Savings",
-                    "bg-warning"
+                    "Avg DOI",
+                    f"{avg_doi:.1f} days",
+                    "Days of Inventory",
+                    "bg-teal"
                 ), unsafe_allow_html=True)
         
         with col11:
-            if not all_data['po'].empty and 'Total_Value' in all_data['po'].columns:
-                total_po_value = all_data['po']['Total_Value'].sum()
+            if not inv_metrics.empty:
+                avg_cover = inv_metrics['Cover_Months'].mean()
                 st.markdown(components.summary_card(
-                    "PO Value",
-                    f"${total_po_value:,.0f}",
-                    "Total Purchase Orders",
+                    "Avg Cover",
+                    f"{avg_cover:.1f} months",
+                    "Stock Coverage",
                     "bg-purple"
                 ), unsafe_allow_html=True)
         
         with col12:
-            # Calculate inventory coverage
-            if not inv_metrics.empty:
-                avg_cover = inv_metrics['Cover_Months'].mean()
+            # Calculate action items
+            if 'Qty_to_Order' in inv_metrics.columns and 'Qty_to_Reduce' in inv_metrics.columns:
+                total_action = inv_metrics['Qty_to_Order'].sum() + inv_metrics['Qty_to_Reduce'].sum()
                 st.markdown(components.summary_card(
-                    "Avg Stock Cover",
-                    f"{avg_cover:.1f} months",
-                    "Average Inventory Coverage",
-                    "bg-teal"
+                    "Action Items",
+                    f"{total_action:,.0f}",
+                    "Units to Adjust",
+                    "bg-warning"
                 ), unsafe_allow_html=True)
     
     # ==========================================
     # TAB 2: INVENTORY MANAGEMENT
     # ==========================================
     with tab2:
-        st.subheader("📦 Advanced Inventory Analytics")
+        st.subheader("📦 Inventory Management (Active SKUs)")
         
         if not inv_metrics.empty:
             # Inventory Status Distribution
@@ -1070,6 +1022,39 @@ def main():
                 fig_cover.update_layout(height=400)
                 st.plotly_chart(fig_cover, use_container_width=True)
             
+            # DOI Analysis
+            st.markdown("---")
+            st.subheader("📊 DOI (Days of Inventory) Analysis")
+            
+            col_doi1, col_doi2 = st.columns(2)
+            
+            with col_doi1:
+                fig_doi = px.histogram(
+                    inv_metrics,
+                    x='DOI',
+                    nbins=30,
+                    title="DOI Distribution",
+                    labels={'DOI': 'Days of Inventory'},
+                    color_discrete_sequence=['#00cec9']
+                )
+                fig_doi.update_layout(height=400)
+                st.plotly_chart(fig_doi, use_container_width=True)
+            
+            with col_doi2:
+                # Top 10 SKUs by DOI
+                top_doi = inv_metrics.nlargest(10, 'DOI')[['Product_Name', 'DOI', 'Cover_Months', 'Stock_Qty']]
+                st.markdown("**Top 10 SKUs with Highest DOI**")
+                st.dataframe(
+                    top_doi,
+                    column_config={
+                        "DOI": st.column_config.NumberColumn(format="%.1f"),
+                        "Cover_Months": st.column_config.NumberColumn(format="%.1f"),
+                        "Stock_Qty": st.column_config.NumberColumn(format="%d")
+                    },
+                    use_container_width=True,
+                    height=300
+                )
+            
             # Actionable Insights
             st.markdown("---")
             st.subheader("🎯 Actionable Insights")
@@ -1096,47 +1081,9 @@ def main():
                         "bg-warning"
                     ), unsafe_allow_html=True)
             
-            # ABC Analysis
-            st.markdown("---")
-            st.subheader("📊 ABC Analysis")
-            
-            if 'ABC_Classification' in inv_metrics.columns:
-                abc_data = inv_metrics.groupby('ABC_Classification').agg({
-                    'SKU_ID': 'count',
-                    'Stock_Value': 'sum'
-                }).reset_index()
-                
-                abc_col1, abc_col2 = st.columns(2)
-                
-                with abc_col1:
-                    fig_abc_count = px.bar(
-                        abc_data,
-                        x='ABC_Classification',
-                        y='SKU_ID',
-                        title="SKU Count by ABC Classification",
-                        labels={'SKU_ID': 'Number of SKUs', 'ABC_Classification': 'Classification'},
-                        color='ABC_Classification',
-                        color_discrete_map={'A': '#e55039', 'B': '#f6b93b', 'C': '#38ada9'}
-                    )
-                    fig_abc_count.update_layout(height=350)
-                    st.plotly_chart(fig_abc_count, use_container_width=True)
-                
-                with abc_col2:
-                    fig_abc_value = px.pie(
-                        abc_data,
-                        values='Stock_Value',
-                        names='ABC_Classification',
-                        title="Inventory Value by ABC Classification",
-                        color='ABC_Classification',
-                        color_discrete_map={'A': '#e55039', 'B': '#f6b93b', 'C': '#38ada9'}
-                    )
-                    fig_abc_value.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_abc_value.update_layout(height=350)
-                    st.plotly_chart(fig_abc_value, use_container_width=True)
-            
             # Detailed Inventory Table
             st.markdown("---")
-            st.subheader("📋 Detailed Inventory Analysis")
+            st.subheader("📋 Detailed Inventory Analysis (Active SKUs)")
             
             # Filters
             col_f1, col_f2, col_f3 = st.columns(3)
@@ -1173,7 +1120,7 @@ def main():
             
             # Display table
             display_cols = ['SKU_ID', 'Product_Name', 'Brand', 'ABC_Classification', 
-                           'Stock_Qty', 'Avg_Sales_3M', 'Cover_Months', 
+                           'Stock_Qty', 'Avg_Sales_3M', 'DOI', 'Cover_Months', 
                            'Inventory_Status', 'Stock_Value', 'Qty_to_Order', 'Qty_to_Reduce']
             display_cols = [col for col in display_cols if col in filtered_inv.columns]
             
@@ -1182,6 +1129,7 @@ def main():
                 column_config={
                     "Stock_Qty": st.column_config.NumberColumn(format="%d"),
                     "Avg_Sales_3M": st.column_config.NumberColumn(format="%d"),
+                    "DOI": st.column_config.NumberColumn(format="%.1f"),
                     "Cover_Months": st.column_config.NumberColumn(format="%.1f"),
                     "Stock_Value": st.column_config.NumberColumn("Stock Value", format="$%.0f"),
                     "Qty_to_Order": st.column_config.NumberColumn(format="%d"),
@@ -1191,105 +1139,13 @@ def main():
                 height=500
             )
         else:
-            st.warning("No inventory data available. Please check Stock_Onhand sheet.")
+            st.warning("No inventory data available for active SKUs.")
     
     # ==========================================
-    # TAB 3: LOGISTICS & PROCUREMENT
+    # TAB 3: FORECAST PERFORMANCE
     # ==========================================
     with tab3:
-        st.subheader("🚚 Logistics & Procurement Analytics")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Supplier Performance
-            st.subheader("🏭 Supplier Analysis")
-            
-            if not supplier_metrics.empty:
-                # Top suppliers by lead time
-                if 'Lead_Time_Avg' in supplier_metrics.columns:
-                    supplier_lead = supplier_metrics[['Supplier_Name', 'Lead_Time_Avg']].dropna()
-                    if not supplier_lead.empty:
-                        supplier_lead = supplier_lead.sort_values('Lead_Time_Avg', ascending=True)
-                        
-                        fig_suppliers = px.bar(
-                            supplier_lead.head(10),
-                            x='Supplier_Name',
-                            y='Lead_Time_Avg',
-                            title="Top 10 Suppliers by Lead Time (Fastest)",
-                            labels={'Lead_Time_Avg': 'Average Lead Time (days)', 'Supplier_Name': 'Supplier'},
-                            color='Lead_Time_Avg',
-                            color_continuous_scale='viridis'
-                        )
-                        fig_suppliers.update_layout(height=400)
-                        st.plotly_chart(fig_suppliers, use_container_width=True)
-        
-        with col2:
-            # Transportation Analytics
-            st.subheader("🚛 Transportation Analytics")
-            
-            if not logistics_metrics.empty:
-                # Carrier Performance
-                fig_carrier = px.bar(
-                    logistics_metrics,
-                    x='Carrier',
-                    y='On_Time_Rate',
-                    title="Carrier On-Time Delivery Rate",
-                    labels={'On_Time_Rate': 'On-Time Rate (%)', 'Carrier': 'Carrier'},
-                    color='On_Time_Rate',
-                    color_continuous_scale='plasma'
-                )
-                fig_carrier.update_layout(height=400)
-                st.plotly_chart(fig_carrier, use_container_width=True)
-        
-        # Procurement Analytics
-        st.markdown("---")
-        st.subheader("📋 Procurement Analytics")
-        
-        if not all_data['po'].empty:
-            col_po1, col_po2 = st.columns(2)
-            
-            with col_po1:
-                # PO Status Distribution
-                if 'PO_Status' in all_data['po'].columns:
-                    po_status = all_data['po']['PO_Status'].value_counts().reset_index()
-                    po_status.columns = ['Status', 'Count']
-                    
-                    fig_po = px.pie(
-                        po_status,
-                        values='Count',
-                        names='Status',
-                        title="Purchase Order Status Distribution",
-                        color_discrete_sequence=px.colors.qualitative.Pastel
-                    )
-                    fig_po.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_po.update_layout(height=300)
-                    st.plotly_chart(fig_po, use_container_width=True)
-            
-            with col_po2:
-                # PO Value by Month
-                if 'Order_Date' in all_data['po'].columns and 'Total_Value' in all_data['po'].columns:
-                    po_df = all_data['po'].copy()
-                    po_df['Order_Month'] = pd.to_datetime(po_df['Order_Date']).dt.to_period('M')
-                    po_monthly = po_df.groupby('Order_Month')['Total_Value'].sum().reset_index()
-                    po_monthly['Order_Month'] = po_monthly['Order_Month'].astype(str)
-                    
-                    fig_po_value = px.line(
-                        po_monthly,
-                        x='Order_Month',
-                        y='Total_Value',
-                        title="Monthly PO Value Trend",
-                        labels={'Total_Value': 'Total Value ($)', 'Order_Month': 'Month'},
-                        markers=True
-                    )
-                    fig_po_value.update_layout(height=300)
-                    st.plotly_chart(fig_po_value, use_container_width=True)
-    
-    # ==========================================
-    # TAB 4: FORECAST & SALES
-    # ==========================================
-    with tab4:
-        st.subheader("📈 Forecast & Sales Analytics")
+        st.subheader("📈 Forecast Performance (Rofo vs PO)")
         
         if 'overall_mape' in forecast_accuracy:
             # Forecast Accuracy Dashboard
@@ -1302,7 +1158,7 @@ def main():
                     "Forecast Accuracy",
                     f"{accuracy:.1f}%",
                     trend=2.5,
-                    subtitle="Overall MAPE",
+                    subtitle="Rofo vs PO",
                     icon="🎯"
                 ), unsafe_allow_html=True)
             
@@ -1338,62 +1194,136 @@ def main():
                     x='Month',
                     y='Accuracy_%',
                     markers=True,
-                    title="Monthly Forecast Accuracy Trend",
+                    title="Monthly Forecast Accuracy Trend (Rofo vs PO)",
                     labels={'Accuracy_%': 'Accuracy (%)', 'Month': 'Month'}
                 )
                 fig_accuracy.add_hline(y=80, line_dash="dash", line_color="red", 
                                       annotation_text="Target: 80%")
                 fig_accuracy.update_layout(height=400)
                 st.plotly_chart(fig_accuracy, use_container_width=True)
-        
-        # Sales Trend Analysis
-        st.markdown("---")
-        st.subheader("📊 Sales Trend Analysis")
-        
-        if not all_data['sales'].empty:
-            # Aggregate sales by month
-            sales_monthly = all_data['sales'].groupby('Month')['Sales_Qty'].sum().reset_index()
             
-            fig_sales_trend = px.line(
-                sales_monthly,
-                x='Month',
-                y='Sales_Qty',
-                title="Monthly Sales Trend",
-                labels={'Sales_Qty': 'Sales Quantity', 'Month': 'Month'},
-                markers=True
-            )
-            fig_sales_trend.update_layout(height=400)
-            st.plotly_chart(fig_sales_trend, use_container_width=True)
-        
-        # Top Performing SKUs
-        st.markdown("---")
-        st.subheader("🏆 Top Performing SKUs")
-        
-        if not all_data['sales'].empty:
-            # Calculate top SKUs by sales volume
-            top_skus = all_data['sales'].groupby('SKU_ID')['Sales_Qty'].sum().reset_index()
-            top_skus = top_skus.sort_values('Sales_Qty', ascending=False).head(10)
+            # Forecast vs PO Comparison
+            st.markdown("---")
+            st.subheader("📊 Forecast vs PO Comparison")
             
-            # Merge with product names
-            if not all_data['product'].empty:
-                top_skus = pd.merge(
-                    top_skus,
-                    all_data['product'][['SKU_ID', 'Product_Name', 'Brand']],
-                    on='SKU_ID',
-                    how='left'
+            if 'detailed_data' in forecast_accuracy and not forecast_accuracy['detailed_data'].empty:
+                # Aggregate by month
+                monthly_comparison = forecast_accuracy['detailed_data'].groupby('Month').agg({
+                    'Forecast_Qty': 'sum',
+                    'Order_Qty': 'sum'
+                }).reset_index()
+                
+                fig_comparison = px.bar(
+                    monthly_comparison,
+                    x='Month',
+                    y=['Forecast_Qty', 'Order_Qty'],
+                    title="Monthly Forecast vs PO Quantity",
+                    labels={'value': 'Quantity', 'variable': 'Type'},
+                    barmode='group'
                 )
+                fig_comparison.update_layout(height=400)
+                st.plotly_chart(fig_comparison, use_container_width=True)
+        else:
+            st.warning("Forecast accuracy data not available. Please check Rofo and PO data.")
+    
+    # ==========================================
+    # TAB 4: SALES PERFORMANCE
+    # ==========================================
+    with tab4:
+        st.subheader("📊 Sales Performance (Active SKUs)")
+        
+        if sales_performance:
+            # Sales Performance Dashboard
+            col1, col2, col3 = st.columns(3)
             
-            fig_top_skus = px.bar(
-                top_skus,
-                x='Product_Name',
-                y='Sales_Qty',
-                title="Top 10 SKUs by Sales Volume",
-                labels={'Sales_Qty': 'Total Sales', 'Product_Name': 'Product'},
-                color='Brand',
-                hover_data=['Brand']
-            )
-            fig_top_skus.update_layout(height=400, xaxis_tickangle=-45)
-            st.plotly_chart(fig_top_skus, use_container_width=True)
+            with col1:
+                sales_vs_forecast = sales_performance.get('sales_vs_forecast', 0)
+                st.markdown(components.kpi_card(
+                    "Sales vs Forecast",
+                    f"{sales_vs_forecast:.1f}%",
+                    trend=2.5,
+                    subtitle="Actual vs Planned",
+                    icon="📈"
+                ), unsafe_allow_html=True)
+            
+            with col2:
+                sales_vs_po = sales_performance.get('sales_vs_po', 0)
+                st.markdown(components.kpi_card(
+                    "Sales vs PO",
+                    f"{sales_vs_po:.1f}%",
+                    trend=1.8,
+                    subtitle="Actual vs Ordered",
+                    icon="📦"
+                ), unsafe_allow_html=True)
+            
+            with col3:
+                po_vs_forecast = sales_performance.get('po_vs_forecast', 0)
+                st.markdown(components.kpi_card(
+                    "PO vs Forecast",
+                    f"{po_vs_forecast:.1f}%",
+                    trend=0.5,
+                    subtitle="Ordered vs Planned",
+                    icon="📝"
+                ), unsafe_allow_html=True)
+            
+            # Sales Trend Analysis
+            st.markdown("---")
+            st.subheader("📈 Sales Trend Analysis")
+            
+            if not all_data['sales'].empty:
+                # Aggregate sales by month
+                sales_monthly = all_data['sales'].groupby('Month')['Sales_Qty'].sum().reset_index()
+                
+                fig_sales_trend = px.line(
+                    sales_monthly,
+                    x='Month',
+                    y='Sales_Qty',
+                    title="Monthly Sales Trend (Active SKUs)",
+                    labels={'Sales_Qty': 'Sales Quantity', 'Month': 'Month'},
+                    markers=True
+                )
+                fig_sales_trend.update_layout(height=400)
+                st.plotly_chart(fig_sales_trend, use_container_width=True)
+            
+            # Top Performing SKUs
+            st.markdown("---")
+            st.subheader("🏆 Top Performing SKUs")
+            
+            if not all_data['sales'].empty:
+                # Calculate top SKUs by sales volume (last 3 months)
+                sales_df = all_data['sales'].copy()
+                sales_df['Month'] = pd.to_datetime(sales_df['Month'])
+                
+                # Get last 3 months
+                if len(sales_df['Month'].unique()) >= 3:
+                    last_3_months = sorted(sales_df['Month'].unique())[-3:]
+                    recent_sales = sales_df[sales_df['Month'].isin(last_3_months)]
+                    
+                    top_skus = recent_sales.groupby('SKU_ID')['Sales_Qty'].sum().reset_index()
+                    top_skus = top_skus.sort_values('Sales_Qty', ascending=False).head(10)
+                    
+                    # Merge with product names
+                    if not all_data['product'].empty:
+                        top_skus = pd.merge(
+                            top_skus,
+                            all_data['product'][['SKU_ID', 'Product_Name', 'Brand']],
+                            on='SKU_ID',
+                            how='left'
+                        )
+                    
+                    fig_top_skus = px.bar(
+                        top_skus,
+                        x='Product_Name',
+                        y='Sales_Qty',
+                        title="Top 10 SKUs by Sales Volume (Last 3 Months)",
+                        labels={'Sales_Qty': 'Total Sales', 'Product_Name': 'Product'},
+                        color='Brand',
+                        hover_data=['Brand']
+                    )
+                    fig_top_skus.update_layout(height=400, xaxis_tickangle=-45)
+                    st.plotly_chart(fig_top_skus, use_container_width=True)
+        else:
+            st.warning("Sales performance data not available. Please check Sales, Forecast, and PO data.")
 
 # --- RUN DASHBOARD ---
 if __name__ == "__main__":
