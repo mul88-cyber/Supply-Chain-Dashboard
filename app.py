@@ -444,13 +444,13 @@ def load_and_process_data(_client):
     Load semua data termasuk sheet baru: BS_Fullfilment_Cost
     """
     
-    gsheet_url = st.secrets["gsheet_url"]
+    sheet_id = "1jcs8L0CysdzxemPz1EYVVfVhsSR-ik46khIw5jhhBgw"
     data = {}
 
     # --- HELPER: Baca Sheet Manual ---
     def safe_read_stock_sheet(sheet_name):
         try:
-            ws = _client.open_by_url(gsheet_url).worksheet(sheet_name)
+            ws = _client.open_by_key(sheet_id).worksheet(sheet_name)
             raw_data = ws.get_all_values()
             if len(raw_data) < 2: return pd.DataFrame()
             headers = [str(h).strip() for h in raw_data[0]]
@@ -461,7 +461,7 @@ def load_and_process_data(_client):
 
     try:
         # 1. PRODUCT MASTER
-        ws_prod = _client.open_by_url(gsheet_url).worksheet("Product_Master")
+        ws_prod = _client.open_by_key(sheet_id).worksheet("Product_Master")
         df_product = pd.DataFrame(ws_prod.get_all_records())
         df_product.columns = [col.strip().replace(' ', '_') for col in df_product.columns]
         
@@ -477,7 +477,7 @@ def load_and_process_data(_client):
         data['product_active'] = df_product_active
 
         # 2. SALES DATA
-        ws_sales = _client.open_by_url(gsheet_url).worksheet("Sales")
+        ws_sales = _client.open_by_key(sheet_id).worksheet("Sales")
         df_sales_raw = pd.DataFrame(ws_sales.get_all_records())
         df_sales_raw.columns = [col.strip() for col in df_sales_raw.columns]
         month_cols = [c for c in df_sales_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -493,7 +493,7 @@ def load_and_process_data(_client):
             data['sales'] = df_sales_long.sort_values('Month')
 
         # 3. ROFO DATA
-        ws_rofo = _client.open_by_url(gsheet_url).worksheet("Rofo")
+        ws_rofo = _client.open_by_key(sheet_id).worksheet("Rofo")
         df_rofo_raw = pd.DataFrame(ws_rofo.get_all_records())
         df_rofo_raw.columns = [col.strip() for col in df_rofo_raw.columns]
         month_cols_rofo = [c for c in df_rofo_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -509,7 +509,7 @@ def load_and_process_data(_client):
             data['forecast'] = df_rofo_long
 
         # 4. PO DATA
-        ws_po = _client.open_by_url(gsheet_url).worksheet("PO")
+        ws_po = _client.open_by_key(sheet_id).worksheet("PO")
         df_po_raw = pd.DataFrame(ws_po.get_all_records())
         df_po_raw.columns = [col.strip() for col in df_po_raw.columns]
         month_cols_po = [c for c in df_po_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -544,7 +544,7 @@ def load_and_process_data(_client):
 
         # 6. FORECAST 2026 ECOMM
         try:
-            ws_ecomm = _client.open_by_url(gsheet_url).worksheet("Forecast_2026_Ecomm")
+            ws_ecomm = _client.open_by_key(sheet_id).worksheet("Forecast_2026_Ecomm")
             df_ecomm_raw = pd.DataFrame(ws_ecomm.get_all_records())
             df_ecomm_raw.columns = [col.strip().replace(' ', '_') for col in df_ecomm_raw.columns]
             month_cols_ecomm = [c for c in df_ecomm_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -558,7 +558,7 @@ def load_and_process_data(_client):
         
         # 7. FORECAST 2026 RESELLER
         try:
-            ws_reseller = _client.open_by_url(gsheet_url).worksheet("Forecast_2026_Reseller")
+            ws_reseller = _client.open_by_key(sheet_id).worksheet("Forecast_2026_Reseller")
             df_reseller_raw = pd.DataFrame(ws_reseller.get_all_records())
             df_reseller_raw.columns = [col.strip().replace(' ', '_') for col in df_reseller_raw.columns]
             all_month_cols_res = [c for c in df_reseller_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -594,7 +594,7 @@ def load_and_process_data(_client):
         # 8. BS FULLFILMENT COST (NEW SHEET)
         # ==============================================================================
         try:
-            ws_bs = _client.open_by_url(gsheet_url).worksheet("BS_Fullfilment_Cost")
+            ws_bs = _client.open_by_key(sheet_id).worksheet("BS_Fullfilment_Cost")
             df_bs = pd.DataFrame(ws_bs.get_all_records())
             
             # Cleaning Headers & Data
@@ -644,7 +644,7 @@ def load_reseller_complete_data(_client):
     
     try:
         # 1. FORECAST 2026 RESELLER
-        ws_fcst = _client.open_by_url(gsheet_url).worksheet("Forecast_2026_Reseller")
+        ws_fcst = _client.open_by_key(sheet_id).worksheet("Forecast_2026_Reseller")
         df_fcst_raw = pd.DataFrame(ws_fcst.get_all_records())
         df_fcst_raw.columns = [col.strip() for col in df_fcst_raw.columns]
         
@@ -673,7 +673,7 @@ def load_reseller_complete_data(_client):
         
         # 2. SALES RESELLER
         try:
-            ws_sales = _client.open_by_url(gsheet_url).worksheet("Sales_Reseller")
+            ws_sales = _client.open_by_key(sheet_id).worksheet("Sales_Reseller")
             df_sales_raw = pd.DataFrame(ws_sales.get_all_records())
             df_sales_raw.columns = [col.strip() for col in df_sales_raw.columns]
             
@@ -699,7 +699,7 @@ def load_reseller_complete_data(_client):
         
         # 3. PAST ROFO RESELLER
         try:
-            ws_rofo = _client.open_by_url(gsheet_url).worksheet("Past_Rofo_Reseller")
+            ws_rofo = _client.open_by_key(sheet_id).worksheet("Past_Rofo_Reseller")
             df_rofo_raw = pd.DataFrame(ws_rofo.get_all_records())
             df_rofo_raw.columns = [col.strip() for col in df_rofo_raw.columns]
             
@@ -724,7 +724,7 @@ def load_reseller_complete_data(_client):
         
         # 4. PAST PO RESELLER
         try:
-            ws_po = _client.open_by_url(gsheet_url).worksheet("Past_PO_Reseller")
+            ws_po = _client.open_by_key(sheet_id).worksheet("Past_PO_Reseller")
             df_po_raw = pd.DataFrame(ws_po.get_all_records())
             df_po_raw.columns = [col.strip() for col in df_po_raw.columns]
             
