@@ -444,7 +444,7 @@ def load_and_process_data(_client):
     Load semua data termasuk sheet baru: BS_Fullfilment_Cost
     """
     
-    gsheet_url = st.secrets["https://docs.google.com/spreadsheets/d/1jcs8L0CysdzxemPz1EYVVfVhsSR-ik46khIw5jhhBgw"]
+    gsheet_url = st.secrets["gsheet_url"]
     data = {}
 
     # --- HELPER: Baca Sheet Manual ---
