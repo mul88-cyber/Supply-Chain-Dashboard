@@ -3002,898 +3002,989 @@ with tab2:
                     avg_cover = tier_inv['Avg_Cover_Months'].mean()
                     st.metric("Average Cover All Tiers", f"{avg_cover:.1f} months")
 
-# --- TAB 3: INVENTORY ANALYSIS (FIXED VERSION) ---
+# --- TAB 3: INTELLIGENT INVENTORY OPTIMIZATION ---
 with tab3:
-    st.subheader("📦 Inventory Health & Aging Analysis")
-    st.markdown("#### **Professional Stock Management Dashboard**")
+    st.subheader("🧠 INTELLIGENT INVENTORY OPTIMIZATION SYSTEM")
+    st.markdown("#### **AI-Powered Stock Management with Predictive Analytics**")
     
-    # 1. AMBIL DATA & PASTIKAN KOLOM KATEGORI ADA
-    df_batch = df_stock.copy()
+    # ============================================
+    # SECTION 1: EXECUTIVE INTELLIGENCE DASHBOARD
+    # ============================================
+    st.markdown("---")
     
-    # Debug: Cek kolom yang tersedia
-    if st.checkbox("🔍 Show Available Columns", False):
-        st.write("Available columns:", list(df_batch.columns))
+    # REAL-TIME INVENTORY HEALTH SCORE
+    col_score1, col_score2, col_score3, col_score4 = st.columns(4)
     
-    # Cari kolom kategori dengan pattern matching
-    col_cat = 'Stock_Category'
-    if col_cat not in df_batch.columns:
-        candidates = [c for c in df_batch.columns if 'category' in c.lower() or 'kategori' in c.lower()]
-        if candidates:
-            col_cat = candidates[0]
-        else:
-            st.error("❌ Column 'Stock_Category' not found")
-            col_cat = None
-    
-    if col_cat:
-        # Standardize column names
-        df_batch = df_batch.rename(columns={col_cat: 'Stock_Category'})
+    with col_score1:
+        # Inventory Health Score
+        health_score = 0
+        if 'inventory_df' in inventory_metrics and not inventory_metrics['inventory_df'].empty:
+            df_inv = inventory_metrics['inventory_df']
+            healthy_skus = len(df_inv[df_inv['Cover_Months'].between(0.8, 1.5)])
+            total_active = len(df_inv)
+            health_score = (healthy_skus / total_active * 100) if total_active > 0 else 0
         
-        # Filter Data Kosong
-        df_batch['Stock_Qty'] = pd.to_numeric(df_batch['Stock_Qty'], errors='coerce').fillna(0)
-        df_batch = df_batch[df_batch['Stock_Qty'] > 0]
-        
-        # Bersihkan Nama Kategori
-        df_batch['Stock_Category'] = df_batch['Stock_Category'].astype(str).str.strip()
-        
-        # 2. TAMBAHKAN STATUS DARI PRODUCT MASTER
-        if not df_product.empty and 'SKU_ID' in df_batch.columns:
-            # Ambil kolom Status dari Product Master
-            product_status = df_product[['SKU_ID', 'Status']].copy()
-            product_status['Status'] = product_status['Status'].astype(str).str.strip()
-            
-            # Merge dengan stock data
-            df_batch = pd.merge(
-                df_batch, 
-                product_status, 
-                on='SKU_ID', 
-                how='left'
-            )
-            
-            # Fill missing status
-            df_batch['Status'] = df_batch['Status'].fillna('Unknown')
-        else:
-            df_batch['Status'] = 'Unknown'
-        
-        # 3. LOGIC UMUR EXPIRED - IMPROVED VERSION
-        def get_expiry_desc(row):
-            """Enhanced expiry categorization"""
-            try:
-                # Cari kolom expiry dengan pattern matching
-                expiry_cols = [c for c in row.index if 'expir' in c.lower() or 'ed' in c.lower()]
-                
-                if not expiry_cols:
-                    return 'Not Defined'
-                
-                d_val = row[expiry_cols[0]]
-                
-                if pd.isna(d_val) or str(d_val).strip() in ['', '-', 'nan', 'None', 'null']:
-                    return 'Not Defined'
-                
-                # Multiple date parsing strategies
-                formats = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
-                
-                for fmt in formats:
-                    try:
-                        exp = pd.to_datetime(d_val, format=fmt)
-                        break
-                    except:
-                        try:
-                            exp = pd.to_datetime(str(d_val), dayfirst=True)
-                            break
-                        except:
-                            exp = pd.NaT
-                
-                if pd.isna(exp):
-                    return 'Not Defined'
-                
-                days = (exp - pd.Timestamp.now()).days
-                
-                if days < 0:
-                    return '❌ EXPIRED'
-                elif days <= 30:
-                    return '🚨 Critical (<30 days)'
-                elif days <= 90:
-                    return '⚠️ NED (1-3 months)'
-                elif days <= 180:
-                    return '📅 NED (3-6 months)'
-                elif days <= 365:
-                    return '✅ NED (6-12 months)'
-                else:
-                    return '🌟 Fresh (> 12 months)'
-            except:
-                return 'Not Defined'
-        
-        df_batch['Expiry_Category'] = df_batch.apply(get_expiry_desc, axis=1)
-        
-        # ============================================
-        # SECTION 1: EXECUTIVE SUMMARY CARDS
-        # ============================================
-        st.markdown("---")
-        st.markdown("### 📊 Executive Summary")
-        
-        # Calculate metrics
-        total_stock = df_batch['Stock_Qty'].sum()
-        total_skus = df_batch['SKU_ID'].nunique()
-        total_value = 0
-        
-        # Try to calculate value if price exists
-        if 'Floor_Price' in df_batch.columns:
-            df_batch['Floor_Price'] = pd.to_numeric(df_batch['Floor_Price'], errors='coerce').fillna(0)
-            total_value = (df_batch['Stock_Qty'] * df_batch['Floor_Price']).sum()
-        
-        # Expiry risk metrics
-        critical_items = df_batch[df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 days)'])]
-        critical_qty = critical_items['Stock_Qty'].sum()
-        critical_skus = critical_items['SKU_ID'].nunique()
-        
-        # Status distribution
-        if 'Status' in df_batch.columns:
-            active_count = df_batch[df_batch['Status'].str.upper() == 'ACTIVE']['SKU_ID'].nunique()
-        else:
-            active_count = total_skus
-        
-        # Create summary cards
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        border-radius: 12px; padding: 1.5rem; color: white; 
-                        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);">
-                <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL STOCK VALUE</div>
-                <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">Rp {total_value:,.0f}</div>
-                <div style="font-size: 0.8rem;">{total_skus:,} SKUs</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); 
-                        border-radius: 12px; padding: 1.5rem; color: white; 
-                        box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);">
-                <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL QUANTITY</div>
-                <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">{total_stock:,.0f}</div>
-                <div style="font-size: 0.8rem;">Units in stock</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); 
-                        border-radius: 12px; padding: 1.5rem; color: white; 
-                        box-shadow: 0 6px 20px rgba(255, 152, 0, 0.3);">
-                <div style="font-size: 0.9rem; opacity: 0.9;">ACTIVE SKUS</div>
-                <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">{active_count:,}</div>
-                <div style="font-size: 0.8rem;">{total_skus-active_count:,} Inactive</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            risk_color = "#F44336" if critical_qty > 0 else "#4CAF50"
-            risk_text = "⚠️ HIGH" if critical_qty > 0 else "✅ LOW"
-            
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, {risk_color} 0%, {risk_color.replace('F44', 'D32')} 100%); 
-                        border-radius: 12px; padding: 1.5rem; color: white; 
-                        box-shadow: 0 6px 20px rgba(244, 67, 54, 0.3);">
-                <div style="font-size: 0.9rem; opacity: 0.9;">EXPIRY RISK</div>
-                <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">{risk_text}</div>
-                <div style="font-size: 0.8rem;">{critical_skus:,} risky SKUs</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # ============================================
-        # NEW SECTION: INVENTORY COVERAGE ANALYSIS
-        # ============================================
-        st.markdown("---")
-        st.markdown("### 📅 Inventory Coverage Analysis (Months Cover)")
-        st.caption("**Analyzing Regular SKUs Only** | Thresholds: <0.8 months = Need Replenishment | 0.8-1.5 months = Ideal | >1.5 months = Over Stock")
-        
-        # ======================== TAMBAH DI SINI: WAREHOUSE SETTINGS ========================
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 🏢 Warehouse Settings")
-        WH_CAPACITY = st.sidebar.number_input(
-            "Warehouse Capacity (pcs)",
-            min_value=1000,
-            max_value=1000000,
-            value=250000,
-            step=10000,
-            help="Total warehouse capacity in pieces"
-        )
-        
-        # Identifikasi Regular vs Non-Regular SKUs
-        def identify_regular_skus(df_stock, df_sales, df_forecast, df_product):
-            """Identify Regular SKUs based on sales, forecast, and active status"""
-            regular_skus = []
-            
-            # SKU dengan status Active di Product Master
-            if not df_product.empty and 'Status' in df_product.columns:
-                active_skus = df_product[df_product['Status'].str.upper() == 'ACTIVE']['SKU_ID'].unique().tolist()
-                regular_skus.extend(active_skus)
-            
-            # SKU dengan sales dalam 3 bulan terakhir
-            if not df_sales.empty:
-                sales_months = sorted(df_sales['Month'].unique())
-                if len(sales_months) >= 3:
-                    last_3_months = sales_months[-3:]
-                    recent_sales_skus = df_sales[df_sales['Month'].isin(last_3_months)]['SKU_ID'].unique().tolist()
-                    regular_skus.extend(recent_sales_skus)
-            
-            # SKU dengan forecast untuk bulan depan
-            if not df_forecast.empty:
-                forecast_skus = df_forecast['SKU_ID'].unique().tolist()
-                regular_skus.extend(forecast_skus)
-            
-            # Remove duplicates
-            regular_skus = list(set(regular_skus))
-            return regular_skus
-        
-        # Get Regular SKUs
-        regular_skus = identify_regular_skus(df_batch, df_sales, df_forecast, df_product)
-        
-        # Add Regular/Non-Regular classification
-        df_batch['SKU_Type'] = df_batch['SKU_ID'].apply(
-            lambda x: 'Regular' if x in regular_skus else 'Non-Regular'
-        )
-        
-        # Filter hanya Regular SKUs untuk coverage analysis (dan Active status)
-        df_regular = df_batch[(df_batch['SKU_Type'] == 'Regular') & (df_batch['Status'].str.upper() == 'ACTIVE')].copy()
-        
-        if not df_regular.empty:
-            # Calculate coverage months
-            # Asumsi: Avg Monthly Sales = 3-month average dari sales data
-            
-            # Get sales data untuk regular SKUs
-            if not df_sales.empty:
-                # Get last 3 months sales data
-                sales_months = sorted(df_sales['Month'].unique())
-                if len(sales_months) >= 3:
-                    last_3_months = sales_months[-3:]
-                    df_sales_last_3 = df_sales[df_sales['Month'].isin(last_3_months)].copy()
-                    
-                    # Calculate average monthly sales per SKU
-                    avg_monthly_sales = df_sales_last_3.groupby('SKU_ID')['Sales_Qty'].mean().reset_index()
-                    avg_monthly_sales.columns = ['SKU_ID', 'Avg_Monthly_Sales_3M']
-                    
-                    # Merge dengan stock data
-                    df_coverage = pd.merge(
-                        df_regular,
-                        avg_monthly_sales,
-                        on='SKU_ID',
-                        how='left'
-                    )
-                else:
-                    df_coverage = df_regular.copy()
-                    df_coverage['Avg_Monthly_Sales_3M'] = 0
-            else:
-                df_coverage = df_regular.copy()
-                df_coverage['Avg_Monthly_Sales_3M'] = 0
-            
-            # Fill NaN dengan 0
-            df_coverage['Avg_Monthly_Sales_3M'] = df_coverage['Avg_Monthly_Sales_3M'].fillna(0)
-            
-            # Calculate coverage months
-            df_coverage['Cover_Months'] = np.where(
-                df_coverage['Avg_Monthly_Sales_3M'] > 0,
-                df_coverage['Stock_Qty'] / df_coverage['Avg_Monthly_Sales_3M'],
-                999  # Untuk SKU dengan no sales history
-            )
-            
-            # Categorize coverage status
-            conditions = [
-                df_coverage['Cover_Months'] < 0.8,
-                (df_coverage['Cover_Months'] >= 0.8) & (df_coverage['Cover_Months'] <= 1.5),
-                df_coverage['Cover_Months'] > 1.5
-            ]
-            choices = ['Need Replenishment', 'Ideal/Healthy', 'High Stock']
-            df_coverage['Coverage_Status'] = np.select(conditions, choices, default='Unknown')
-            
-            # Add product info (jika belum ada)
-            if 'Product_Name' not in df_coverage.columns:
-                df_coverage = add_product_info_to_data(df_coverage, df_product)
-            
-            # ======================== TAMBAH DI SINI: HITUNG METRICS PENTING ========================
-            # Hitung metrics untuk speedometer
-            valid_coverage = df_coverage[df_coverage['Cover_Months'] < 999]
-            avg_cover = valid_coverage['Cover_Months'].mean() if not valid_coverage.empty else 0
-            
-            # Warehouse occupancy calculation
-            current_occupancy = df_regular['Stock_Qty'].sum() if not df_regular.empty else 0
-            occupancy_percentage = (current_occupancy / WH_CAPACITY * 100) if WH_CAPACITY > 0 else 0
-            
-            # SKU health score
-            healthy_skus = len(df_coverage[df_coverage['Coverage_Status'] == 'Ideal/Healthy'])
-            total_regular_skus = len(df_coverage)
-            health_score = (healthy_skus / total_regular_skus * 100) if total_regular_skus > 0 else 0
-            
-        # ============================================
-        # COVERAGE ANALYSIS VISUALIZATION - COMPACT VERSION (2 SPEEDOMETERS)
-        # ============================================
-        
-        # Row 2: Two Speedometers in One Row
-        st.markdown("---")
-        st.markdown("#### ⚡ Inventory Health Dashboard")
-        
-        speed_col1, speed_col2 = st.columns(2)  # UBAH: dari 3 jadi 2 kolom
-        
-        with speed_col1:
-            # Speedometer 1: Average Coverage
-            coverage_status = ""
-            if avg_cover < 0.8:
-                coverage_status = "🔴 Need Replenishment"
-            elif avg_cover <= 1.5:
-                coverage_status = "🟢 Ideal"
-            else:
-                coverage_status = "🟡 High Stock"
-            
-            fig_coverage = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=avg_cover,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={
-                    'text': "Avg Coverage<br><span style='font-size:12px;color:gray'>Target: 0.8-1.5 months</span>",
-                    'font': {'size': 16}
-                },
-                number={
-                    'suffix': " months",
-                    'font': {'size': 24}
-                },
-                gauge={
-                    'axis': {'range': [0, 3], 'tickwidth': 1, 'tickfont': {'size': 12}},
-                    'bar': {'color': "#667eea"},
-                    'steps': [
-                        {'range': [0, 0.8], 'color': "#FF5252"},
-                        {'range': [0.8, 1.5], 'color': "#4CAF50"},
-                        {'range': [1.5, 3], 'color': "#FF9800"}
-                    ],
-                    'threshold': {
-                        'line': {'color': "black", 'width': 3},
-                        'thickness': 0.80,
-                        'value': 1.5
-                    }
+        fig_health = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=health_score,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "🏆 Inventory Health Score", 'font': {'size': 16}},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "#4CAF50"},
+                'steps': [
+                    {'range': [0, 50], 'color': "#FF5252"},
+                    {'range': [50, 80], 'color': "#FF9800"},
+                    {'range': [80, 100], 'color': "#4CAF50"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 80
                 }
-            ))
-            
-            fig_coverage.update_layout(
-                height=250,
-                margin=dict(t=40, b=30, l=20, r=20),
-                font={'size': 12}
-            )
-            
-            st.plotly_chart(fig_coverage, use_container_width=True)
-            st.caption(f"**{coverage_status}** | Based on {len(valid_coverage)} SKUs")
-        
-        with speed_col2:
-            # Speedometer 2: Warehouse Occupancy
-            wh_status = ""
-            if occupancy_percentage < 60:
-                wh_status = "🟢 Optimal"
-            elif occupancy_percentage < 80:
-                wh_status = "🟡 Moderate"
+            }
+        ))
+        fig_health.update_layout(height=200, margin=dict(t=30, b=10))
+        st.plotly_chart(fig_health, use_container_width=True)
+    
+    with col_score2:
+        # Capital Efficiency Score
+        if 'inventory_df' in inventory_metrics and not df_stock.empty and 'Floor_Price' in df_stock.columns:
+            # Calculate inventory turns
+            total_inv_value = (df_stock['Stock_Qty'] * df_stock['Floor_Price']).sum()
+            if not df_financial.empty:
+                annual_sales = df_financial['Revenue'].sum()
+                inventory_turns = annual_sales / total_inv_value if total_inv_value > 0 else 0
+                
+                # Industry benchmark comparison
+                industry_avg = 4.0  # Retail industry average
+                efficiency_score = min(100, (inventory_turns / industry_avg * 100))
+                
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); 
+                            border-radius: 12px; padding: 1.2rem; color: white; 
+                            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.3); height: 200px;">
+                    <div style="font-size: 0.9rem; opacity: 0.9;">CAPITAL EFFICIENCY</div>
+                    <div style="font-size: 2rem; font-weight: 800; margin: 0.5rem 0;">{inventory_turns:.1f}x</div>
+                    <div style="font-size: 0.9rem;">Inventory Turns</div>
+                    <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
+                        Industry Avg: {industry_avg}x<br>
+                        Score: {efficiency_score:.0f}/100
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                wh_status = "🔴 Critical"
-            
-            fig_wh = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=occupancy_percentage,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={
-                    'text': "WH Occupancy<br><span style='font-size:12px;color:gray'>250K capacity</span>",
-                    'font': {'size': 11}
-                },
-                number={
-                    'suffix': "%",
-                    'font': {'size': 24}
-                },
-                gauge={
-                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickfont': {'size': 10}},
-                    'bar': {'color': "#9C27B0"},
-                    'steps': [
-                        {'range': [0, 60], 'color': '#4CAF50'},
-                        {'range': [60, 80], 'color': '#FF9800'},
-                        {'range': [80, 100], 'color': '#F44336'}
-                    ],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.80,
-                        'value': 80
-                    }
-                }
-            ))
-            
-            fig_wh.update_layout(
-                height=250,
-                margin=dict(t=40, b=30, l=20, r=20),
-                font={'size': 12}
-            )
-            
-            st.plotly_chart(fig_wh, use_container_width=True)
-            st.caption(f"**{wh_status}** | Available: {WH_CAPACITY - current_occupancy:,.0f} pcs")
-
-            
-            # Row 3: Warehouse Utilization Insights
-            st.markdown("---")
-            with st.expander("📦 **Warehouse Space Analysis**", expanded=False):
+                st.metric("Capital Efficiency", "N/A", "Need sales data")
+        else:
+            st.metric("Capital Efficiency", "N/A", "Need price data")
+    
+    with col_score3:
+        # Stockout Risk Index
+        stockout_risk = 0
+        if 'low_stock' in inventory_metrics and not inventory_metrics['low_stock'].empty:
+            low_stock_df = inventory_metrics['low_stock']
+            critical_items = low_stock_df[low_stock_df['Cover_Months'] < 0.5]
+            stockout_risk = len(critical_items)
+        
+        risk_color = "#4CAF50" if stockout_risk == 0 else "#FF9800" if stockout_risk < 5 else "#F44336"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, {risk_color} 0%, {risk_color.replace('F44', 'D32')} 100%); 
+                    border-radius: 12px; padding: 1.2rem; color: white; 
+                    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.3); height: 200px;">
+            <div style="font-size: 0.9rem; opacity: 0.9;">🚨 STOCKOUT RISK</div>
+            <div style="font-size: 2rem; font-weight: 800; margin: 0.5rem 0;">{stockout_risk}</div>
+            <div style="font-size: 0.9rem;">Critical SKUs</div>
+            <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
+                {"✅ All good" if stockout_risk == 0 else "⚠️ Monitor" if stockout_risk < 5 else "🚨 Immediate action needed"}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_score4:
+        # Excess Stock Value
+        excess_value = 0
+        if 'high_stock' in inventory_metrics and not inventory_metrics['high_stock'].empty:
+            high_stock_df = inventory_metrics['high_stock']
+            if 'Floor_Price' in high_stock_df.columns:
+                high_stock_df['Value'] = high_stock_df['Stock_Qty'] * high_stock_df['Floor_Price']
+                excess_value = high_stock_df['Value'].sum()
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); 
+                    border-radius: 12px; padding: 1.2rem; color: white; 
+                    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.3); height: 200px;">
+            <div style="font-size: 0.9rem; opacity: 0.9;">📦 EXCESS STOCK</div>
+            <div style="font-size: 2rem; font-weight: 800; margin: 0.5rem 0;">Rp {excess_value:,.0f}</div>
+            <div style="font-size: 0.9rem;">Capital Locked</div>
+            <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
+                {"✅ Optimal" if excess_value < 10000000 else "⚠️ Moderate" if excess_value < 50000000 else "🚨 High"}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ============================================
+    # NEW SECTION: INTELLIGENT RECOMMENDATIONS ENGINE
+    # ============================================
+    st.markdown("---")
+    st.subheader("🎯 AI-PURCHASING RECOMMENDATIONS")
+    
+    # ======================== FUNGSI BARU: REORDER POINT CALCULATION ========================
+    @st.cache_data
+    def calculate_reorder_recommendations(df_inventory, df_sales, service_level=95, lead_time_days=30):
+        """
+        Calculate intelligent reorder recommendations
+        based on statistical safety stock calculations
+        """
+        recommendations = []
+        
+        if df_inventory.empty or df_sales.empty:
+            return pd.DataFrame()
+        
+        try:
+            # Calculate daily sales statistics
+            if 'Month' in df_sales.columns:
+                # Get last 90 days sales
+                latest_date = df_sales['Month'].max()
+                start_date = latest_date - pd.Timedelta(days=90)
+                recent_sales = df_sales[df_sales['Month'] >= start_date].copy()
                 
-                # Utilization by category
-                category_utilization = df_regular.groupby('Stock_Category').agg({
-                    'Stock_Qty': 'sum',
-                    'SKU_ID': 'count'
-                }).reset_index()
+                # Calculate daily sales per SKU
+                recent_sales['Days_Since'] = (latest_date - recent_sales['Month']).dt.days
+                recent_sales['Weight'] = np.exp(-recent_sales['Days_Since'] / 30)  # Exponential decay weighting
                 
-                category_utilization['Utilization_Pct'] = (category_utilization['Stock_Qty'] / current_occupancy * 100)
-                category_utilization = category_utilization.sort_values('Stock_Qty', ascending=False)
-                
-                col_util1, col_util2 = st.columns(2)
-                
-                with col_util1:
-                    # Top categories bar chart
-                    fig_top_cat = px.bar(
-                        category_utilization.head(10),
-                        x='Stock_Category',
-                        y='Stock_Qty',
-                        title="Top 10 Categories by Space Usage",
-                        labels={'Stock_Qty': 'Quantity (pcs)', 'Stock_Category': 'Category'},
-                        color='Stock_Qty',
-                        color_continuous_scale='Viridis'
-                    )
+                sku_stats = []
+                for sku_id in df_inventory['SKU_ID'].unique():
+                    sku_sales = recent_sales[recent_sales['SKU_ID'] == sku_id]
                     
-                    fig_top_cat.update_layout(height=300)
-                    st.plotly_chart(fig_top_cat, use_container_width=True)
-                
-                with col_util2:
-                    # Space allocation pie chart
-                    fig_pie_space = px.pie(
-                        category_utilization,
-                        values='Stock_Qty',
-                        names='Stock_Category',
-                        title="Warehouse Space Allocation",
-                        hole=0.4
-                    )
-                    
-                    fig_pie_space.update_layout(height=300)
-                    st.plotly_chart(fig_pie_space, use_container_width=True)
-                
-                # Space optimization tips
-                st.markdown("#### 💡 Space Optimization Tips")
-                
-                tips = []
-                
-                if occupancy_percentage > 80:
-                    tips.append("🚨 **Urgent Action Required:** Warehouse >80% full. Consider clearance sales for slow-moving items.")
-                elif occupancy_percentage > 60:
-                    tips.append("⚠️ **Monitor Closely:** Warehouse 60-80% full. Optimize storage layout.")
-                
-                if not category_utilization.empty:
-                    top_cat = category_utilization.iloc[0]
-                    if top_cat['Utilization_Pct'] > 30:
-                        tips.append(f"📦 **Category Focus:** '{top_cat['Stock_Category']}' uses {top_cat['Utilization_Pct']:.1f}% of space. Consider storage optimization.")
-                
-                high_stock_count = len(df_coverage[df_coverage['Coverage_Status'] == 'High Stock'])
-                if high_stock_count > 0:
-                    tips.append(f"📉 **Stock Reduction:** {high_stock_count} SKUs have >1.5 months coverage. Reduce to free up space.")
-                
-                for tip in tips:
-                    st.info(tip)
-            
-            # Row 4: Detailed Coverage Table
-            st.markdown("---")
-                    
-                  
-            # ============================================
-            # NEW: WAREHOUSE UTILIZATION INSIGHTS
-            # ============================================
-            st.markdown("---")
-            with st.expander("🏢 **Warehouse Utilization Analysis**", expanded=False):
-                
-                # Hitung utilization per kategori
-                if not df_regular.empty:
-                    # Utilization by category
-                    category_utilization = df_regular.groupby('Stock_Category').agg({
-                        'Stock_Qty': 'sum',
-                        'SKU_ID': 'count'
-                    }).reset_index()
-                    
-                    category_utilization['Utilization_Pct'] = (category_utilization['Stock_Qty'] / current_occupancy * 100)
-                    category_utilization = category_utilization.sort_values('Stock_Qty', ascending=False)
-                    
-                    col_wh1, col_wh2 = st.columns(2)
-                    
-                    with col_wh1:
-                        st.markdown("#### 📦 Top Categories by Space")
+                    if len(sku_sales) >= 3:  # Minimum data points
+                        # Weighted average daily sales
+                        total_weight = sku_sales['Weight'].sum()
+                        if total_weight > 0:
+                            avg_daily_sales = (sku_sales['Sales_Qty'] * sku_sales['Weight']).sum() / total_weight / 30
+                        else:
+                            avg_daily_sales = sku_sales['Sales_Qty'].mean() / 30
                         
-                        # Bar chart top categories
-                        fig_cat = px.bar(
-                            category_utilization.head(10),
-                            x='Stock_Category',
-                            y='Stock_Qty',
-                            title=f"Top 10 Categories ({category_utilization['Stock_Qty'].head(10).sum():,.0f} pcs)",
-                            labels={'Stock_Qty': 'Quantity (pcs)', 'Stock_Category': 'Category'},
-                            color='Stock_Qty',
-                            color_continuous_scale='Viridis'
-                        )
+                        # Standard deviation
+                        sales_std = sku_sales['Sales_Qty'].std() / 30
                         
-                        fig_cat.update_layout(height=300)
-                        st.plotly_chart(fig_cat, use_container_width=True)
-                    
-                    with col_wh2:
-                        st.markdown("#### 📊 Space Distribution")
-                        
-                        # Pie chart space distribution
-                        fig_pie_wh = px.pie(
-                            category_utilization,
-                            values='Stock_Qty',
-                            names='Stock_Category',
-                            title=f"Warehouse Space Allocation",
-                            hole=0.4,
-                            color_discrete_sequence=px.colors.qualitative.Set3
-                        )
-                        
-                        fig_pie_wh.update_layout(height=300)
-                        st.plotly_chart(fig_pie_wh, use_container_width=True)
-                    
-                    # Warehouse recommendations
-                    st.markdown("#### 💡 Warehouse Optimization Suggestions")
-                    
-                    recommendations = []
-                    
-                    # Space optimization
-                    if occupancy_percentage > 80:
-                        recommendations.append("🚨 **Critical Space:** Warehouse occupancy >80%. Consider urgent stock reduction.")
-                    elif occupancy_percentage > 60:
-                        recommendations.append("⚠️ **Moderate Space:** Warehouse occupancy 60-80%. Monitor closely.")
-                    else:
-                        recommendations.append("✅ **Optimal Space:** Warehouse occupancy <60%. Good utilization.")
-                    
-                    # Category-specific recommendations
-                    if not category_utilization.empty:
-                        top_category = category_utilization.iloc[0]
-                        top_pct = top_category['Utilization_Pct']
-                        if top_pct > 30:
-                            recommendations.append(f"📦 **Category Concentration:** '{top_category['Stock_Category']}' uses {top_pct:.1f}% of total space. Consider diversification.")
-                    
-                    # Coverage-based recommendations
-                    if 'df_coverage' in locals():
-                        high_stock_count = len(df_coverage[df_coverage['Coverage_Status'] == 'High Stock'])
-                        if high_stock_count > 0:
-                            recommendations.append(f"📉 **Excess Stock:** {high_stock_count} SKUs with >1.5 months coverage. Reduce to free up space.")
-                    
-                    for rec in recommendations:
-                        st.info(rec)
+                        sku_stats.append({
+                            'SKU_ID': sku_id,
+                            'Avg_Daily_Sales': avg_daily_sales,
+                            'Sales_Std': sales_std if not pd.isna(sales_std) else avg_daily_sales * 0.3
+                        })
                 
-                # Space projection
-                st.markdown("#### 📈 Space Projection")
+                df_stats = pd.DataFrame(sku_stats)
                 
-                col_proj1, col_proj2, col_proj3 = st.columns(3)
+                # Merge with inventory data
+                df_combined = pd.merge(df_inventory, df_stats, on='SKU_ID', how='left')
+                df_combined['Avg_Daily_Sales'] = df_combined['Avg_Daily_Sales'].fillna(0)
+                df_combined['Sales_Std'] = df_combined['Sales_Std'].fillna(df_combined['Avg_Daily_Sales'] * 0.3)
                 
-                with col_proj1:
-                    available_space = WH_CAPACITY - current_occupancy
-                    st.metric("Available Space", f"{available_space:,.0f} pcs")
+                # Z-score for service level
+                z_score = {90: 1.28, 95: 1.65, 99: 2.33}.get(service_level, 1.65)
                 
-                with col_proj2:
-                    # Project jika semua Need Replenishment diorder
-                    if 'need_replenish' in locals() and not need_replenish.empty:
-                        projected_qty = need_replenish['Avg_Monthly_Sales_3M'].sum() * 1.5  # Order untuk 1.5 bulan
-                        st.metric("Replenishment Projection", f"{projected_qty:,.0f} pcs")
+                # Calculate safety stock
+                df_combined['Safety_Stock'] = z_score * df_combined['Sales_Std'] * np.sqrt(lead_time_days)
                 
-                with col_proj3:
-                    projected_occupancy = current_occupancy + (need_replenish['Avg_Monthly_Sales_3M'].sum() * 1.5 if 'need_replenish' in locals() and not need_replenish.empty else 0)
-                    projected_pct = (projected_occupancy / WH_CAPACITY * 100) if WH_CAPACITY > 0 else 0
-                    st.metric("Projected Occupancy", f"{projected_pct:.1f}%")
-                    
-        
-        # ============================================
-        # SECTION 2: INVENTORY MATRIX (PIVOT TABLE - FIXED VERSION)
-        # ============================================
-        st.markdown("---")
-        st.markdown("### 🗓️ Inventory Matrix: Category vs Expiry")
-        st.caption("**Excel-style Pivot Table** - Horizontal expiry categories with heatmap visualization")
-        
-        # Create pivot table
-        pivot = pd.pivot_table(
-            df_batch, 
-            values='Stock_Qty', 
-            index='Stock_Category', 
-            columns='Expiry_Category', 
-            aggfunc='sum', 
-            fill_value=0
-        )
-        
-        # Reorder columns logically
-        expiry_order = [
-            '❌ EXPIRED',
-            '🚨 Critical (<30 days)',
-            '⚠️ NED (1-3 months)',
-            '📅 NED (3-6 months)',
-            '✅ NED (6-12 months)',
-            '🌟 Fresh (> 12 months)',
-            'Not Defined'
-        ]
-        
-        # Filter hanya kolom yang ada
-        existing_cols = [col for col in expiry_order if col in pivot.columns]
-        
-        # Pastikan ada kolom yang bisa ditampilkan
-        if existing_cols:
-            pivot = pivot[existing_cols]
-            
-            # Hitung TOTAL row manual
-            pivot.loc['TOTAL'] = pivot.sum()
-            
-            # Hitung TOTAL column manual
-            pivot['TOTAL'] = pivot.sum(axis=1)
-            
-            # Sort rows by total (exclude TOTAL row dari sorting)
-            pivot_for_sorting = pivot.drop('TOTAL', errors='ignore')
-            if 'TOTAL' in pivot_for_sorting.index:
-                pivot_for_sorting = pivot_for_sorting.drop('TOTAL')
-            
-            # Sort by TOTAL column
-            pivot_for_sorting = pivot_for_sorting.sort_values('TOTAL', ascending=False)
-            
-            # Gabungkan kembali dengan TOTAL row
-            pivot_sorted = pd.concat([pivot_for_sorting, pivot.loc[['TOTAL']]])
-            
-            # Create styled dataframe dengan heatmap
-            def color_heatmap(val):
-                """Color coding based on value"""
-                if val == 0:
-                    return 'background-color: #F5F5F5; color: #999'
-                elif val < 100:
-                    return 'background-color: #E8F5E9; color: #000'
-                elif val < 1000:
-                    return 'background-color: #C8E6C9; color: #000'
-                elif val < 5000:
-                    return 'background-color: #A5D6A7; color: #000'
-                elif val < 10000:
-                    return 'background-color: #81C784; color: #000'
-                else:
-                    return 'background-color: #4CAF50; color: white; font-weight: bold'
-            
-            # Apply styling
-            styled_pivot = pivot_sorted.style.applymap(color_heatmap)
-            
-            # Add number formatting
-            styled_pivot = styled_pivot.format("{:,.0f}")
-            
-            # Highlight TOTAL row
-            def highlight_total(row):
-                if row.name == 'TOTAL':
-                    return ['background-color: #E3F2FD; font-weight: bold'] * len(row)
-                return [''] * len(row)
-            
-            styled_pivot = styled_pivot.apply(highlight_total, axis=1)
-            
-            # Display the pivot table
-            st.dataframe(
-                styled_pivot,
-                use_container_width=True,
-                height=min(600, (len(pivot_sorted) + 2) * 35)
-            )
-                    
-        # ============================================
-        # SECTION 4: DRILL-DOWN ANALYSIS
-        # ============================================
-        st.markdown("---")
-        st.markdown("### 🔍 Drill-Down Analysis")
-        
-        # Filter options
-        col_filter1, col_filter2, col_filter3 = st.columns(3)
-        
-        with col_filter1:
-            selected_category = st.selectbox(
-                "Select Stock Category",
-                options=['All'] + sorted(df_batch['Stock_Category'].unique().tolist()),
-                index=0,
-                key="drill_category"
-            )
-        
-        with col_filter2:
-            selected_expiry = st.selectbox(
-                "Select Expiry Status",
-                options=['All'] + sorted(df_batch['Expiry_Category'].unique().tolist()),
-                index=0,
-                key="drill_expiry"
-            )
-        
-        with col_filter3:
-            selected_status = st.selectbox(
-                "Select SKU Status",
-                options=['All'] + sorted(df_batch['Status'].unique().tolist()),
-                index=0,
-                key="drill_sku_status"
-            )
-        
-        # Apply filters
-        filtered_drill = df_batch.copy()
-        
-        if selected_category != 'All':
-            filtered_drill = filtered_drill[filtered_drill['Stock_Category'] == selected_category]
-        
-        if selected_expiry != 'All':
-            filtered_drill = filtered_drill[filtered_drill['Expiry_Category'] == selected_expiry]
-        
-        if selected_status != 'All':
-            filtered_drill = filtered_drill[filtered_drill['Status'] == selected_status]
-        
-        if not filtered_drill.empty:
-            # Display detailed table
-            st.markdown(f"**📋 Detailed SKU List ({len(filtered_drill)} items)**")
-            
-            # Prepare display columns - TANPA SKU_Type
-            display_cols = ['SKU_ID', 'Product_Name', 'Status', 'Stock_Category', 
-                            'Expiry_Category', 'Stock_Qty', 'Expiry_Date']
-            
-            # Add coverage info jika ada
-            if 'Cover_Months' in df_batch.columns:
-                display_cols.append('Cover_Months')
-                display_cols.append('Coverage_Status')
-            
-            # Add price if available
-            if 'Floor_Price' in filtered_drill.columns:
-                display_cols.append('Floor_Price')
-                filtered_drill['Value'] = filtered_drill['Stock_Qty'] * filtered_drill['Floor_Price']
-                display_cols.append('Value')
-            
-            # Filter available columns
-            available_cols = [col for col in display_cols if col in filtered_drill.columns]
-            
-            # Create styled dataframe
-            drill_df = filtered_drill[available_cols].copy()
-            
-            # Format columns
-            if 'Stock_Qty' in drill_df.columns:
-                drill_df['Stock_Qty'] = drill_df['Stock_Qty'].apply(lambda x: f"{x:,.0f}")
-            
-            if 'Floor_Price' in drill_df.columns:
-                drill_df['Floor_Price'] = drill_df['Floor_Price'].apply(lambda x: f"Rp {x:,.0f}")
-            
-            if 'Value' in drill_df.columns:
-                drill_df['Value'] = drill_df['Value'].apply(lambda x: f"Rp {x:,.0f}")
-            
-            if 'Cover_Months' in drill_df.columns:
-                drill_df['Cover_Months'] = drill_df['Cover_Months'].apply(lambda x: f"{x:.1f}" if x < 999 else "N/A")
-            
-            # Color code by expiry
-            def color_expiry(row):
-                colors = []
-                for col in drill_df.columns:
-                    if row['Expiry_Category'] == '❌ EXPIRED':
-                        colors.append('background-color: #FFEBEE; color: #C62828')
-                    elif row['Expiry_Category'] == '🚨 Critical (<30 days)':
-                        colors.append('background-color: #FFF3E0; color: #EF6C00')
-                    elif row['Expiry_Category'] == '⚠️ NED (1-3 months)':
-                        colors.append('background-color: #FFF8E1; color: #FF8F00')
-                    else:
-                        colors.append('')
-                return colors
-            
-            # Color code by status
-            def color_status(row):
-                colors = []
-                for col in drill_df.columns:
-                    if row['Status'] == 'Active':
-                        colors.append('')
-                    elif row['Status'] == 'Inactive':
-                        colors.append('background-color: #F5F5F5; color: #757575')
-                    else:
-                        colors.append('background-color: #ECEFF1; color: #546E7A')
-                return colors
-            
-            # Apply styling
-            styled_drill_df = drill_df.style
-            if 'Expiry_Category' in drill_df.columns:
-                styled_drill_df = styled_drill_df.apply(color_expiry, axis=1)
-            if 'Status' in drill_df.columns:
-                styled_drill_df = styled_drill_df.apply(color_status, axis=1)
-            
-            # Display with styling
-            st.dataframe(
-                styled_drill_df,
-                use_container_width=True,
-                height=min(400, (len(drill_df) + 1) * 35)
-            )
-            
-            # Summary for filtered data
-            total_filtered_qty = filtered_drill['Stock_Qty'].sum()
-            total_filtered_skus = filtered_drill['SKU_ID'].nunique()
-            
-            if 'Floor_Price' in filtered_drill.columns:
-                total_filtered_value = (filtered_drill['Stock_Qty'] * filtered_drill['Floor_Price']).sum()
-                st.caption(f"**Summary:** {total_filtered_skus} SKUs | {total_filtered_qty:,.0f} units | Rp {total_filtered_value:,.0f} value")
-            else:
-                st.caption(f"**Summary:** {total_filtered_skus} SKUs | {total_filtered_qty:,.0f} units")
-        
-        # ============================================
-        # SECTION 5: EXPORT & ACTIONS
-        # ============================================
-        st.markdown("---")
-        st.markdown("### ⚡ Quick Actions")
-        
-        action_col1, action_col2, action_col3 = st.columns(3)
-        
-        with action_col1:
-            if st.button("📥 Export Full Data", use_container_width=True, key="export_full"):
-                csv = df_batch.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"inventory_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="download_full"
+                # Calculate reorder point
+                df_combined['Reorder_Point'] = (df_combined['Avg_Daily_Sales'] * lead_time_days) + df_combined['Safety_Stock']
+                
+                # Calculate suggested order quantity
+                df_combined['Suggested_Order_Qty'] = df_combined.apply(
+                    lambda row: max(0, row['Reorder_Point'] - row['Stock_Qty']) if row['Stock_Qty'] < row['Reorder_Point'] else 0,
+                    axis=1
                 )
-        
-        with action_col2:
-            if st.button("🚨 Critical Items Report", use_container_width=True, key="critical_report"):
-                critical = df_batch[df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 days)'])]
-                if not critical.empty:
-                    st.warning(f"**{len(critical)} critical items found!**")
-                    st.dataframe(critical[['SKU_ID', 'Product_Name', 'Status', 'Stock_Qty', 'Expiry_Category', 'Expiry_Date']], 
-                                use_container_width=True)
-        
-        with action_col3:
-            if st.button("🔄 Refresh Analysis", use_container_width=True, key="refresh_analysis"):
-                st.cache_data.clear()
-                st.rerun()
-        
-        # ============================================
-        # SECTION 6: INSIGHTS & RECOMMENDATIONS
-        # ============================================
-        st.markdown("---")
-        with st.expander("💡 **Key Insights & Recommendations**", expanded=True):
-            # Generate insights
-            insights = []
-            
-            # Expiry risk insight
-            if critical_qty > 0:
-                insights.append(f"🚨 **High Risk:** {critical_skus} SKUs ({critical_qty:,.0f} units) are expired or critical. Immediate action required!")
-            
-            # Coverage insights (jika ada data coverage)
-            if 'df_coverage' in locals() and not df_coverage.empty:
-                need_replenish = df_coverage[df_coverage['Coverage_Status'] == 'Need Replenishment']
-                high_stock = df_coverage[df_coverage['Coverage_Status'] == 'High Stock']
                 
-                if len(need_replenish) > 0:
-                    insights.append(f"🔴 **Replenishment Needed:** {len(need_replenish)} Regular SKUs have less than 0.8 months coverage")
+                # Add EOQ (Economic Order Quantity) calculation
+                # Assume ordering cost Rp 50,000 and holding cost 20% of product cost
+                ordering_cost = 50000
+                holding_rate = 0.20
                 
-                if len(high_stock) > 0:
-                    insights.append(f"🟡 **Excess Stock:** {len(high_stock)} Regular SKUs have more than 1.5 months coverage")
+                df_combined['EOQ'] = df_combined.apply(
+                    lambda row: np.sqrt((2 * row['Avg_Daily_Sales'] * 30 * ordering_cost) / 
+                                      (row['Floor_Price'] * holding_rate)) if row['Floor_Price'] > 0 else 0,
+                    axis=1
+                )
+                
+                # Adjust suggested order to EOQ if applicable
+                df_combined['Final_Suggested_Qty'] = df_combined.apply(
+                    lambda row: max(row['Suggested_Order_Qty'], row['EOQ']) if row['Suggested_Order_Qty'] > 0 else 0,
+                    axis=1
+                )
+                
+                # Filter only SKUs that need reorder
+                df_reorder = df_combined[
+                    (df_combined['Final_Suggested_Qty'] > 0) &
+                    (df_combined['Status'].str.upper() == 'ACTIVE')
+                ].copy()
+                
+                # Calculate order value
+                if 'Floor_Price' in df_reorder.columns:
+                    df_reorder['Order_Value'] = df_reorder['Final_Suggested_Qty'] * df_reorder['Floor_Price']
+                
+                return df_reorder.sort_values('Order_Value', ascending=False)
             
-            # Status distribution insight
-            if 'Status' in df_batch.columns:
-                status_counts = df_batch['Status'].value_counts()
-                inactive_count = status_counts.get('Inactive', 0)
-                if inactive_count > 0:
-                    insights.append(f"📊 **Inactive SKUs:** {inactive_count} SKUs marked as Inactive. Consider discontinuing or clearance.")
+            return pd.DataFrame()
             
-            # Category concentration insight
-            category_dist = df_batch.groupby('Stock_Category')['Stock_Qty'].sum()
-            top_3_categories = category_dist.nlargest(3)
-            if len(top_3_categories) >= 3:
-                top_3_percent = (top_3_categories.sum() / total_stock * 100)
-                insights.append(f"📦 **Inventory Concentration:** Top 3 categories hold {top_3_percent:.1f}% of total stock")
-            
-            # Display insights
-            for insight in insights:
-                st.info(insight)
-            
-            # Recommendations
-            st.markdown("#### **Recommended Actions:**")
-            recommendations = [
-                "📦 **Clearance Strategy:** Create promotions for expiring items (>30 days)",
-                "🔄 **Stock Rotation:** Implement FIFO (First-In-First-Out) system",
-                "📊 **Regular Audits:** Schedule monthly expiry checks",
-                "🚨 **Alert System:** Set up expiry notifications at 60, 30, and 7 days",
-                "🎯 **Replenishment Plan:** Order SKUs with <0.8 months coverage",
-                "📉 **Stock Reduction:** Reduce orders for SKUs with >1.5 months coverage"
-            ]
-            
-            for rec in recommendations:
-                st.markdown(f"- {rec}")
+        except Exception as e:
+            st.error(f"Reorder calculation error: {str(e)}")
+            return pd.DataFrame()
     
+    # ======================== FUNGSI BARU: ABC ANALYSIS ========================
+    @st.cache_data
+    def perform_abc_analysis(df_inventory, df_sales=None):
+        """Perform ABC analysis based on Pareto principle"""
+        
+        if df_inventory.empty:
+            return pd.DataFrame()
+        
+        try:
+            # Calculate inventory value
+            df_abc = df_inventory.copy()
+            
+            if 'Floor_Price' in df_abc.columns:
+                df_abc['Value'] = df_abc['Stock_Qty'] * df_abc['Floor_Price']
+            else:
+                # Use stock quantity if no price available
+                df_abc['Value'] = df_abc['Stock_Qty']
+            
+            # Sort by value descending
+            df_abc = df_abc.sort_values('Value', ascending=False)
+            
+            # Calculate cumulative percentages
+            df_abc['Cumulative_Value'] = df_abc['Value'].cumsum()
+            total_value = df_abc['Value'].sum()
+            
+            if total_value > 0:
+                df_abc['Value_Pct'] = (df_abc['Value'] / total_value * 100)
+                df_abc['Cumulative_Pct'] = (df_abc['Cumulative_Value'] / total_value * 100)
+                
+                # Classify A, B, C items
+                conditions = [
+                    df_abc['Cumulative_Pct'] <= 80,      # A items: 80% of value
+                    df_abc['Cumulative_Pct'] <= 95,      # B items: next 15% of value
+                    df_abc['Cumulative_Pct'] <= 100      # C items: last 5% of value
+                ]
+                
+                choices = ['A', 'B', 'C']
+                df_abc['ABC_Class'] = np.select(conditions, choices, default='C')
+                
+                # Calculate turnover if sales data available
+                if df_sales is not None and not df_sales.empty:
+                    # Get last 3 months sales
+                    latest_month = df_sales['Month'].max()
+                    three_months_ago = latest_month - pd.DateOffset(months=3)
+                    recent_sales = df_sales[df_sales['Month'] >= three_months_ago]
+                    
+                    sales_by_sku = recent_sales.groupby('SKU_ID')['Sales_Qty'].sum().reset_index()
+                    sales_by_sku.columns = ['SKU_ID', 'Sales_3M']
+                    
+                    df_abc = pd.merge(df_abc, sales_by_sku, on='SKU_ID', how='left')
+                    df_abc['Sales_3M'] = df_abc['Sales_3M'].fillna(0)
+                    df_abc['Turnover_Rate'] = df_abc.apply(
+                        lambda row: row['Sales_3M'] / row['Stock_Qty'] if row['Stock_Qty'] > 0 else 0,
+                        axis=1
+                    )
+                
+                return df_abc
+            
+            return pd.DataFrame()
+            
+        except Exception as e:
+            st.error(f"ABC Analysis error: {str(e)}")
+            return pd.DataFrame()
+    
+    # ======================== FUNGSI BARU: DEAD STOCK IDENTIFICATION ========================
+    @st.cache_data
+    def identify_dead_stock(df_inventory, df_sales, months_threshold=6):
+        """Identify dead/slow-moving stock"""
+        
+        if df_inventory.empty or df_sales.empty:
+            return pd.DataFrame()
+        
+        try:
+            # Get latest sales date
+            latest_sales_date = df_sales['Month'].max()
+            cutoff_date = latest_sales_date - pd.DateOffset(months=months_threshold)
+            
+            # Find SKUs with sales in last X months
+            recent_sales_skus = df_sales[df_sales['Month'] >= cutoff_date]['SKU_ID'].unique()
+            
+            # Identify dead stock (has inventory but no recent sales)
+            df_dead = df_inventory[
+                (~df_inventory['SKU_ID'].isin(recent_sales_skus)) &
+                (df_inventory['Stock_Qty'] > 0) &
+                (df_inventory['Status'].str.upper() == 'ACTIVE')
+            ].copy()
+            
+            if 'Floor_Price' in df_dead.columns:
+                df_dead['Dead_Stock_Value'] = df_dead['Stock_Qty'] * df_dead['Floor_Price']
+            
+            return df_dead.sort_values('Stock_Qty', ascending=False)
+            
+        except Exception as e:
+            st.error(f"Dead stock identification error: {str(e)}")
+            return pd.DataFrame()
+    
+    # ======================== FUNGSI BARU: SEASONALITY ADJUSTMENT ========================
+    @st.cache_data
+    def calculate_seasonality_adjustment(df_sales):
+        """Calculate seasonal adjustment factors"""
+        
+        if df_sales.empty:
+            return {}
+        
+        try:
+            # Add month number
+            df_sales['Month_Num'] = df_sales['Month'].dt.month
+            
+            # Calculate monthly sales pattern
+            monthly_sales = df_sales.groupby('Month_Num')['Sales_Qty'].sum()
+            avg_monthly = monthly_sales.mean()
+            
+            # Calculate seasonal indices
+            seasonal_indices = {}
+            for month in range(1, 13):
+                month_sales = monthly_sales.get(month, 0)
+                seasonal_indices[month] = month_sales / avg_monthly if avg_monthly > 0 else 1.0
+            
+            return seasonal_indices
+            
+        except Exception as e:
+            st.error(f"Seasonality calculation error: {str(e)}")
+            return {}
+    
+    # ============================================
+    # IMPLEMENTASI DASHBOARD BARU
+    # ============================================
+    
+    # 1. SETTING PANEL
+    with st.expander("⚙️ INTELLIGENT SETTINGS", expanded=True):
+        col_set1, col_set2, col_set3 = st.columns(3)
+        
+        with col_set1:
+            service_level = st.slider("Service Level Target", 90, 99, 95, 
+                                     help="Probability of not having stockout")
+            lead_time = st.number_input("Lead Time (days)", 7, 90, 30,
+                                       help="Supplier lead time in days")
+        
+        with col_set2:
+            reorder_threshold = st.slider("Reorder Threshold (months)", 0.5, 2.0, 0.8, 0.1,
+                                         help="Reorder when stock below X months coverage")
+            excess_threshold = st.slider("Excess Threshold (months)", 1.5, 6.0, 1.5, 0.1,
+                                        help="Flag as excess when stock above X months")
+        
+        with col_set3:
+            ordering_cost = st.number_input("Ordering Cost (Rp)", 10000, 200000, 50000,
+                                          help="Cost per purchase order")
+            holding_rate = st.slider("Holding Cost Rate (%)", 10, 30, 20,
+                                    help="Annual inventory carrying cost as % of value")
+    
+    # 2. REORDER RECOMMENDATIONS ENGINE
+    st.markdown("### 📋 AUTOMATED REORDER RECOMMENDATIONS")
+    
+    if 'inventory_df' in inventory_metrics and not inventory_metrics['inventory_df'].empty:
+        df_inventory = inventory_metrics['inventory_df']
+        
+        # Calculate reorder recommendations
+        with st.spinner("🤖 Calculating intelligent reorder points..."):
+            df_recommendations = calculate_reorder_recommendations(
+                df_inventory, 
+                df_sales,
+                service_level=service_level,
+                lead_time_days=lead_time
+            )
+        
+        if not df_recommendations.empty:
+            # Summary metrics
+            total_order_qty = df_recommendations['Final_Suggested_Qty'].sum()
+            total_order_value = df_recommendations['Order_Value'].sum() if 'Order_Value' in df_recommendations.columns else 0
+            skus_to_reorder = len(df_recommendations)
+            
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            with col_sum1:
+                st.metric("SKUs to Reorder", skus_to_reorder)
+            with col_sum2:
+                st.metric("Total Quantity", f"{total_order_qty:,.0f}")
+            with col_sum3:
+                st.metric("Total Investment", f"Rp {total_order_value:,.0f}")
+            
+            # Display recommendations
+            display_cols = ['SKU_ID', 'Product_Name', 'Brand', 'Stock_Qty', 
+                          'Avg_Daily_Sales', 'Safety_Stock', 'Reorder_Point',
+                          'Final_Suggested_Qty', 'EOQ', 'Order_Value']
+            
+            available_cols = [col for col in display_cols if col in df_recommendations.columns]
+            
+            # Format for display
+            df_display = df_recommendations[available_cols].copy()
+            
+            # Format numbers
+            if 'Avg_Daily_Sales' in df_display.columns:
+                df_display['Avg_Daily_Sales'] = df_display['Avg_Daily_Sales'].apply(lambda x: f"{x:.1f}")
+            
+            if 'Safety_Stock' in df_display.columns:
+                df_display['Safety_Stock'] = df_display['Safety_Stock'].apply(lambda x: f"{x:.0f}")
+            
+            if 'Reorder_Point' in df_display.columns:
+                df_display['Reorder_Point'] = df_display['Reorder_Point'].apply(lambda x: f"{x:.0f}")
+            
+            if 'Order_Value' in df_display.columns:
+                df_display['Order_Value'] = df_display['Order_Value'].apply(lambda x: f"Rp {x:,.0f}")
+            
+            st.dataframe(
+                df_display.sort_values('Order_Value', ascending=False),
+                use_container_width=True,
+                height=400
+            )
+            
+            # Export button
+            csv_rec = df_recommendations.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Reorder Recommendations (CSV)",
+                data=csv_rec,
+                file_name=f"reorder_recommendations_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.success("✅ No reorder recommendations at this time")
     else:
-        st.error("Unable to process inventory data. Please check the 'Stock_Category' column.")
+        st.warning("⚠️ Inventory data not available for recommendations")
+    
+    # 3. ABC ANALYSIS DASHBOARD
+    st.markdown("---")
+    st.markdown("### 📊 ABC ANALYSIS - PARETO INVENTORY CLASSIFICATION")
+    
+    if 'inventory_df' in inventory_metrics:
+        with st.spinner("📈 Performing ABC analysis..."):
+            df_abc = perform_abc_analysis(inventory_metrics['inventory_df'], df_sales)
+        
+        if not df_abc.empty:
+            # ABC Summary
+            abc_summary = df_abc.groupby('ABC_Class').agg({
+                'SKU_ID': 'count',
+                'Value': 'sum',
+                'Stock_Qty': 'sum'
+            }).reset_index()
+            
+            abc_summary.columns = ['Class', 'SKU Count', 'Total Value', 'Total Qty']
+            abc_summary['Value Pct'] = (abc_summary['Total Value'] / abc_summary['Total Value'].sum() * 100)
+            abc_summary['SKU Pct'] = (abc_summary['SKU Count'] / abc_summary['SKU Count'].sum() * 100)
+            
+            # Visualizations
+            col_abc1, col_abc2 = st.columns(2)
+            
+            with col_abc1:
+                # Pareto Chart
+                fig_pareto = go.Figure()
+                
+                # Cumulative percentage line
+                df_abc_sorted = df_abc.sort_values('Value', ascending=False).reset_index()
+                df_abc_sorted['Cum_Pct'] = df_abc_sorted['Cumulative_Pct']
+                
+                fig_pareto.add_trace(go.Bar(
+                    x=df_abc_sorted.index,
+                    y=df_abc_sorted['Value'],
+                    name='Value',
+                    marker_color=df_abc_sorted['ABC_Class'].map({'A': '#FF5252', 'B': '#FF9800', 'C': '#4CAF50'})
+                ))
+                
+                fig_pareto.add_trace(go.Scatter(
+                    x=df_abc_sorted.index,
+                    y=df_abc_sorted['Cum_Pct'],
+                    name='Cumulative %',
+                    yaxis='y2',
+                    line=dict(color='#2196F3', width=3)
+                ))
+                
+                fig_pareto.update_layout(
+                    height=400,
+                    title='Pareto Chart: Inventory Value Distribution',
+                    xaxis_title='SKU Rank',
+                    yaxis_title='Inventory Value (Rp)',
+                    yaxis2=dict(
+                        title='Cumulative %',
+                        overlaying='y',
+                        side='right',
+                        range=[0, 100]
+                    ),
+                    showlegend=True
+                )
+                
+                st.plotly_chart(fig_pareto, use_container_width=True)
+            
+            with col_abc2:
+                # ABC Pie Chart
+                fig_abc_pie = px.pie(
+                    abc_summary,
+                    values='Total Value',
+                    names='Class',
+                    title='Inventory Value by ABC Class',
+                    color='Class',
+                    color_discrete_map={'A': '#FF5252', 'B': '#FF9800', 'C': '#4CAF50'},
+                    hole=0.4
+                )
+                
+                fig_abc_pie.update_layout(height=400)
+                st.plotly_chart(fig_abc_pie, use_container_width=True)
+            
+            # ABC Management Recommendations
+            st.markdown("#### 🎯 ABC MANAGEMENT STRATEGIES")
+            
+            col_strat1, col_strat2, col_strat3 = st.columns(3)
+            
+            with col_strat1:
+                st.markdown("""
+                <div style="background: #FFEBEE; border-left: 5px solid #F44336; 
+                            padding: 1rem; border-radius: 8px; margin: 0.5rem 0;">
+                    <h4 style="color: #C62828; margin: 0 0 0.5rem 0;">🅰️ CLASS A ITEMS</h4>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>{sku_count} SKUs ({value_pct:.1f}% of value)</strong><br>
+                    • Tight control<br>
+                    • Frequent review<br>
+                    • Accurate forecasting<br>
+                    • High service level
+                    </p>
+                </div>
+                """.format(
+                    sku_count=abc_summary[abc_summary['Class'] == 'A']['SKU Count'].iloc[0],
+                    value_pct=abc_summary[abc_summary['Class'] == 'A']['Value Pct'].iloc[0]
+                ), unsafe_allow_html=True)
+            
+            with col_strat2:
+                st.markdown("""
+                <div style="background: #FFF3E0; border-left: 5px solid #FF9800; 
+                            padding: 1rem; border-radius: 8px; margin: 0.5rem 0;">
+                    <h4 style="color: #EF6C00; margin: 0 0 0.5rem 0;">🅱️ CLASS B ITEMS</h4>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>{sku_count} SKUs ({value_pct:.1f}% of value)</strong><br>
+                    • Moderate control<br>
+                    • Periodic review<br>
+                    • Standard forecasting<br>
+                    • Moderate service level
+                    </p>
+                </div>
+                """.format(
+                    sku_count=abc_summary[abc_summary['Class'] == 'B']['SKU Count'].iloc[0],
+                    value_pct=abc_summary[abc_summary['Class'] == 'B']['Value Pct'].iloc[0]
+                ), unsafe_allow_html=True)
+            
+            with col_strat3:
+                st.markdown("""
+                <div style="background: #E8F5E9; border-left: 5px solid #4CAF50; 
+                            padding: 1rem; border-radius: 8px; margin: 0.5rem 0;">
+                    <h4 style="color: #2E7D32; margin: 0 0 0.5rem 0;">© CLASS C ITEMS</h4>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>{sku_count} SKUs ({value_pct:.1f}% of value)</strong><br>
+                    • Simple control<br>
+                    • Occasional review<br>
+                    • Minimal forecasting<br>
+                    • Basic service level
+                    </p>
+                </div>
+                """.format(
+                    sku_count=abc_summary[abc_summary['Class'] == 'C']['SKU Count'].iloc[0],
+                    value_pct=abc_summary[abc_summary['Class'] == 'C']['Value Pct'].iloc[0]
+                ), unsafe_allow_html=True)
+    
+    # 4. DEAD STOCK ANALYSIS
+    st.markdown("---")
+    st.markdown("### 🗑️ DEAD & SLOW-MOVING STOCK ANALYSIS")
+    
+    if 'inventory_df' in inventory_metrics and not df_sales.empty:
+        with st.spinner("🔍 Identifying dead stock..."):
+            df_dead = identify_dead_stock(
+                inventory_metrics['inventory_df'], 
+                df_sales,
+                months_threshold=6
+            )
+        
+        if not df_dead.empty:
+            total_dead_value = df_dead['Dead_Stock_Value'].sum() if 'Dead_Stock_Value' in df_dead.columns else 0
+            
+            col_dead1, col_dead2 = st.columns(2)
+            
+            with col_dead1:
+                st.warning(f"""
+                ⚠️ **CRITICAL FINDING**
+                
+                Found **{len(df_dead)} SKUs** with no sales in last 6 months
+                
+                **Total Value Locked:** Rp {total_dead_value:,.0f}
+                
+                **Recommendation:** Immediate action required to free up working capital
+                """)
+            
+            with col_dead2:
+                # Top 10 dead stock items
+                df_top_dead = df_dead.head(10).copy()
+                if 'Dead_Stock_Value' in df_top_dead.columns:
+                    df_top_dead['Dead_Stock_Value'] = df_top_dead['Dead_Stock_Value'].apply(lambda x: f"Rp {x:,.0f}")
+                
+                st.dataframe(
+                    df_top_dead[['SKU_ID', 'Product_Name', 'Brand', 'Stock_Qty', 'Dead_Stock_Value']],
+                    use_container_width=True,
+                    height=250
+                )
+            
+            # Action Plan
+            st.markdown("#### 🛠️ DEAD STOCK ACTION PLAN")
+            
+            action_col1, action_col2, action_col3, action_col4 = st.columns(4)
+            
+            with action_col1:
+                st.markdown("""
+                <div style="background: #FFF3E0; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">🔥</div>
+                    <strong>Clearance Sale</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    30-50% discount to clear inventory
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with action_col2:
+                st.markdown("""
+                <div style="background: #E8F5E9; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">🎁</div>
+                    <strong>Bundle Offers</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    Combine with fast-moving items
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with action_col3:
+                st.markdown("""
+                <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">↩️</div>
+                    <strong>Return to Supplier</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    If return policy allows
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with action_col4:
+                st.markdown("""
+                <div style="background: #F3E5F5; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">🤝</div>
+                    <strong>Donate for Tax Benefit</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    Corporate social responsibility
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Export dead stock list
+            csv_dead = df_dead.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Dead Stock List (CSV)",
+                data=csv_dead,
+                file_name=f"dead_stock_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.success("✅ No dead stock identified - Excellent inventory management!")
+    
+    # 5. WAREHOUSE OPTIMIZATION
+    st.markdown("---")
+    st.markdown("### 🏢 WAREHOUSE OPTIMIZATION ANALYSIS")
+    
+    # Warehouse settings in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🏢 Warehouse Configuration")
+    
+    wh_capacity = st.sidebar.number_input(
+        "Total Warehouse Capacity (pcs)",
+        min_value=10000,
+        max_value=1000000,
+        value=250000,
+        step=10000,
+        help="Maximum storage capacity in units"
+    )
+    
+    wh_rent_cost = st.sidebar.number_input(
+        "Monthly Warehouse Cost (Rp)",
+        min_value=1000000,
+        max_value=100000000,
+        value=10000000,
+        step=1000000,
+        help="Monthly rental/storage cost"
+    )
+    
+    if 'inventory_df' in inventory_metrics:
+        df_inv = inventory_metrics['inventory_df']
+        current_occupancy = df_inv['Stock_Qty'].sum()
+        occupancy_pct = (current_occupancy / wh_capacity * 100) if wh_capacity > 0 else 0
+        
+        # Storage cost analysis
+        storage_cost_per_unit = wh_rent_cost / wh_capacity if wh_capacity > 0 else 0
+        monthly_storage_cost = current_occupancy * storage_cost_per_unit
+        
+        col_wh1, col_wh2, col_wh3, col_wh4 = st.columns(4)
+        
+        with col_wh1:
+            st.metric(
+                "Warehouse Occupancy",
+                f"{occupancy_pct:.1f}%",
+                delta="Optimal < 80%" if occupancy_pct < 80 else "High ≥ 80%",
+                delta_color="normal" if occupancy_pct < 80 else "off"
+            )
+        
+        with col_wh2:
+            available_space = wh_capacity - current_occupancy
+            st.metric("Available Space", f"{available_space:,.0f} pcs")
+        
+        with col_wh3:
+            st.metric("Monthly Storage Cost", f"Rp {monthly_storage_cost:,.0f}")
+        
+        with col_wh4:
+            # Cost per unit stored
+            st.metric("Cost per Unit/Month", f"Rp {storage_cost_per_unit:,.0f}")
+        
+        # Space Optimization Recommendations
+        if 'high_stock' in inventory_metrics and not inventory_metrics['high_stock'].empty:
+            high_stock_df = inventory_metrics['high_stock']
+            
+            # Calculate space that could be freed
+            excess_coverage = high_stock_df[high_stock_df['Cover_Months'] > 2.0]
+            
+            if not excess_coverage.empty:
+                excess_qty = excess_coverage['Stock_Qty'].sum()
+                space_pct = (excess_qty / wh_capacity * 100) if wh_capacity > 0 else 0
+                
+                st.info(f"""
+                **💡 SPACE OPTIMIZATION OPPORTUNITY**
+                
+                You have **{excess_qty:,.0f} units** ({space_pct:.1f}% of warehouse) 
+                with excessive coverage (>2 months).
+                
+                **Potential savings:** Rp {excess_qty * storage_cost_per_unit:,.0f} monthly
+                
+                **Action:** Consider reducing inventory levels for these SKUs
+                """)
+    
+    # 6. FINANCIAL IMPACT ANALYSIS
+    st.markdown("---")
+    st.markdown("### 💰 FINANCIAL IMPACT ANALYSIS")
+    
+    if 'inventory_df' in inventory_metrics:
+        df_inv = inventory_metrics['inventory_df']
+        
+        # Calculate inventory value
+        total_inv_value = 0
+        if 'Floor_Price' in df_inv.columns:
+            total_inv_value = (df_inv['Stock_Qty'] * df_inv['Floor_Price']).sum()
+        
+        # Calculate holding costs
+        annual_holding_rate = holding_rate / 100
+        annual_holding_cost = total_inv_value * annual_holding_rate
+        monthly_holding_cost = annual_holding_cost / 12
+        
+        col_fin1, col_fin2, col_fin3 = st.columns(3)
+        
+        with col_fin1:
+            st.markdown(f"""
+            <div style="background: #F5F5F5; border-radius: 10px; padding: 1rem; text-align: center;">
+                <div style="font-size: 0.9rem; color: #666;">Total Inventory Value</div>
+                <div style="font-size: 1.8rem; font-weight: 800; color: #333;">Rp {total_inv_value:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #999;">Capital tied up in inventory</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_fin2:
+            st.markdown(f"""
+            <div style="background: #F5F5F5; border-radius: 10px; padding: 1rem; text-align: center;">
+                <div style="font-size: 0.9rem; color: #666;">Monthly Holding Cost</div>
+                <div style="font-size: 1.8rem; font-weight: 800; color: #333;">Rp {monthly_holding_cost:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #999;">{holding_rate}% of inventory value</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_fin3:
+            # Calculate potential savings from optimization
+            potential_savings = 0
+            
+            # From dead stock elimination
+            if 'df_dead' in locals() and not df_dead.empty and 'Dead_Stock_Value' in df_dead.columns:
+                dead_value = df_dead['Dead_Stock_Value'].sum()
+                potential_savings += dead_value * (annual_holding_rate / 12)  # Monthly holding cost savings
+            
+            # From excess stock reduction
+            if 'excess_coverage' in locals() and not excess_coverage.empty:
+                excess_value = 0
+                if 'Floor_Price' in excess_coverage.columns:
+                    excess_value = (excess_coverage['Stock_Qty'] * excess_coverage['Floor_Price']).sum()
+                    potential_savings += excess_value * (annual_holding_rate / 12) * 0.5  # Assume 50% reduction
+            
+            st.markdown(f"""
+            <div style="background: #E8F5E9; border-radius: 10px; padding: 1rem; text-align: center;">
+                <div style="font-size: 0.9rem; color: #2E7D32;">Potential Monthly Savings</div>
+                <div style="font-size: 1.8rem; font-weight: 800; color: #1B5E20;">Rp {potential_savings:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #4CAF50;">From optimization</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # 7. EXPORT ALL ANALYSES
+    st.markdown("---")
+    st.markdown("### 📊 EXPORT COMPREHENSIVE ANALYSIS")
+    
+    export_col1, export_col2, export_col3 = st.columns(3)
+    
+    with export_col1:
+        if st.button("📥 Export All Recommendations", use_container_width=True, type="primary"):
+            # Create comprehensive report
+            report_data = {}
+            
+            # 1. Reorder recommendations
+            if 'df_recommendations' in locals() and not df_recommendations.empty:
+                report_data['Reorder_Recommendations'] = df_recommendations
+            
+            # 2. ABC Analysis
+            if 'df_abc' in locals() and not df_abc.empty:
+                report_data['ABC_Analysis'] = df_abc
+            
+            # 3. Dead Stock
+            if 'df_dead' in locals() and not df_dead.empty:
+                report_data['Dead_Stock'] = df_dead
+            
+            # 4. Inventory summary
+            if 'inventory_df' in inventory_metrics:
+                report_data['Inventory_Summary'] = inventory_metrics['inventory_df']
+            
+            # Create Excel file with multiple sheets
+            import io
+            from pandas import ExcelWriter
+            
+            output = io.BytesIO()
+            with ExcelWriter(output, engine='openpyxl') as writer:
+                for sheet_name, df in report_data.items():
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            output.seek(0)
+            
+            st.download_button(
+                label="💾 Download Excel Report",
+                data=output,
+                file_name=f"Inventory_Intelligence_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    
+    with export_col2:
+        if st.button("🔄 Run Advanced Analysis", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
+    with export_col3:
+        if st.button("📊 Generate Executive Summary", use_container_width=True):
+            # Create executive summary
+            summary_html = f"""
+            <div style="background: white; border-radius: 12px; padding: 2rem; margin: 1rem 0; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                <h2 style="color: #333; margin-top: 0;">📈 Inventory Intelligence Executive Summary</h2>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 2rem 0;">
+                    <div style="background: #E8F5E9; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.9rem; color: #2E7D32;">Inventory Health</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #1B5E20;">{health_score:.0f}/100</div>
+                    </div>
+                    <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.9rem; color: #1565C0;">Stockout Risk</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #0D47A1;">{stockout_risk} SKUs</div>
+                    </div>
+                    <div style="background: #FFF3E0; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.9rem; color: #EF6C00;">Excess Stock Value</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #E65100;">Rp {excess_value:,.0f}</div>
+                    </div>
+                </div>
+            </div>
+            """
+            
+            st.markdown(summary_html, unsafe_allow_html=True)
+    
+    # 8. QUICK ACTIONS PANEL
+    st.markdown("---")
+    st.markdown("### ⚡ QUICK ACTION PANEL")
+    
+    action_tab1, action_tab2, action_tab3 = st.tabs(["🚨 Critical Actions", "📈 Optimization", "📊 Reports"])
+    
+    with action_tab1:
+        # Critical actions
+        critical_actions = []
+        
+        # Check stockout risk
+        if stockout_risk > 0:
+            critical_actions.append(f"🚨 **Immediate Reorder Needed:** {stockout_risk} SKUs at risk of stockout")
+        
+        # Check dead stock
+        if 'df_dead' in locals() and not df_dead.empty:
+            dead_count = len(df_dead)
+            dead_value = df_dead['Dead_Stock_Value'].sum() if 'Dead_Stock_Value' in df_dead.columns else 0
+            critical_actions.append(f"🗑️ **Clear Dead Stock:** {dead_count} SKUs (Rp {dead_value:,.0f} value)")
+        
+        # Check warehouse capacity
+        if occupancy_pct > 85:
+            critical_actions.append(f"🏢 **Warehouse Critical:** {occupancy_pct:.1f}% full - Consider expansion or reduction")
+        
+        if critical_actions:
+            for action in critical_actions:
+                st.error(action)
+        else:
+            st.success("✅ No critical actions required")
+    
+    with action_tab2:
+        # Optimization suggestions
+        optimizations = []
+        
+        # ABC optimization
+        if 'abc_summary' in locals():
+            a_items = abc_summary[abc_summary['Class'] == 'A']['SKU Count'].iloc[0]
+            c_items = abc_summary[abc_summary['Class'] == 'C']['SKU Count'].iloc[0]
+            optimizations.append(f"📊 **ABC Strategy:** Focus on {a_items} A-items, simplify {c_items} C-items")
+        
+        # Reorder optimization
+        if 'df_recommendations' in locals() and not df_recommendations.empty:
+            rec_count = len(df_recommendations)
+            rec_value = df_recommendations['Order_Value'].sum() if 'Order_Value' in df_recommendations.columns else 0
+            optimizations.append(f"📋 **Smart Reordering:** {rec_count} SKUs need ordering (Rp {rec_value:,.0f})")
+        
+        # Holding cost optimization
+        if 'potential_savings' in locals() and potential_savings > 0:
+            optimizations.append(f"💰 **Cost Reduction:** Potential savings Rp {potential_savings:,.0f}/month")
+        
+        if optimizations:
+            for opt in optimizations:
+                st.info(opt)
+    
+    with action_tab3:
+        # Quick report generation
+        report_col1, report_col2 = st.columns(2)
+        
+        with report_col1:
+            if st.button("📋 Generate Stock Report", use_container_width=True):
+                if 'inventory_df' in inventory_metrics:
+                    df_report = inventory_metrics['inventory_df'][['SKU_ID', 'Product_Name', 'Brand', 'Stock_Qty', 'Cover_Months', 'Inventory_Status']]
+                    st.dataframe(df_report, use_container_width=True, height=300)
+        
+        with report_col2:
+            if st.button("🎯 Generate Action Items", use_container_width=True):
+                # Create action items list
+                actions = []
+                
+                if 'df_recommendations' in locals() and not df_recommendations.empty:
+                    actions.append("**1. Place Purchase Orders:**")
+                    for _, row in df_recommendations.head(5).iterrows():
+                        actions.append(f"   - {row['SKU_ID']}: Order {row['Final_Suggested_Qty']:.0f} units")
+                
+                if 'df_dead' in locals() and not df_dead.empty:
+                    actions.append(f"\n**2. Clear Dead Stock ({len(df_dead)} SKUs):**")
+                    actions.append("   - Plan clearance sale")
+                    actions.append("   - Contact suppliers for returns")
+                
+                st.text_area("Action Items", "\n".join(actions), height=200)
 
 # --- TAB 4: SKU EVALUATION ---
 with tab4:
