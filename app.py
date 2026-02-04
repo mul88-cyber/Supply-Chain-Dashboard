@@ -5187,7 +5187,7 @@ with tab7:
                             'type': 'New Product Risk',
                             'description': f"{len(high_new_forecast)} new products with forecast > 1,000 units",
                             'severity': 'High',
-                            'impact': 'Potential overstock if demand doesn't materialize'
+                            'impact': "Potential overstock if demand doesn't materialize"
                         })
             
             # Risk 2: High concentration in few SKUs
