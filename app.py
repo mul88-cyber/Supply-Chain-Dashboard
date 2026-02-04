@@ -639,7 +639,8 @@ def load_reseller_complete_data(_client):
     """
     Load SEMUA data reseller: forecast, sales, past rofo, past PO
     """
-    gsheet_url = st.secrets["gsheet_url"]
+    # Gunakan sheet_id yang sudah ada
+    sheet_id = "1jcs8L0CysdzxemPz1EYVVfVhsSR-ik46khIw5jhhBgw"
     reseller_data = {}
     
     try:
