@@ -1,11 +1,10 @@
 streamlit
-pandas>=2.0.0
-numpy>=1.26.0
+pandas
+numpy
+altair
 plotly
 gspread
 google-auth
-oauth2client
-openpyxl
+tenacity
 python-dateutil
-scipy
-setuptools
+matplotlib
