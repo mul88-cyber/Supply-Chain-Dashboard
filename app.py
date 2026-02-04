@@ -4789,7 +4789,51 @@ with tab6:
 with tab7:
     st.subheader("🔮 ADVANCED FORECAST INTELLIGENCE SYSTEM")
     st.markdown("#### **Predictive Analytics with ML Insights & Scenario Planning**")
-    
+
+    # --- FUNGSI BANTU UNTUK TAB 7 ---
+    def parse_month_str(month_str):
+        """Parse bulan dari string format - untuk sorting"""
+        try:
+            month_str = str(month_str).upper().strip()
+            
+            # Handle berbagai format
+            formats_to_try = [
+                '%b-%y',     # Jan-26
+                '%b_%y',     # Jan_26
+                '%b %y',     # Jan 26
+                '%b-%Y',     # Jan-2026
+                '%B-%y',     # January-26
+                '%B %Y',     # January 2026
+            ]
+            
+            for fmt in formats_to_try:
+                try:
+                    return datetime.strptime(month_str, fmt)
+                except:
+                    continue
+            
+            # Fallback: cari bulan dalam string
+            month_map = {
+                'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+                'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
+            }
+            
+            for month_name, month_num in month_map.items():
+                if month_name in month_str:
+                    # Cari tahun
+                    year_part = month_str.replace(month_name, '').replace('-', '').replace('_', '').replace(' ', '').strip()
+                    if year_part and year_part.isdigit():
+                        year = int('20' + year_part) if len(year_part) == 2 else int(year_part)
+                    else:
+                        year = 2026  # Default untuk forecast 2026
+                    
+                    return datetime(year, month_num, 1)
+            
+            return datetime.now()  # Fallback
+            
+        except Exception as e:
+            st.warning(f"Error parsing month string '{month_str}': {str(e)}")
+            return datetime.now()
     # ============================================
     # SECTION 0: DATA VALIDATION & PREPARATION
     # ============================================
