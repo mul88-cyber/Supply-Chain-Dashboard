@@ -6238,8 +6238,18 @@ with tab7:
             </div>
             
             <div style="margin-top: 0.8rem; font-size: 0.8rem; color: #888; display: flex; gap: 1rem;">
-                <div>📅 Suggested timeline: {get_timeline_for_priority(rec['priority'])}</div>
-                <div>👥 Owner: {get_owner_for_priority(rec['priority'])}</div>
+                <div>📅 Suggested timeline: {
+                    'Critical': 'Immediate (1-2 weeks)',
+                    'High': 'Short-term (2-4 weeks)', 
+                    'Medium': 'Medium-term (1-2 months)',
+                    'Low': 'Long-term (2-3 months)'
+                }.get(rec['priority'], '1-2 months')}</div>
+                <div>👥 Owner: {
+                    'Critical': 'Supply Chain Manager',
+                    'High': 'Demand Planner',
+                    'Medium': 'Inventory Analyst', 
+                    'Low': 'Team Lead'
+                }.get(rec['priority'], 'Cross-functional team')}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
