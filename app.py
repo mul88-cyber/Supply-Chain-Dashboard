@@ -5962,9 +5962,9 @@ with tab7:
             'title': 'Improve Forecast Confidence',
             'description': f"Current confidence score is {forecast_confidence['confidence_score']}%. Focus on improving data quality and historical accuracy.",
             'actions': [
-                'Review and clean forecast data',
-                'Improve historical data collection',
-                'Implement forecast accuracy tracking'
+                'Review and clean forecast data for missing values',
+                'Improve historical data collection process',
+                'Implement forecast accuracy tracking weekly'
             ]
         })
     
@@ -5976,8 +5976,8 @@ with tab7:
             'description': f"Found {len(anomalies)} anomalies in forecast data. Investigate and correct unusual patterns.",
             'actions': [
                 'Verify demand assumptions for anomalous months',
-                'Check for data entry errors',
-                'Review promotional calendar'
+                'Check for potential data entry errors',
+                'Review promotional calendar for those periods'
             ]
         })
     
@@ -5991,8 +5991,8 @@ with tab7:
                 'description': f"Found {high_risk_count} high-severity risks requiring immediate attention.",
                 'actions': [
                     'Develop contingency plans for key risks',
-                    'Increase monitoring of high-risk areas',
-                    'Review supplier contracts'
+                    'Increase monitoring frequency of high-risk areas',
+                    'Review supplier contracts for flexibility'
                 ]
             })
     
@@ -6005,9 +6005,9 @@ with tab7:
                 'title': 'Prepare for Peak Season',
                 'description': f"Peak season identified in {', '.join(peak_months)}. Plan inventory and operations accordingly.",
                 'actions': [
-                    'Increase safety stock before peak months',
-                    'Schedule additional staffing',
-                    'Plan marketing campaigns'
+                    'Increase safety stock 2 months before peak',
+                    'Schedule additional warehouse staffing',
+                    'Coordinate marketing campaigns with inventory'
                 ]
             })
     
@@ -6024,8 +6024,9 @@ with tab7:
             ]
         })
     
-    # Display recommendations
+    # Display recommendations with FIXED Formatting
     for rec in recommendations:
+        # Determine Color
         priority_color = {
             'Critical': '#F44336',
             'High': '#FF9800',
@@ -6033,57 +6034,36 @@ with tab7:
             'Low': '#4CAF50'
         }.get(rec['priority'], '#9E9E9E')
         
-        st.markdown(f"""
-        <div style="border-left: 5px solid {priority_color}; padding: 1rem; margin: 1rem 0; 
-                    background: white; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <div style="background: {priority_color}; color: white; padding: 0.2rem 0.8rem; 
-                                    border-radius: 12px; font-size: 0.8rem; font-weight: bold;">
-                            {rec['priority']} Priority
-                        </div>
-                        <h4 style="margin: 0;">{rec['title']}</h4>
-                    </div>
-                    <p style="margin: 0.5rem 0; color: #666;">{rec['description']}</p>
-                </div>
-            </div>
-            
-            for rec in recommendations:
-            priority_color = {
-                'Critical': '#F44336',
-                'High': '#FF9800',
-                'Medium': '#FFC107',
-                'Low': '#4CAF50'
-            }.get(rec['priority'], '#9E9E9E')
-            
-            # PERBAIKAN: Buat list action menggunakan format Markdown standar
-            action_list = "\n".join([f"- {action}" for action in rec['actions']])
+        # Prepare Markdown List string (Fixes HTML issue)
+        action_items = "\n".join([f"- {action}" for action in rec['actions']])
         
-            st.markdown(f"""
-            <div style="border-left: 5px solid {priority_color}; padding: 1rem; margin: 1rem 0; 
-                        background: white; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <div style="background: {priority_color}; color: white; padding: 0.2rem 0.8rem; 
-                                        border-radius: 12px; font-size: 0.8rem; font-weight: bold;">
-                                {rec['priority']} Priority
-                            </div>
-                            <h4 style="margin: 0;">{rec['title']}</h4>
-                        </div>
-                        <p style="margin: 0.5rem 0; color: #666;">{rec['description']}</p>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid #eee;">
-                    <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem;">Recommended Actions:</div>
-                    </div>
+        # Render Card Header & Description using HTML/CSS
+        st.markdown(f"""
+        <div style="border-left: 5px solid {priority_color}; padding: 1.5rem; margin: 1rem 0; 
+                    background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
+                <span style="background: {priority_color}; color: white; padding: 4px 12px; 
+                            border-radius: 16px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">
+                    {rec['priority']}
+                </span>
+                <h4 style="margin: 0; color: #333;">{rec['title']}</h4>
             </div>
-            """, unsafe_allow_html=True)
-            
-            # Render Action List sebagai Markdown murni agar rapi
-            st.markdown(action_list)
+            <p style="margin: 0.5rem 0 1rem 0; color: #555; font-size: 0.95rem;">
+                {rec['description']}
+            </p>
+            <div style="font-size: 0.9rem; font-weight: 700; color: #333; margin-bottom: 0.5rem;">
+                Recommended Actions:
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Render Actions as Native Markdown (outside the HTML div to prevent render issues)
+        # We use a container or specific indent to make it look part of the card if needed, 
+        # but standard markdown below the card is safest and cleanest.
+        st.markdown(action_items)
+        
+        # Add a small spacer
+        st.write("")
     
     # ============================================
     # SECTION 5: FORECAST PERFORMANCE TRACKING
