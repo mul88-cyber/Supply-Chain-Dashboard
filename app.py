@@ -2280,62 +2280,121 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🚚 Fulfillment Cost Analysis" # <-- TAB BARU
 ])
 
-# --- TAB 1: MONTHLY PERFORMANCE DETAILS ---
+# --- TAB 1: MONTHLY PERFORMANCE DETAILS (IMPROVED) ---
 with tab1:
-    st.subheader("📅 Monthly Performance Details")
+    st.subheader("📅 Monthly Forecast Accuracy Audit")
     
+    col_t1, col_t2 = st.columns([3, 1])
+    with col_t1:
+        st.markdown("""
+        **Panduan Audit:**
+        - **MAPE (Mean Absolute Percentage Error):** Semakin rendah semakin baik.
+        - **Bias:** Negatif berarti *Overforecast* (potensi Dead Stock), Positif berarti *Underforecast* (potensi Lost Sales).
+        """)
+    with col_t2:
+        view_mode = st.radio("View Mode", ["Summary", "Detailed SKU"], horizontal=True)
+
     if monthly_performance:
-        # Create monthly performance summary table
-        summary_data = []
-        for month, data in sorted(monthly_performance.items()):
-            summary_data.append({
-                'Month': month.strftime('%b %Y'),
-                'Accuracy (%)': data['accuracy'],
-                'Under': data['status_counts'].get('Under', 0),
-                'Accurate': data['status_counts'].get('Accurate', 0),
-                'Over': data['status_counts'].get('Over', 0),
-                'Total SKUs': data['total_records'],
-                'MAPE': data['mape']
-            })
-        
-        summary_df = pd.DataFrame(summary_data)
-        
-        # Display summary table
-        st.dataframe(
-            summary_df,
-            column_config={
-                "Accuracy (%)": st.column_config.ProgressColumn(
-                    "Accuracy %",
-                    format="%.1f%%",
-                    min_value=0,
-                    max_value=100
-                ),
-                "MAPE": st.column_config.NumberColumn("MAPE %", format="%.1f%%")
-            },
-            use_container_width=True,
-            height=400
-        )
-        
-        # Add forecast bias analysis if available
+        if view_mode == "Summary":
+            # Create monthly performance summary table
+            summary_data = []
+            for month, data in sorted(monthly_performance.items(), reverse=True): # Reverse biar bulan terbaru diatas
+                summary_data.append({
+                    'Month': month.strftime('%b %Y'),
+                    'Accuracy': data['accuracy']/100, # Normalize for percentage column
+                    'Status': "✅" if data['accuracy'] >= 80 else "⚠️" if data['accuracy'] >= 60 else "🚨",
+                    'Under_SKUs': data['status_counts'].get('Under', 0),
+                    'Accurate_SKUs': data['status_counts'].get('Accurate', 0),
+                    'Over_SKUs': data['status_counts'].get('Over', 0),
+                    'Total_SKUs': data['total_records'],
+                    'MAPE': data['mape']/100
+                })
+            
+            summary_df = pd.DataFrame(summary_data)
+
+            st.dataframe(
+                summary_df,
+                column_config={
+                    "Month": st.column_config.TextColumn("Period", width="medium"),
+                    "Status": st.column_config.TextColumn("Health", width="small"),
+                    "Accuracy": st.column_config.ProgressColumn(
+                        "Accuracy Score",
+                        format="%.1f%%",
+                        min_value=0,
+                        max_value=1,
+                    ),
+                    "MAPE": st.column_config.NumberColumn(
+                        "Error Rate (MAPE)",
+                        format="%.1f%%"
+                    ),
+                    "Under_SKUs": st.column_config.NumberColumn("Under Forecast (Risk: Stockout)"),
+                    "Over_SKUs": st.column_config.NumberColumn("Over Forecast (Risk: Excess)"),
+                },
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+
+        else: # Detailed View
+            # Get last month data by default or select month
+            month_options = sorted(monthly_performance.keys(), reverse=True)
+            selected_month_view = st.selectbox("Select Month for Audit", month_options, format_func=lambda x: x.strftime('%B %Y'))
+            
+            sel_data = monthly_performance[selected_month_view]['data']
+            
+            # Interactive Filter
+            filter_status = st.multiselect("Filter Status", ["Under", "Accurate", "Over"], default=["Under", "Over"])
+            
+            if filter_status:
+                filtered_df = sel_data[sel_data['Accuracy_Status'].isin(filter_status)].copy()
+                
+                # Format for display
+                filtered_df['PO_Rofo_Ratio'] = filtered_df['PO_Rofo_Ratio'] / 100
+                
+                st.dataframe(
+                    filtered_df[['SKU_ID', 'Product_Name', 'Brand', 'Forecast_Qty', 'PO_Qty', 'PO_Rofo_Ratio', 'Accuracy_Status']],
+                    column_config={
+                        "PO_Rofo_Ratio": st.column_config.ProgressColumn(
+                            "Compliance %",
+                            format="%.0f%%",
+                            min_value=0,
+                            max_value=2, # Cap at 200%
+                        ),
+                        "Forecast_Qty": st.column_config.NumberColumn("Plan (Rofo)"),
+                        "PO_Qty": st.column_config.NumberColumn("Actual (PO)"),
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Select a status to filter data.")
+
+        # Bias Chart (Improved)
         if not forecast_bias.empty:
             st.divider()
-            st.subheader("📉 Forecast Bias Analysis")
+            st.subheader("📉 Forecast Bias Direction")
+            st.caption("Grafik ini menunjukkan kecenderungan forecast anda: Apakah selalu terlalu optimis (Over) atau pesimis (Under)?")
             
             fig_bias = go.Figure()
             fig_bias.add_trace(go.Bar(
                 x=forecast_bias['Month'].dt.strftime('%b-%Y'),
                 y=forecast_bias['Avg_Bias_Percentage'],
-                name='Forecast Bias %',
-                marker_color=forecast_bias['Avg_Bias_Percentage'].apply(
-                    lambda x: '#4CAF50' if x >= -10 and x <= 10 else '#FF9800' if x >= -20 and x <= 20 else '#F44336'
-                )
+                name='Bias %',
+                marker=dict(
+                    color=forecast_bias['Avg_Bias_Percentage'],
+                    colorscale='RdYlGn',
+                    cmid=0 # 0 is green (unbiased)
+                ),
+                text=forecast_bias['Avg_Bias_Percentage'].apply(lambda x: f"{x:+.1f}%"),
+                textposition='auto'
             ))
             
             fig_bias.update_layout(
                 height=300,
-                title='Monthly Forecast Bias (Positive = Over-forecast, Negative = Under-forecast)',
-                xaxis_title='Month',
-                yaxis_title='Bias %'
+                xaxis_title=None,
+                yaxis_title='Bias % (+ Under / - Over)',
+                yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'),
+                plot_bgcolor='white'
             )
             
             st.plotly_chart(fig_bias, use_container_width=True)
