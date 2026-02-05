@@ -2280,121 +2280,62 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🚚 Fulfillment Cost Analysis" # <-- TAB BARU
 ])
 
-# --- TAB 1: MONTHLY PERFORMANCE DETAILS (IMPROVED) ---
+# --- TAB 1: MONTHLY PERFORMANCE DETAILS ---
 with tab1:
-    st.subheader("📅 Monthly Forecast Accuracy Audit")
+    st.subheader("📅 Monthly Performance Details")
     
-    col_t1, col_t2 = st.columns([3, 1])
-    with col_t1:
-        st.markdown("""
-        **Panduan Audit:**
-        - **MAPE (Mean Absolute Percentage Error):** Semakin rendah semakin baik.
-        - **Bias:** Negatif berarti *Overforecast* (potensi Dead Stock), Positif berarti *Underforecast* (potensi Lost Sales).
-        """)
-    with col_t2:
-        view_mode = st.radio("View Mode", ["Summary", "Detailed SKU"], horizontal=True)
-
     if monthly_performance:
-        if view_mode == "Summary":
-            # Create monthly performance summary table
-            summary_data = []
-            for month, data in sorted(monthly_performance.items(), reverse=True): # Reverse biar bulan terbaru diatas
-                summary_data.append({
-                    'Month': month.strftime('%b %Y'),
-                    'Accuracy': data['accuracy']/100, # Normalize for percentage column
-                    'Status': "✅" if data['accuracy'] >= 80 else "⚠️" if data['accuracy'] >= 60 else "🚨",
-                    'Under_SKUs': data['status_counts'].get('Under', 0),
-                    'Accurate_SKUs': data['status_counts'].get('Accurate', 0),
-                    'Over_SKUs': data['status_counts'].get('Over', 0),
-                    'Total_SKUs': data['total_records'],
-                    'MAPE': data['mape']/100
-                })
-            
-            summary_df = pd.DataFrame(summary_data)
-
-            st.dataframe(
-                summary_df,
-                column_config={
-                    "Month": st.column_config.TextColumn("Period", width="medium"),
-                    "Status": st.column_config.TextColumn("Health", width="small"),
-                    "Accuracy": st.column_config.ProgressColumn(
-                        "Accuracy Score",
-                        format="%.1f%%",
-                        min_value=0,
-                        max_value=1,
-                    ),
-                    "MAPE": st.column_config.NumberColumn(
-                        "Error Rate (MAPE)",
-                        format="%.1f%%"
-                    ),
-                    "Under_SKUs": st.column_config.NumberColumn("Under Forecast (Risk: Stockout)"),
-                    "Over_SKUs": st.column_config.NumberColumn("Over Forecast (Risk: Excess)"),
-                },
-                use_container_width=True,
-                hide_index=True,
-                height=400
-            )
-
-        else: # Detailed View
-            # Get last month data by default or select month
-            month_options = sorted(monthly_performance.keys(), reverse=True)
-            selected_month_view = st.selectbox("Select Month for Audit", month_options, format_func=lambda x: x.strftime('%B %Y'))
-            
-            sel_data = monthly_performance[selected_month_view]['data']
-            
-            # Interactive Filter
-            filter_status = st.multiselect("Filter Status", ["Under", "Accurate", "Over"], default=["Under", "Over"])
-            
-            if filter_status:
-                filtered_df = sel_data[sel_data['Accuracy_Status'].isin(filter_status)].copy()
-                
-                # Format for display
-                filtered_df['PO_Rofo_Ratio'] = filtered_df['PO_Rofo_Ratio'] / 100
-                
-                st.dataframe(
-                    filtered_df[['SKU_ID', 'Product_Name', 'Brand', 'Forecast_Qty', 'PO_Qty', 'PO_Rofo_Ratio', 'Accuracy_Status']],
-                    column_config={
-                        "PO_Rofo_Ratio": st.column_config.ProgressColumn(
-                            "Compliance %",
-                            format="%.0f%%",
-                            min_value=0,
-                            max_value=2, # Cap at 200%
-                        ),
-                        "Forecast_Qty": st.column_config.NumberColumn("Plan (Rofo)"),
-                        "PO_Qty": st.column_config.NumberColumn("Actual (PO)"),
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("Select a status to filter data.")
-
-        # Bias Chart (Improved)
+        # Create monthly performance summary table
+        summary_data = []
+        for month, data in sorted(monthly_performance.items()):
+            summary_data.append({
+                'Month': month.strftime('%b %Y'),
+                'Accuracy (%)': data['accuracy'],
+                'Under': data['status_counts'].get('Under', 0),
+                'Accurate': data['status_counts'].get('Accurate', 0),
+                'Over': data['status_counts'].get('Over', 0),
+                'Total SKUs': data['total_records'],
+                'MAPE': data['mape']
+            })
+        
+        summary_df = pd.DataFrame(summary_data)
+        
+        # Display summary table
+        st.dataframe(
+            summary_df,
+            column_config={
+                "Accuracy (%)": st.column_config.ProgressColumn(
+                    "Accuracy %",
+                    format="%.1f%%",
+                    min_value=0,
+                    max_value=100
+                ),
+                "MAPE": st.column_config.NumberColumn("MAPE %", format="%.1f%%")
+            },
+            use_container_width=True,
+            height=400
+        )
+        
+        # Add forecast bias analysis if available
         if not forecast_bias.empty:
             st.divider()
-            st.subheader("📉 Forecast Bias Direction")
-            st.caption("Grafik ini menunjukkan kecenderungan forecast anda: Apakah selalu terlalu optimis (Over) atau pesimis (Under)?")
+            st.subheader("📉 Forecast Bias Analysis")
             
             fig_bias = go.Figure()
             fig_bias.add_trace(go.Bar(
                 x=forecast_bias['Month'].dt.strftime('%b-%Y'),
                 y=forecast_bias['Avg_Bias_Percentage'],
-                name='Bias %',
-                marker=dict(
-                    color=forecast_bias['Avg_Bias_Percentage'],
-                    colorscale='RdYlGn',
-                    cmid=0 # 0 is green (unbiased)
-                ),
-                text=forecast_bias['Avg_Bias_Percentage'].apply(lambda x: f"{x:+.1f}%"),
-                textposition='auto'
+                name='Forecast Bias %',
+                marker_color=forecast_bias['Avg_Bias_Percentage'].apply(
+                    lambda x: '#4CAF50' if x >= -10 and x <= 10 else '#FF9800' if x >= -20 and x <= 20 else '#F44336'
+                )
             ))
             
             fig_bias.update_layout(
                 height=300,
-                xaxis_title=None,
-                yaxis_title='Bias % (+ Under / - Over)',
-                yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'),
-                plot_bgcolor='white'
+                title='Monthly Forecast Bias (Positive = Over-forecast, Negative = Under-forecast)',
+                xaxis_title='Month',
+                yaxis_title='Bias %'
             )
             
             st.plotly_chart(fig_bias, use_container_width=True)
@@ -3061,109 +3002,990 @@ with tab2:
                     avg_cover = tier_inv['Avg_Cover_Months'].mean()
                     st.metric("Average Cover All Tiers", f"{avg_cover:.1f} months")
 
-# --- TAB 3: INVENTORY SIMULATION & OPTIMIZATION (IMPROVED) ---
+# --- TAB 3: INTELLIGENT INVENTORY OPTIMIZATION ---
 with tab3:
-    st.subheader("🧠 Inventory Optimization Simulator")
-    st.markdown("Simulasikan perubahan parameter supply chain untuk melihat dampaknya terhadap **Safety Stock** dan **Cash Flow**.")
-
-    # --- 1. SIMULATOR CONTROLS ---
-    with st.container(border=True):
-        col_sim1, col_sim2, col_sim3 = st.columns(3)
-        with col_sim1:
-            sim_lead_time = st.slider("🔧 Supplier Lead Time (Days)", 7, 90, 30, help="Waktu tunggu barang datang dari supplier.")
-        with col_sim2:
-            sim_service_level = st.slider("🛡️ Service Level Target (%)", 85, 99, 95, help="Semakin tinggi, semakin kecil resiko stockout, tapi stock makin tebal.")
-        with col_sim3:
-            sim_holding_cost = st.number_input("💰 Holding Cost (%) / Year", 10, 40, 20, help="Biaya menyimpan barang setahun (bunga bank + gudang).")
-
-    # --- 2. CALCULATION ENGINE ---
-    if 'inventory_df' in inventory_metrics and not inventory_metrics['inventory_df'].empty:
-        df_sim = inventory_metrics['inventory_df'].copy()
+    st.subheader("🧠 INTELLIGENT INVENTORY OPTIMIZATION SYSTEM")
+    st.markdown("#### **AI-Powered Stock Management with Predictive Analytics**")
+    
+    # ============================================
+    # SECTION 1: EXECUTIVE INTELLIGENCE DASHBOARD
+    # ============================================
+    st.markdown("---")
+    
+    # REAL-TIME INVENTORY HEALTH SCORE
+    col_score1, col_score2, col_score3, col_score4 = st.columns(4)
+    
+    with col_score1:
+        # Inventory Health Score
+        health_score = 0
+        if 'inventory_df' in inventory_metrics and not inventory_metrics['inventory_df'].empty:
+            df_inv = inventory_metrics['inventory_df']
+            healthy_skus = len(df_inv[df_inv['Cover_Months'].between(0.8, 1.5)])
+            total_active = len(df_inv)
+            health_score = (healthy_skus / total_active * 100) if total_active > 0 else 0
         
-        # Simulasi sederhana
-        # Safety Stock = Z * StdDev * Sqrt(LeadTime)
-        # Kita asumsikan StdDev demand sekitar 30% dari rata-rata (jika tidak ada data detail)
-        
-        z_score_map = {85: 1.04, 90: 1.28, 95: 1.65, 98: 2.05, 99: 2.33}
-        z_score = z_score_map.get(sim_service_level, 1.65)
-        
-        # Calculate Simulation Metrics
-        df_sim['Sim_Daily_Sales'] = df_sim['Avg_Monthly_Sales_3M'] / 30
-        df_sim['Sim_Std_Dev'] = df_sim['Sim_Daily_Sales'] * 0.4 # Asumsi volatilitas 40%
-        df_sim['Sim_Safety_Stock'] = np.ceil(z_score * df_sim['Sim_Std_Dev'] * np.sqrt(sim_lead_time))
-        df_sim['Sim_Reorder_Point'] = np.ceil((df_sim['Sim_Daily_Sales'] * sim_lead_time) + df_sim['Sim_Safety_Stock'])
-        
-        # Calculate Value
-        if 'Floor_Price' in df_sim.columns:
-            df_sim['Current_Value'] = df_sim['Stock_Qty'] * df_sim['Floor_Price']
-            df_sim['Target_Stock_Value'] = df_sim['Sim_Reorder_Point'] * df_sim['Floor_Price']
-            
-            total_current_val = df_sim['Current_Value'].sum()
-            total_target_val = df_sim['Target_Stock_Value'].sum()
-            gap_val = total_current_val - total_target_val # Positif = Overstock, Negatif = Perlu Beli
-            
-            holding_cost_val = total_target_val * (sim_holding_cost/100)
+        fig_health = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=health_score,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "🏆 Inventory Health Score", 'font': {'size': 16}},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "#4CAF50"},
+                'steps': [
+                    {'range': [0, 50], 'color': "#FF5252"},
+                    {'range': [50, 80], 'color': "#FF9800"},
+                    {'range': [80, 100], 'color': "#4CAF50"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 80
+                }
+            }
+        ))
+        fig_health.update_layout(height=200, margin=dict(t=30, b=10))
+        st.plotly_chart(fig_health, use_container_width=True)
+    
+    with col_score2:
+        # Capital Efficiency Score
+        if 'inventory_df' in inventory_metrics and not df_stock.empty and 'Floor_Price' in df_stock.columns:
+            # Calculate inventory turns
+            total_inv_value = (df_stock['Stock_Qty'] * df_stock['Floor_Price']).sum()
+            if not df_financial.empty:
+                annual_sales = df_financial['Revenue'].sum()
+                inventory_turns = annual_sales / total_inv_value if total_inv_value > 0 else 0
+                
+                # Industry benchmark comparison
+                industry_avg = 4.0  # Retail industry average
+                efficiency_score = min(100, (inventory_turns / industry_avg * 100))
+                
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); 
+                            border-radius: 12px; padding: 1.2rem; color: white; 
+                            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.3); height: 200px;">
+                    <div style="font-size: 0.9rem; opacity: 0.9;">CAPITAL EFFICIENCY</div>
+                    <div style="font-size: 2rem; font-weight: 800; margin: 0.5rem 0;">{inventory_turns:.1f}x</div>
+                    <div style="font-size: 0.9rem;">Inventory Turns</div>
+                    <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
+                        Industry Avg: {industry_avg}x<br>
+                        Score: {efficiency_score:.0f}/100
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.metric("Capital Efficiency", "N/A", "Need sales data")
         else:
-            total_current_val = 0
-            total_target_val = 0
-            gap_val = 0
-            holding_cost_val = 0
-
-        # --- 3. RESULT VISUALIZATION ---
-        col_res1, col_res2, col_res3 = st.columns(3)
+            st.metric("Capital Efficiency", "N/A", "Need price data")
+    
+    with col_score3:
+        # Stockout Risk Index
+        stockout_risk = 0
+        if 'low_stock' in inventory_metrics and not inventory_metrics['low_stock'].empty:
+            low_stock_df = inventory_metrics['low_stock']
+            critical_items = low_stock_df[low_stock_df['Cover_Months'] < 0.5]
+            stockout_risk = len(critical_items)
         
-        with col_res1:
-            st.metric(
-                "Ideal Inventory Value", 
-                f"Rp {total_target_val:,.0f}", 
-                f"{total_target_val - total_current_val:,.0f} vs Current",
-                delta_color="inverse"
+        risk_color = "#4CAF50" if stockout_risk == 0 else "#FF9800" if stockout_risk < 5 else "#F44336"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, {risk_color} 0%, {risk_color.replace('F44', 'D32')} 100%); 
+                    border-radius: 12px; padding: 1.2rem; color: white; 
+                    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.3); height: 200px;">
+            <div style="font-size: 0.9rem; opacity: 0.9;">🚨 STOCKOUT RISK</div>
+            <div style="font-size: 2rem; font-weight: 800; margin: 0.5rem 0;">{stockout_risk}</div>
+            <div style="font-size: 0.9rem;">Critical SKUs</div>
+            <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
+                {"✅ All good" if stockout_risk == 0 else "⚠️ Monitor" if stockout_risk < 5 else "🚨 Immediate action needed"}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_score4:
+        # Excess Stock Value
+        excess_value = 0
+        if 'high_stock' in inventory_metrics and not inventory_metrics['high_stock'].empty:
+            high_stock_df = inventory_metrics['high_stock']
+            if 'Floor_Price' in high_stock_df.columns:
+                high_stock_df['Value'] = high_stock_df['Stock_Qty'] * high_stock_df['Floor_Price']
+                excess_value = high_stock_df['Value'].sum()
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); 
+                    border-radius: 12px; padding: 1.2rem; color: white; 
+                    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.3); height: 200px;">
+            <div style="font-size: 0.9rem; opacity: 0.9;">📦 EXCESS STOCK</div>
+            <div style="font-size: 2rem; font-weight: 800; margin: 0.5rem 0;">Rp {excess_value:,.0f}</div>
+            <div style="font-size: 0.9rem;">Capital Locked</div>
+            <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
+                {"✅ Optimal" if excess_value < 10000000 else "⚠️ Moderate" if excess_value < 50000000 else "🚨 High"}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ============================================
+    # NEW SECTION: INTELLIGENT RECOMMENDATIONS ENGINE
+    # ============================================
+    st.markdown("---")
+    st.subheader("🎯 AI-PURCHASING RECOMMENDATIONS")
+    
+    # ======================== FUNGSI BARU: REORDER POINT CALCULATION ========================
+    @st.cache_data
+    def calculate_reorder_recommendations(df_inventory, df_sales, service_level=95, lead_time_days=30):
+        """
+        Calculate intelligent reorder recommendations
+        based on statistical safety stock calculations
+        """
+        recommendations = []
+        
+        if df_inventory.empty or df_sales.empty:
+            return pd.DataFrame()
+        
+        try:
+            # Calculate daily sales statistics
+            if 'Month' in df_sales.columns:
+                # Get last 90 days sales
+                latest_date = df_sales['Month'].max()
+                start_date = latest_date - pd.Timedelta(days=90)
+                recent_sales = df_sales[df_sales['Month'] >= start_date].copy()
+                
+                # Calculate daily sales per SKU
+                recent_sales['Days_Since'] = (latest_date - recent_sales['Month']).dt.days
+                recent_sales['Weight'] = np.exp(-recent_sales['Days_Since'] / 30)  # Exponential decay weighting
+                
+                sku_stats = []
+                for sku_id in df_inventory['SKU_ID'].unique():
+                    sku_sales = recent_sales[recent_sales['SKU_ID'] == sku_id]
+                    
+                    if len(sku_sales) >= 3:  # Minimum data points
+                        # Weighted average daily sales
+                        total_weight = sku_sales['Weight'].sum()
+                        if total_weight > 0:
+                            avg_daily_sales = (sku_sales['Sales_Qty'] * sku_sales['Weight']).sum() / total_weight / 30
+                        else:
+                            avg_daily_sales = sku_sales['Sales_Qty'].mean() / 30
+                        
+                        # Standard deviation
+                        sales_std = sku_sales['Sales_Qty'].std() / 30
+                        
+                        sku_stats.append({
+                            'SKU_ID': sku_id,
+                            'Avg_Daily_Sales': avg_daily_sales,
+                            'Sales_Std': sales_std if not pd.isna(sales_std) else avg_daily_sales * 0.3
+                        })
+                
+                df_stats = pd.DataFrame(sku_stats)
+                
+                # Merge with inventory data
+                df_combined = pd.merge(df_inventory, df_stats, on='SKU_ID', how='left')
+                df_combined['Avg_Daily_Sales'] = df_combined['Avg_Daily_Sales'].fillna(0)
+                df_combined['Sales_Std'] = df_combined['Sales_Std'].fillna(df_combined['Avg_Daily_Sales'] * 0.3)
+                
+                # Z-score for service level
+                z_score = {90: 1.28, 95: 1.65, 99: 2.33}.get(service_level, 1.65)
+                
+                # Calculate safety stock
+                df_combined['Safety_Stock'] = z_score * df_combined['Sales_Std'] * np.sqrt(lead_time_days)
+                
+                # Calculate reorder point
+                df_combined['Reorder_Point'] = (df_combined['Avg_Daily_Sales'] * lead_time_days) + df_combined['Safety_Stock']
+                
+                # Calculate suggested order quantity
+                df_combined['Suggested_Order_Qty'] = df_combined.apply(
+                    lambda row: max(0, row['Reorder_Point'] - row['Stock_Qty']) if row['Stock_Qty'] < row['Reorder_Point'] else 0,
+                    axis=1
+                )
+                
+                # Add EOQ (Economic Order Quantity) calculation
+                # Assume ordering cost Rp 50,000 and holding cost 20% of product cost
+                ordering_cost = 50000
+                holding_rate = 0.20
+                
+                df_combined['EOQ'] = df_combined.apply(
+                    lambda row: np.sqrt((2 * row['Avg_Daily_Sales'] * 30 * ordering_cost) / 
+                                      (row['Floor_Price'] * holding_rate)) if row['Floor_Price'] > 0 else 0,
+                    axis=1
+                )
+                
+                # Adjust suggested order to EOQ if applicable
+                df_combined['Final_Suggested_Qty'] = df_combined.apply(
+                    lambda row: max(row['Suggested_Order_Qty'], row['EOQ']) if row['Suggested_Order_Qty'] > 0 else 0,
+                    axis=1
+                )
+                
+                # Filter only SKUs that need reorder
+                df_reorder = df_combined[
+                    (df_combined['Final_Suggested_Qty'] > 0) &
+                    (df_combined['Status'].str.upper() == 'ACTIVE')
+                ].copy()
+                
+                # Calculate order value
+                if 'Floor_Price' in df_reorder.columns:
+                    df_reorder['Order_Value'] = df_reorder['Final_Suggested_Qty'] * df_reorder['Floor_Price']
+                
+                return df_reorder.sort_values('Order_Value', ascending=False)
+            
+            return pd.DataFrame()
+            
+        except Exception as e:
+            st.error(f"Reorder calculation error: {str(e)}")
+            return pd.DataFrame()
+    
+    # ======================== FUNGSI BARU: ABC ANALYSIS ========================
+    @st.cache_data
+    def perform_abc_analysis(df_inventory, df_sales=None):
+        """Perform ABC analysis based on Pareto principle"""
+        
+        if df_inventory.empty:
+            return pd.DataFrame()
+        
+        try:
+            # Calculate inventory value
+            df_abc = df_inventory.copy()
+            
+            if 'Floor_Price' in df_abc.columns:
+                df_abc['Value'] = df_abc['Stock_Qty'] * df_abc['Floor_Price']
+            else:
+                # Use stock quantity if no price available
+                df_abc['Value'] = df_abc['Stock_Qty']
+            
+            # Sort by value descending
+            df_abc = df_abc.sort_values('Value', ascending=False)
+            
+            # Calculate cumulative percentages
+            df_abc['Cumulative_Value'] = df_abc['Value'].cumsum()
+            total_value = df_abc['Value'].sum()
+            
+            if total_value > 0:
+                df_abc['Value_Pct'] = (df_abc['Value'] / total_value * 100)
+                df_abc['Cumulative_Pct'] = (df_abc['Cumulative_Value'] / total_value * 100)
+                
+                # Classify A, B, C items
+                conditions = [
+                    df_abc['Cumulative_Pct'] <= 80,      # A items: 80% of value
+                    df_abc['Cumulative_Pct'] <= 95,      # B items: next 15% of value
+                    df_abc['Cumulative_Pct'] <= 100      # C items: last 5% of value
+                ]
+                
+                choices = ['A', 'B', 'C']
+                df_abc['ABC_Class'] = np.select(conditions, choices, default='C')
+                
+                # Calculate turnover if sales data available
+                if df_sales is not None and not df_sales.empty:
+                    # Get last 3 months sales
+                    latest_month = df_sales['Month'].max()
+                    three_months_ago = latest_month - pd.DateOffset(months=3)
+                    recent_sales = df_sales[df_sales['Month'] >= three_months_ago]
+                    
+                    sales_by_sku = recent_sales.groupby('SKU_ID')['Sales_Qty'].sum().reset_index()
+                    sales_by_sku.columns = ['SKU_ID', 'Sales_3M']
+                    
+                    df_abc = pd.merge(df_abc, sales_by_sku, on='SKU_ID', how='left')
+                    df_abc['Sales_3M'] = df_abc['Sales_3M'].fillna(0)
+                    df_abc['Turnover_Rate'] = df_abc.apply(
+                        lambda row: row['Sales_3M'] / row['Stock_Qty'] if row['Stock_Qty'] > 0 else 0,
+                        axis=1
+                    )
+                
+                return df_abc
+            
+            return pd.DataFrame()
+            
+        except Exception as e:
+            st.error(f"ABC Analysis error: {str(e)}")
+            return pd.DataFrame()
+    
+    # ======================== FUNGSI BARU: DEAD STOCK IDENTIFICATION ========================
+    @st.cache_data
+    def identify_dead_stock(df_inventory, df_sales, months_threshold=6):
+        """Identify dead/slow-moving stock"""
+        
+        if df_inventory.empty or df_sales.empty:
+            return pd.DataFrame()
+        
+        try:
+            # Get latest sales date
+            latest_sales_date = df_sales['Month'].max()
+            cutoff_date = latest_sales_date - pd.DateOffset(months=months_threshold)
+            
+            # Find SKUs with sales in last X months
+            recent_sales_skus = df_sales[df_sales['Month'] >= cutoff_date]['SKU_ID'].unique()
+            
+            # Identify dead stock (has inventory but no recent sales)
+            df_dead = df_inventory[
+                (~df_inventory['SKU_ID'].isin(recent_sales_skus)) &
+                (df_inventory['Stock_Qty'] > 0) &
+                (df_inventory['Status'].str.upper() == 'ACTIVE')
+            ].copy()
+            
+            if 'Floor_Price' in df_dead.columns:
+                df_dead['Dead_Stock_Value'] = df_dead['Stock_Qty'] * df_dead['Floor_Price']
+            
+            return df_dead.sort_values('Stock_Qty', ascending=False)
+            
+        except Exception as e:
+            st.error(f"Dead stock identification error: {str(e)}")
+            return pd.DataFrame()
+    
+    # ======================== FUNGSI BARU: SEASONALITY ADJUSTMENT ========================
+    @st.cache_data
+    def calculate_seasonality_adjustment(df_sales):
+        """Calculate seasonal adjustment factors"""
+        
+        if df_sales.empty:
+            return {}
+        
+        try:
+            # Add month number
+            df_sales['Month_Num'] = df_sales['Month'].dt.month
+            
+            # Calculate monthly sales pattern
+            monthly_sales = df_sales.groupby('Month_Num')['Sales_Qty'].sum()
+            avg_monthly = monthly_sales.mean()
+            
+            # Calculate seasonal indices
+            seasonal_indices = {}
+            for month in range(1, 13):
+                month_sales = monthly_sales.get(month, 0)
+                seasonal_indices[month] = month_sales / avg_monthly if avg_monthly > 0 else 1.0
+            
+            return seasonal_indices
+            
+        except Exception as e:
+            st.error(f"Seasonality calculation error: {str(e)}")
+            return {}
+    
+    # ============================================
+    # IMPLEMENTASI DASHBOARD BARU
+    # ============================================
+    
+    # 1. SETTING PANEL
+    with st.expander("⚙️ INTELLIGENT SETTINGS", expanded=True):
+        col_set1, col_set2, col_set3 = st.columns(3)
+        
+        with col_set1:
+            service_level = st.slider("Service Level Target", 90, 99, 95, 
+                                     help="Probability of not having stockout")
+            lead_time = st.number_input("Lead Time (days)", 7, 90, 30,
+                                       help="Supplier lead time in days")
+        
+        with col_set2:
+            reorder_threshold = st.slider("Reorder Threshold (months)", 0.5, 2.0, 0.8, 0.1,
+                                         help="Reorder when stock below X months coverage")
+            excess_threshold = st.slider("Excess Threshold (months)", 1.5, 6.0, 1.5, 0.1,
+                                        help="Flag as excess when stock above X months")
+        
+        with col_set3:
+            ordering_cost = st.number_input("Ordering Cost (Rp)", 10000, 200000, 50000,
+                                          help="Cost per purchase order")
+            holding_rate = st.slider("Holding Cost Rate (%)", 10, 30, 20,
+                                    help="Annual inventory carrying cost as % of value")
+    
+    # 2. REORDER RECOMMENDATIONS ENGINE
+    st.markdown("### 📋 AUTOMATED REORDER RECOMMENDATIONS")
+    
+    if 'inventory_df' in inventory_metrics and not inventory_metrics['inventory_df'].empty:
+        df_inventory = inventory_metrics['inventory_df']
+        
+        # Calculate reorder recommendations
+        with st.spinner("🤖 Calculating intelligent reorder points..."):
+            df_recommendations = calculate_reorder_recommendations(
+                df_inventory, 
+                df_sales,
+                service_level=service_level,
+                lead_time_days=lead_time
             )
         
-        with col_res2:
-            st.metric(
-                "Projected Annual Holding Cost", 
-                f"Rp {holding_cost_val:,.0f}",
-                help="Estimasi biaya gudang & modal mati setahun dengan setting ini."
+        if not df_recommendations.empty:
+            # Summary metrics
+            total_order_qty = df_recommendations['Final_Suggested_Qty'].sum()
+            total_order_value = df_recommendations['Order_Value'].sum() if 'Order_Value' in df_recommendations.columns else 0
+            skus_to_reorder = len(df_recommendations)
+            
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            with col_sum1:
+                st.metric("SKUs to Reorder", skus_to_reorder)
+            with col_sum2:
+                st.metric("Total Quantity", f"{total_order_qty:,.0f}")
+            with col_sum3:
+                st.metric("Total Investment", f"Rp {total_order_value:,.0f}")
+            
+            # Display recommendations
+            display_cols = ['SKU_ID', 'Product_Name', 'Brand', 'Stock_Qty', 
+                          'Avg_Daily_Sales', 'Safety_Stock', 'Reorder_Point',
+                          'Final_Suggested_Qty', 'EOQ', 'Order_Value']
+            
+            available_cols = [col for col in display_cols if col in df_recommendations.columns]
+            
+            # Format for display
+            df_display = df_recommendations[available_cols].copy()
+            
+            # Format numbers
+            if 'Avg_Daily_Sales' in df_display.columns:
+                df_display['Avg_Daily_Sales'] = df_display['Avg_Daily_Sales'].apply(lambda x: f"{x:.1f}")
+            
+            if 'Safety_Stock' in df_display.columns:
+                df_display['Safety_Stock'] = df_display['Safety_Stock'].apply(lambda x: f"{x:.0f}")
+            
+            if 'Reorder_Point' in df_display.columns:
+                df_display['Reorder_Point'] = df_display['Reorder_Point'].apply(lambda x: f"{x:.0f}")
+            
+            if 'Order_Value' in df_display.columns:
+                df_display['Order_Value'] = df_display['Order_Value'].apply(lambda x: f"Rp {x:,.0f}")
+            
+            st.dataframe(
+                df_display.sort_values('Order_Value', ascending=False),
+                use_container_width=True,
+                height=400
             )
             
-        with col_res3:
-            status_text = "Overstocked (Reduce Buy)" if gap_val > 0 else "Understocked (Need Capital)"
-            st.metric(
-                "Net Position Status", 
-                status_text,
-                f"Rp {abs(gap_val):,.0f}"
+            # Export button
+            csv_rec = df_recommendations.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Reorder Recommendations (CSV)",
+                data=csv_rec,
+                file_name=f"reorder_recommendations_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
             )
-
-        st.divider()
-        
-        # Recommendations Table
-        st.subheader("📋 Actionable Replenishment Plan")
-        
-        df_sim['Action'] = np.where(df_sim['Stock_Qty'] < df_sim['Sim_Reorder_Point'], '🛒 REORDER', 
-                           np.where(df_sim['Stock_Qty'] > df_sim['Sim_Reorder_Point'] * 2, '🛑 STOP BUY / PROMO', '✅ OK'))
-        
-        df_sim['Qty_To_Order'] = np.where(df_sim['Action'] == '🛒 REORDER', df_sim['Sim_Reorder_Point'] - df_sim['Stock_Qty'], 0)
-        
-        # Filter buttons
-        filter_action = st.multiselect("Filter Recommendation:", ['🛒 REORDER', '🛑 STOP BUY / PROMO', '✅ OK'], default=['🛒 REORDER'])
-        
-        df_show = df_sim[df_sim['Action'].isin(filter_action)].sort_values('Qty_To_Order', ascending=False)
-        
-        st.dataframe(
-            df_show[['SKU_ID', 'Product_Name', 'Stock_Qty', 'Sim_Reorder_Point', 'Action', 'Qty_To_Order']],
-            column_config={
-                "Stock_Qty": st.column_config.NumberColumn("Current Stock"),
-                "Sim_Reorder_Point": st.column_config.NumberColumn("Target Level (ROP)"),
-                "Qty_To_Order": st.column_config.NumberColumn("Suggested Order", format="%d pcs"),
-                "Action": st.column_config.TextColumn("Recommendation"),
-            },
-            use_container_width=True
-        )
-        
+        else:
+            st.success("✅ No reorder recommendations at this time")
     else:
-        st.warning("Data Inventory/Sales belum siap untuk simulasi.")
+        st.warning("⚠️ Inventory data not available for recommendations")
+    
+    # 3. ABC ANALYSIS DASHBOARD
+    st.markdown("---")
+    st.markdown("### 📊 ABC ANALYSIS - PARETO INVENTORY CLASSIFICATION")
+    
+    if 'inventory_df' in inventory_metrics:
+        with st.spinner("📈 Performing ABC analysis..."):
+            df_abc = perform_abc_analysis(inventory_metrics['inventory_df'], df_sales)
         
+        if not df_abc.empty:
+            # ABC Summary
+            abc_summary = df_abc.groupby('ABC_Class').agg({
+                'SKU_ID': 'count',
+                'Value': 'sum',
+                'Stock_Qty': 'sum'
+            }).reset_index()
+            
+            abc_summary.columns = ['Class', 'SKU Count', 'Total Value', 'Total Qty']
+            abc_summary['Value Pct'] = (abc_summary['Total Value'] / abc_summary['Total Value'].sum() * 100)
+            abc_summary['SKU Pct'] = (abc_summary['SKU Count'] / abc_summary['SKU Count'].sum() * 100)
+            
+            # Visualizations
+            col_abc1, col_abc2 = st.columns(2)
+            
+            with col_abc1:
+                # Pareto Chart
+                fig_pareto = go.Figure()
+                
+                # Cumulative percentage line
+                df_abc_sorted = df_abc.sort_values('Value', ascending=False).reset_index()
+                df_abc_sorted['Cum_Pct'] = df_abc_sorted['Cumulative_Pct']
+                
+                fig_pareto.add_trace(go.Bar(
+                    x=df_abc_sorted.index,
+                    y=df_abc_sorted['Value'],
+                    name='Value',
+                    marker_color=df_abc_sorted['ABC_Class'].map({'A': '#FF5252', 'B': '#FF9800', 'C': '#4CAF50'})
+                ))
+                
+                fig_pareto.add_trace(go.Scatter(
+                    x=df_abc_sorted.index,
+                    y=df_abc_sorted['Cum_Pct'],
+                    name='Cumulative %',
+                    yaxis='y2',
+                    line=dict(color='#2196F3', width=3)
+                ))
+                
+                fig_pareto.update_layout(
+                    height=400,
+                    title='Pareto Chart: Inventory Value Distribution',
+                    xaxis_title='SKU Rank',
+                    yaxis_title='Inventory Value (Rp)',
+                    yaxis2=dict(
+                        title='Cumulative %',
+                        overlaying='y',
+                        side='right',
+                        range=[0, 100]
+                    ),
+                    showlegend=True
+                )
+                
+                st.plotly_chart(fig_pareto, use_container_width=True)
+            
+            with col_abc2:
+                # ABC Pie Chart
+                fig_abc_pie = px.pie(
+                    abc_summary,
+                    values='Total Value',
+                    names='Class',
+                    title='Inventory Value by ABC Class',
+                    color='Class',
+                    color_discrete_map={'A': '#FF5252', 'B': '#FF9800', 'C': '#4CAF50'},
+                    hole=0.4
+                )
+                
+                fig_abc_pie.update_layout(height=400)
+                st.plotly_chart(fig_abc_pie, use_container_width=True)
+            
+            # ABC Management Recommendations
+            st.markdown("#### 🎯 ABC MANAGEMENT STRATEGIES")
+            
+            col_strat1, col_strat2, col_strat3 = st.columns(3)
+            
+            with col_strat1:
+                st.markdown("""
+                <div style="background: #FFEBEE; border-left: 5px solid #F44336; 
+                            padding: 1rem; border-radius: 8px; margin: 0.5rem 0;">
+                    <h4 style="color: #C62828; margin: 0 0 0.5rem 0;">🅰️ CLASS A ITEMS</h4>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>{sku_count} SKUs ({value_pct:.1f}% of value)</strong><br>
+                    • Tight control<br>
+                    • Frequent review<br>
+                    • Accurate forecasting<br>
+                    • High service level
+                    </p>
+                </div>
+                """.format(
+                    sku_count=abc_summary[abc_summary['Class'] == 'A']['SKU Count'].iloc[0],
+                    value_pct=abc_summary[abc_summary['Class'] == 'A']['Value Pct'].iloc[0]
+                ), unsafe_allow_html=True)
+            
+            with col_strat2:
+                st.markdown("""
+                <div style="background: #FFF3E0; border-left: 5px solid #FF9800; 
+                            padding: 1rem; border-radius: 8px; margin: 0.5rem 0;">
+                    <h4 style="color: #EF6C00; margin: 0 0 0.5rem 0;">🅱️ CLASS B ITEMS</h4>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>{sku_count} SKUs ({value_pct:.1f}% of value)</strong><br>
+                    • Moderate control<br>
+                    • Periodic review<br>
+                    • Standard forecasting<br>
+                    • Moderate service level
+                    </p>
+                </div>
+                """.format(
+                    sku_count=abc_summary[abc_summary['Class'] == 'B']['SKU Count'].iloc[0],
+                    value_pct=abc_summary[abc_summary['Class'] == 'B']['Value Pct'].iloc[0]
+                ), unsafe_allow_html=True)
+            
+            with col_strat3:
+                st.markdown("""
+                <div style="background: #E8F5E9; border-left: 5px solid #4CAF50; 
+                            padding: 1rem; border-radius: 8px; margin: 0.5rem 0;">
+                    <h4 style="color: #2E7D32; margin: 0 0 0.5rem 0;">© CLASS C ITEMS</h4>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                    <strong>{sku_count} SKUs ({value_pct:.1f}% of value)</strong><br>
+                    • Simple control<br>
+                    • Occasional review<br>
+                    • Minimal forecasting<br>
+                    • Basic service level
+                    </p>
+                </div>
+                """.format(
+                    sku_count=abc_summary[abc_summary['Class'] == 'C']['SKU Count'].iloc[0],
+                    value_pct=abc_summary[abc_summary['Class'] == 'C']['Value Pct'].iloc[0]
+                ), unsafe_allow_html=True)
+    
+    # 4. DEAD STOCK ANALYSIS
+    st.markdown("---")
+    st.markdown("### 🗑️ DEAD & SLOW-MOVING STOCK ANALYSIS")
+    
+    if 'inventory_df' in inventory_metrics and not df_sales.empty:
+        with st.spinner("🔍 Identifying dead stock..."):
+            df_dead = identify_dead_stock(
+                inventory_metrics['inventory_df'], 
+                df_sales,
+                months_threshold=6
+            )
+        
+        if not df_dead.empty:
+            total_dead_value = df_dead['Dead_Stock_Value'].sum() if 'Dead_Stock_Value' in df_dead.columns else 0
+            
+            col_dead1, col_dead2 = st.columns(2)
+            
+            with col_dead1:
+                st.warning(f"""
+                ⚠️ **CRITICAL FINDING**
+                
+                Found **{len(df_dead)} SKUs** with no sales in last 6 months
+                
+                **Total Value Locked:** Rp {total_dead_value:,.0f}
+                
+                **Recommendation:** Immediate action required to free up working capital
+                """)
+            
+            with col_dead2:
+                # Top 10 dead stock items
+                df_top_dead = df_dead.head(10).copy()
+                if 'Dead_Stock_Value' in df_top_dead.columns:
+                    df_top_dead['Dead_Stock_Value'] = df_top_dead['Dead_Stock_Value'].apply(lambda x: f"Rp {x:,.0f}")
+                
+                st.dataframe(
+                    df_top_dead[['SKU_ID', 'Product_Name', 'Brand', 'Stock_Qty', 'Dead_Stock_Value']],
+                    use_container_width=True,
+                    height=250
+                )
+            
+            # Action Plan
+            st.markdown("#### 🛠️ DEAD STOCK ACTION PLAN")
+            
+            action_col1, action_col2, action_col3, action_col4 = st.columns(4)
+            
+            with action_col1:
+                st.markdown("""
+                <div style="background: #FFF3E0; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">🔥</div>
+                    <strong>Clearance Sale</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    30-50% discount to clear inventory
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with action_col2:
+                st.markdown("""
+                <div style="background: #E8F5E9; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">🎁</div>
+                    <strong>Bundle Offers</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    Combine with fast-moving items
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with action_col3:
+                st.markdown("""
+                <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">↩️</div>
+                    <strong>Return to Supplier</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    If return policy allows
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with action_col4:
+                st.markdown("""
+                <div style="background: #F3E5F5; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 1.5rem;">🤝</div>
+                    <strong>Donate for Tax Benefit</strong>
+                    <div style="font-size: 0.8rem; color: #666;">
+                    Corporate social responsibility
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Export dead stock list
+            csv_dead = df_dead.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Dead Stock List (CSV)",
+                data=csv_dead,
+                file_name=f"dead_stock_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.success("✅ No dead stock identified - Excellent inventory management!")
+    
+    # 5. WAREHOUSE OPTIMIZATION
+    st.markdown("---")
+    st.markdown("### 🏢 WAREHOUSE OPTIMIZATION ANALYSIS")
+    
+    # Warehouse settings in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🏢 Warehouse Configuration")
+    
+    wh_capacity = st.sidebar.number_input(
+        "Total Warehouse Capacity (pcs)",
+        min_value=10000,
+        max_value=1000000,
+        value=250000,
+        step=10000,
+        help="Maximum storage capacity in units"
+    )
+    
+    wh_rent_cost = st.sidebar.number_input(
+        "Monthly Warehouse Cost (Rp)",
+        min_value=1000000,
+        max_value=100000000,
+        value=10000000,
+        step=1000000,
+        help="Monthly rental/storage cost"
+    )
+    
+    if 'inventory_df' in inventory_metrics:
+        df_inv = inventory_metrics['inventory_df']
+        current_occupancy = df_inv['Stock_Qty'].sum()
+        occupancy_pct = (current_occupancy / wh_capacity * 100) if wh_capacity > 0 else 0
+        
+        # Storage cost analysis
+        storage_cost_per_unit = wh_rent_cost / wh_capacity if wh_capacity > 0 else 0
+        monthly_storage_cost = current_occupancy * storage_cost_per_unit
+        
+        col_wh1, col_wh2, col_wh3, col_wh4 = st.columns(4)
+        
+        with col_wh1:
+            st.metric(
+                "Warehouse Occupancy",
+                f"{occupancy_pct:.1f}%",
+                delta="Optimal < 80%" if occupancy_pct < 80 else "High ≥ 80%",
+                delta_color="normal" if occupancy_pct < 80 else "off"
+            )
+        
+        with col_wh2:
+            available_space = wh_capacity - current_occupancy
+            st.metric("Available Space", f"{available_space:,.0f} pcs")
+        
+        with col_wh3:
+            st.metric("Monthly Storage Cost", f"Rp {monthly_storage_cost:,.0f}")
+        
+        with col_wh4:
+            # Cost per unit stored
+            st.metric("Cost per Unit/Month", f"Rp {storage_cost_per_unit:,.0f}")
+        
+        # Space Optimization Recommendations
+        if 'high_stock' in inventory_metrics and not inventory_metrics['high_stock'].empty:
+            high_stock_df = inventory_metrics['high_stock']
+            
+            # Calculate space that could be freed
+            excess_coverage = high_stock_df[high_stock_df['Cover_Months'] > 2.0]
+            
+            if not excess_coverage.empty:
+                excess_qty = excess_coverage['Stock_Qty'].sum()
+                space_pct = (excess_qty / wh_capacity * 100) if wh_capacity > 0 else 0
+                
+                st.info(f"""
+                **💡 SPACE OPTIMIZATION OPPORTUNITY**
+                
+                You have **{excess_qty:,.0f} units** ({space_pct:.1f}% of warehouse) 
+                with excessive coverage (>2 months).
+                
+                **Potential savings:** Rp {excess_qty * storage_cost_per_unit:,.0f} monthly
+                
+                **Action:** Consider reducing inventory levels for these SKUs
+                """)
+    
+    # 6. FINANCIAL IMPACT ANALYSIS
+    st.markdown("---")
+    st.markdown("### 💰 FINANCIAL IMPACT ANALYSIS")
+    
+    if 'inventory_df' in inventory_metrics:
+        df_inv = inventory_metrics['inventory_df']
+        
+        # Calculate inventory value
+        total_inv_value = 0
+        if 'Floor_Price' in df_inv.columns:
+            total_inv_value = (df_inv['Stock_Qty'] * df_inv['Floor_Price']).sum()
+        
+        # Calculate holding costs
+        annual_holding_rate = holding_rate / 100
+        annual_holding_cost = total_inv_value * annual_holding_rate
+        monthly_holding_cost = annual_holding_cost / 12
+        
+        col_fin1, col_fin2, col_fin3 = st.columns(3)
+        
+        with col_fin1:
+            st.markdown(f"""
+            <div style="background: #F5F5F5; border-radius: 10px; padding: 1rem; text-align: center;">
+                <div style="font-size: 0.9rem; color: #666;">Total Inventory Value</div>
+                <div style="font-size: 1.8rem; font-weight: 800; color: #333;">Rp {total_inv_value:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #999;">Capital tied up in inventory</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_fin2:
+            st.markdown(f"""
+            <div style="background: #F5F5F5; border-radius: 10px; padding: 1rem; text-align: center;">
+                <div style="font-size: 0.9rem; color: #666;">Monthly Holding Cost</div>
+                <div style="font-size: 1.8rem; font-weight: 800; color: #333;">Rp {monthly_holding_cost:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #999;">{holding_rate}% of inventory value</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_fin3:
+            # Calculate potential savings from optimization
+            potential_savings = 0
+            
+            # From dead stock elimination
+            if 'df_dead' in locals() and not df_dead.empty and 'Dead_Stock_Value' in df_dead.columns:
+                dead_value = df_dead['Dead_Stock_Value'].sum()
+                potential_savings += dead_value * (annual_holding_rate / 12)  # Monthly holding cost savings
+            
+            # From excess stock reduction
+            if 'excess_coverage' in locals() and not excess_coverage.empty:
+                excess_value = 0
+                if 'Floor_Price' in excess_coverage.columns:
+                    excess_value = (excess_coverage['Stock_Qty'] * excess_coverage['Floor_Price']).sum()
+                    potential_savings += excess_value * (annual_holding_rate / 12) * 0.5  # Assume 50% reduction
+            
+            st.markdown(f"""
+            <div style="background: #E8F5E9; border-radius: 10px; padding: 1rem; text-align: center;">
+                <div style="font-size: 0.9rem; color: #2E7D32;">Potential Monthly Savings</div>
+                <div style="font-size: 1.8rem; font-weight: 800; color: #1B5E20;">Rp {potential_savings:,.0f}</div>
+                <div style="font-size: 0.8rem; color: #4CAF50;">From optimization</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # 7. EXPORT ALL ANALYSES
+    st.markdown("---")
+    st.markdown("### 📊 EXPORT COMPREHENSIVE ANALYSIS")
+    
+    export_col1, export_col2, export_col3 = st.columns(3)
+    
+    with export_col1:
+        if st.button("📥 Export All Recommendations", use_container_width=True, type="primary"):
+            # Create comprehensive report
+            report_data = {}
+            
+            # 1. Reorder recommendations
+            if 'df_recommendations' in locals() and not df_recommendations.empty:
+                report_data['Reorder_Recommendations'] = df_recommendations
+            
+            # 2. ABC Analysis
+            if 'df_abc' in locals() and not df_abc.empty:
+                report_data['ABC_Analysis'] = df_abc
+            
+            # 3. Dead Stock
+            if 'df_dead' in locals() and not df_dead.empty:
+                report_data['Dead_Stock'] = df_dead
+            
+            # 4. Inventory summary
+            if 'inventory_df' in inventory_metrics:
+                report_data['Inventory_Summary'] = inventory_metrics['inventory_df']
+            
+            # Create Excel file with multiple sheets
+            import io
+            from pandas import ExcelWriter
+            
+            output = io.BytesIO()
+            with ExcelWriter(output, engine='openpyxl') as writer:
+                for sheet_name, df in report_data.items():
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            output.seek(0)
+            
+            st.download_button(
+                label="💾 Download Excel Report",
+                data=output,
+                file_name=f"Inventory_Intelligence_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    
+    with export_col2:
+        if st.button("🔄 Run Advanced Analysis", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
+    with export_col3:
+        if st.button("📊 Generate Executive Summary", use_container_width=True):
+            # Create executive summary
+            summary_html = f"""
+            <div style="background: white; border-radius: 12px; padding: 2rem; margin: 1rem 0; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                <h2 style="color: #333; margin-top: 0;">📈 Inventory Intelligence Executive Summary</h2>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 2rem 0;">
+                    <div style="background: #E8F5E9; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.9rem; color: #2E7D32;">Inventory Health</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #1B5E20;">{health_score:.0f}/100</div>
+                    </div>
+                    <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.9rem; color: #1565C0;">Stockout Risk</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #0D47A1;">{stockout_risk} SKUs</div>
+                    </div>
+                    <div style="background: #FFF3E0; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.9rem; color: #EF6C00;">Excess Stock Value</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #E65100;">Rp {excess_value:,.0f}</div>
+                    </div>
+                </div>
+            </div>
+            """
+            
+            st.markdown(summary_html, unsafe_allow_html=True)
+    
+    # 8. QUICK ACTIONS PANEL
+    st.markdown("---")
+    st.markdown("### ⚡ QUICK ACTION PANEL")
+    
+    action_tab1, action_tab2, action_tab3 = st.tabs(["🚨 Critical Actions", "📈 Optimization", "📊 Reports"])
+    
+    with action_tab1:
+        # Critical actions
+        critical_actions = []
+        
+        # Check stockout risk
+        if stockout_risk > 0:
+            critical_actions.append(f"🚨 **Immediate Reorder Needed:** {stockout_risk} SKUs at risk of stockout")
+        
+        # Check dead stock
+        if 'df_dead' in locals() and not df_dead.empty:
+            dead_count = len(df_dead)
+            dead_value = df_dead['Dead_Stock_Value'].sum() if 'Dead_Stock_Value' in df_dead.columns else 0
+            critical_actions.append(f"🗑️ **Clear Dead Stock:** {dead_count} SKUs (Rp {dead_value:,.0f} value)")
+        
+        # Check warehouse capacity
+        if occupancy_pct > 85:
+            critical_actions.append(f"🏢 **Warehouse Critical:** {occupancy_pct:.1f}% full - Consider expansion or reduction")
+        
+        if critical_actions:
+            for action in critical_actions:
+                st.error(action)
+        else:
+            st.success("✅ No critical actions required")
+    
+    with action_tab2:
+        # Optimization suggestions
+        optimizations = []
+        
+        # ABC optimization
+        if 'abc_summary' in locals():
+            a_items = abc_summary[abc_summary['Class'] == 'A']['SKU Count'].iloc[0]
+            c_items = abc_summary[abc_summary['Class'] == 'C']['SKU Count'].iloc[0]
+            optimizations.append(f"📊 **ABC Strategy:** Focus on {a_items} A-items, simplify {c_items} C-items")
+        
+        # Reorder optimization
+        if 'df_recommendations' in locals() and not df_recommendations.empty:
+            rec_count = len(df_recommendations)
+            rec_value = df_recommendations['Order_Value'].sum() if 'Order_Value' in df_recommendations.columns else 0
+            optimizations.append(f"📋 **Smart Reordering:** {rec_count} SKUs need ordering (Rp {rec_value:,.0f})")
+        
+        # Holding cost optimization
+        if 'potential_savings' in locals() and potential_savings > 0:
+            optimizations.append(f"💰 **Cost Reduction:** Potential savings Rp {potential_savings:,.0f}/month")
+        
+        if optimizations:
+            for opt in optimizations:
+                st.info(opt)
+    
+    with action_tab3:
+        # Quick report generation
+        report_col1, report_col2 = st.columns(2)
+        
+        with report_col1:
+            if st.button("📋 Generate Stock Report", use_container_width=True):
+                if 'inventory_df' in inventory_metrics:
+                    df_report = inventory_metrics['inventory_df'][['SKU_ID', 'Product_Name', 'Brand', 'Stock_Qty', 'Cover_Months', 'Inventory_Status']]
+                    st.dataframe(df_report, use_container_width=True, height=300)
+        
+        with report_col2:
+            if st.button("🎯 Generate Action Items", use_container_width=True):
+                # Create action items list
+                actions = []
+                
+                if 'df_recommendations' in locals() and not df_recommendations.empty:
+                    actions.append("**1. Place Purchase Orders:**")
+                    for _, row in df_recommendations.head(5).iterrows():
+                        actions.append(f"   - {row['SKU_ID']}: Order {row['Final_Suggested_Qty']:.0f} units")
+                
+                if 'df_dead' in locals() and not df_dead.empty:
+                    actions.append(f"\n**2. Clear Dead Stock ({len(df_dead)} SKUs):**")
+                    actions.append("   - Plan clearance sale")
+                    actions.append("   - Contact suppliers for returns")
+                
+                st.text_area("Action Items", "\n".join(actions), height=200)
+
 # --- TAB 4: SKU EVALUATION ---
 with tab4:
     st.subheader("🔍 SKU Performance Evaluation")
@@ -6710,47 +7532,258 @@ with tab9:
                     key="dl_po"
                 )
 
-# --- WITHIN TAB 10 ---
-        # ... (setelah baris metric header) ...
+# --- TAB 10: FULFILLMENT COST ANALYSIS (REVISI: GMV CONTRIBUTION) ---
+with tab10:
+    st.subheader("🚚 Fulfillment Cost Analysis (BS)")
+    st.markdown("**Analisis Kontribusi BS terhadap Total Marketplace & Efisiensi Biaya**")
+    
+    # Ambil data
+    df_bs = all_data.get('fulfillment', pd.DataFrame())
+    
+    if not df_bs.empty:
+        # --- 1. KEY METRICS (HEADER) ---
+        last_row = df_bs.iloc[-1]
+        prev_row = df_bs.iloc[-2] if len(df_bs) > 1 else last_row
+        last_month_name = last_row['Month']
         
-        st.subheader("📉 Unit Economics Trend (Cost per Order)")
+        # Hitung Kontribusi
+        gmv_total = last_row.get('GMV Total (MP)', 0)
+        gmv_bs = last_row.get('GMV (Fullfil By BS)', 0)
+        contrib_pct = (gmv_bs / gmv_total * 100) if gmv_total > 0 else 0
         
-        # Hitung CPO
-        df_bs['Cost_Per_Order'] = df_bs['Total Cost'] / df_bs['Total Order(BS)']
+        # Hitung Kontribusi Bulan Lalu (untuk Delta)
+        prev_gmv_total = prev_row.get('GMV Total (MP)', 0)
+        prev_gmv_bs = prev_row.get('GMV (Fullfil By BS)', 0)
+        prev_contrib_pct = (prev_gmv_bs / prev_gmv_total * 100) if prev_gmv_total > 0 else 0
+        delta_contrib = contrib_pct - prev_contrib_pct
+
+        # ROW 1: BUSINESS SCALE (GMV & CONTRIBUTION)
+        st.markdown("##### 💼 Business Scale & Contribution")
+        m1, m2, m3 = st.columns(3)
         
-        fig_cpo = go.Figure()
+        with m1:
+            # GMV Total Marketplace
+            delta_gmv_tot = (gmv_total - prev_gmv_total) / prev_gmv_total * 100 if prev_gmv_total > 0 else 0
+            st.metric(f"GMV Total Marketplace (MP)", f"Rp {gmv_total:,.0f}", f"{delta_gmv_tot:+.1f}%")
+            
+        with m2:
+            # GMV Fulfilled by BS
+            delta_gmv_bs = (gmv_bs - prev_gmv_bs) / prev_gmv_bs * 100 if prev_gmv_bs > 0 else 0
+            st.metric(f"GMV Fulfilled by BS", f"Rp {gmv_bs:,.0f}", f"{delta_gmv_bs:+.1f}%")
+            
+        with m3:
+            # % Contribution
+            st.metric(f"% BS Contribution", f"{contrib_pct:.1f}%", f"{delta_contrib:+.1f}% (pts)")
+
+        st.markdown("---")
+
+        # ROW 2: OPERATIONAL EFFICIENCY (COST & ORDERS)
+        st.markdown("##### ⚙️ Operational Efficiency")
+        k1, k2, k3, k4 = st.columns(4)
         
-        # Bar: Total Orders (Volume)
-        fig_cpo.add_trace(go.Bar(
+        with k1:
+            curr_ord = last_row['Total Order(BS)']
+            delta_ord = (curr_ord - prev_row['Total Order(BS)']) / prev_row['Total Order(BS)'] * 100 if prev_row['Total Order(BS)'] > 0 else 0
+            st.metric(f"Total Orders (BS)", f"{curr_ord:,.0f}", f"{delta_ord:+.1f}%")
+
+        with k2:
+            curr_cost = last_row['Total Cost']
+            delta_cost = (curr_cost - prev_row['Total Cost']) / prev_row['Total Cost'] * 100 if prev_row['Total Cost'] > 0 else 0
+            st.metric(f"Total Cost", f"Rp {curr_cost:,.0f}", f"{delta_cost:+.1f}%", delta_color="inverse")
+            
+        with k3:
+            curr_pct = last_row['%Cost']
+            prev_pct = prev_row['%Cost']
+            delta_pct = (curr_pct - prev_pct)
+            st.metric(f"% Cost Ratio", f"{curr_pct:.2f}%", f"{delta_pct:+.2f}%", delta_color="inverse")
+            
+        with k4:
+            curr_bsa = last_row['BSA']
+            delta_bsa = (curr_bsa - prev_row['BSA']) / prev_row['BSA'] * 100 if prev_row['BSA'] > 0 else 0
+            st.metric(f"BSA (Basket Size)", f"Rp {curr_bsa:,.0f}", f"{delta_bsa:+.1f}%")
+
+        st.divider()
+        
+        # --- 2. DUAL CHARTS ---
+        c1, c2 = st.columns([1, 1])
+        
+        # CHART KIRI: Business Health (GMV vs Cost %)
+        with c1:
+            st.subheader("💰 Business Efficiency")
+            st.caption("Korelasi GMV (BS) dengan % Cost Ratio")
+            
+            fig_biz = go.Figure()
+            
+            # Bar: GMV BS
+            fig_biz.add_trace(go.Bar(
+                x=df_bs['Month'], 
+                y=df_bs['GMV (Fullfil By BS)'], 
+                name='GMV BS',
+                marker_color='#667eea',
+                opacity=0.7
+            ))
+            
+            # Line: % Cost Ratio
+            fig_biz.add_trace(go.Scatter(
+                x=df_bs['Month'], 
+                y=df_bs['%Cost'], 
+                name='% Cost Ratio',
+                mode='lines+markers+text',
+                line=dict(color='#FF5252', width=3),
+                text=[f"{x:.2f}%" for x in df_bs['%Cost']],
+                textposition='top center',
+                yaxis='y2'
+            ))
+            
+            fig_biz.update_layout(
+                height=450,
+                xaxis_title="Month",
+                yaxis=dict(title="GMV Fulfilled (Rp)"),
+                yaxis2=dict(
+                    title="% Cost Ratio", 
+                    overlaying="y", 
+                    side="right", 
+                    showgrid=False
+                ),
+                legend=dict(orientation="h", y=1.1),
+                margin=dict(l=0, r=0, t=30, b=0),
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig_biz, use_container_width=True)
+            
+        # CHART KANAN: Operational Load (Order vs Cost)
+        with c2:
+            st.subheader("⚙️ Operational Load")
+            st.caption("Korelasi Volume Order dengan Total Cost")
+            
+            fig_ops = go.Figure()
+            
+            # Area: Total Cost
+            fig_ops.add_trace(go.Scatter(
+                x=df_bs['Month'], 
+                y=df_bs['Total Cost'], 
+                name='Total Cost',
+                fill='tozeroy',
+                mode='lines',
+                line=dict(color='#FF9800', width=0),
+                hovertemplate='Cost: Rp %{y:,.0f}'
+            ))
+            
+            # Line: Total Order
+            fig_ops.add_trace(go.Scatter(
+                x=df_bs['Month'], 
+                y=df_bs['Total Order(BS)'], 
+                name='Total Orders',
+                mode='lines+markers',
+                line=dict(color='#2196F3', width=3),
+                yaxis='y2',
+                hovertemplate='Order: %{y:,.0f}'
+            ))
+            
+            fig_ops.update_layout(
+                height=450,
+                xaxis_title="Month",
+                yaxis=dict(title="Total Cost (Rp)"),
+                yaxis2=dict(
+                    title="Total Order (Qty)", 
+                    overlaying="y", 
+                    side="right", 
+                    showgrid=False
+                ),
+                legend=dict(orientation="h", y=1.1),
+                margin=dict(l=0, r=0, t=30, b=0),
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig_ops, use_container_width=True)
+
+        st.divider()
+        
+        # --- 3. CONTRIBUTION & BASKET SIZE (WITH LABELS) ---
+        st.subheader("🏢 Market Share & Basket Size Trend")
+        st.caption("Bar: Komposisi GMV (Label dalam Milyar) | Line: Rata-rata Nilai Order")
+        
+        # Hitung GMV Non-BS
+        df_bs['GMV Non-BS'] = df_bs['GMV Total (MP)'] - df_bs['GMV (Fullfil By BS)']
+        
+        fig_gmv = go.Figure()
+        
+        # Stacked Bar 1: GMV BS (Hijau)
+        fig_gmv.add_trace(go.Bar(
             x=df_bs['Month'],
-            y=df_bs['Total Order(BS)'],
-            name='Order Volume',
-            marker_color='#E0E0E0',
-            yaxis='y'
+            y=df_bs['GMV (Fullfil By BS)'],
+            name='Fulfilled by BS',
+            marker_color='#4CAF50',
+            # TAMBAHAN LABEL ANGKA
+            text=[f"{x/1e9:.1f} M" for x in df_bs['GMV (Fullfil By BS)']], # Format: 6.7 M
+            textposition='auto', # Plotly otomatis atur posisi terbaik
+            textfont=dict(color='white') # Warna teks putih biar kontras di hijau
         ))
         
-        # Line: Cost per Order (Efficiency)
-        fig_cpo.add_trace(go.Scatter(
+        # Stacked Bar 2: GMV Non-BS (Abu-abu)
+        fig_gmv.add_trace(go.Bar(
             x=df_bs['Month'],
-            y=df_bs['Cost_Per_Order'],
-            name='Cost Per Order (Rp)',
-            mode='lines+markers+text',
-            text=[f"{x/1000:.0f}k" for x in df_bs['Cost_Per_Order']],
+            y=df_bs['GMV Non-BS'],
+            name='Non-BS Fulfillment',
+            marker_color='#9E9E9E', # Sedikit digelapkan biar teks putih terbaca
+            # TAMBAHAN LABEL ANGKA
+            text=[f"{x/1e9:.1f} M" for x in df_bs['GMV Non-BS']],
+            textposition='auto',
+            textfont=dict(color='white')
+        ))
+        
+        # Line Chart: BSA (Basket Size) - Biru
+        fig_gmv.add_trace(go.Scatter(
+            x=df_bs['Month'],
+            y=df_bs['BSA'],
+            name='Basket Size (BSA)',
+            mode='lines+markers+text', # Tambah text di line juga
+            line=dict(color='#2196F3', width=3),
+            text=[f"{x/1000:.0f}k" for x in df_bs['BSA']], # Format: 123k
             textposition='top center',
-            line=dict(color='#FF5722', width=3),
+            textfont=dict(color='#2196F3'),
             yaxis='y2'
         ))
         
-        fig_cpo.update_layout(
-            title="Efficiency: Order Volume vs Cost Per Order",
+        fig_gmv.update_layout(
+            height=500, # Sedikit dipertinggi biar lega
             xaxis_title="Month",
-            yaxis=dict(title="Order Volume", showgrid=False),
-            yaxis2=dict(title="Cost per Order (Rp)", overlaying='y', side='right'),
-            legend=dict(x=0, y=1.1, orientation='h'),
-            height=450
+            barmode='stack',
+            
+            # Sumbu Kiri (GMV)
+            yaxis=dict(title="GMV Total (Rp)", side="left"),
+            
+            # Sumbu Kanan (BSA)
+            yaxis2=dict(
+                title="Basket Size (Rp)",
+                overlaying="y",
+                side="right",
+                showgrid=False
+            ),
+            
+            legend=dict(orientation="h", y=1.1),
+            hovermode="x unified",
+            margin=dict(t=50, b=0, l=0, r=0)
         )
+        st.plotly_chart(fig_gmv, use_container_width=True)
         
-        st.plotly_chart(fig_cpo, use_container_width=True)
+        # --- 4. RAW DATA TABLE ---
+        with st.expander("📋 View Detail Data"):
+            df_disp = df_bs.copy()
+            # Format
+            for c in df_disp.columns:
+                if c in ['Total Order(BS)', 'GMV (Fullfil By BS)', 'GMV Total (MP)', 'Total Cost', 'BSA']:
+                    df_disp[c] = df_disp[c].apply(lambda x: f"{x:,.0f}")
+                elif '%Cost' in c:
+                    df_disp[c] = df_disp[c].apply(lambda x: f"{x:.2f}%")
+            
+            # Remove technical cols
+            cols_hide = ['Month_Date', 'GMV Non-BS']
+            df_disp = df_disp.drop(columns=[c for c in cols_hide if c in df_disp.columns])
+            
+            st.dataframe(df_disp, use_container_width=True)
+
+    else:
+        st.warning("⚠️ Data 'BS_Fullfilment_Cost' belum tersedia.")
 
 # --- FOOTER ---
 st.divider()
