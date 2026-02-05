@@ -5947,84 +5947,261 @@ with tab7:
                     )
     
     # ============================================
-    # SECTION 4: FORECAST OPTIMIZATION RECOMMENDATIONS
+    # SECTION 4: FORECAST OPTIMIZATION RECOMMENDATIONS (ENHANCED)
     # ============================================
     st.markdown("---")
     st.markdown("### 🎯 FORECAST OPTIMIZATION RECOMMENDATIONS")
     
-    # Generate recommendations based on analysis
+    # Generate enhanced recommendations based on multiple analyses
     recommendations = []
     
-    # Recommendation 1: Based on confidence score
-    if forecast_confidence.get('confidence_score', 0) < 70:
-        recommendations.append({
-            'priority': 'High',
-            'title': 'Improve Forecast Confidence',
-            'description': f"Current confidence score is {forecast_confidence['confidence_score']}%. Focus on improving data quality and historical accuracy.",
-            'actions': [
-                'Review and clean forecast data',
-                'Improve historical data collection',
-                'Implement forecast accuracy tracking'
-            ]
-        })
-    
-    # Recommendation 2: Based on anomalies
-    if anomalies:
-        recommendations.append({
-            'priority': 'High',
-            'title': 'Address Forecast Anomalies',
-            'description': f"Found {len(anomalies)} anomalies in forecast data. Investigate and correct unusual patterns.",
-            'actions': [
-                'Verify demand assumptions for anomalous months',
-                'Check for data entry errors',
-                'Review promotional calendar'
-            ]
-        })
-    
-    # Recommendation 3: Based on risks
-    if risks:
-        high_risk_count = len([r for r in risks if r['severity'] == 'High'])
-        if high_risk_count > 0:
+    # 1. Recommendation based on confidence score dengan threshold lebih rendah
+    confidence_score = forecast_confidence.get('confidence_score', 0)
+    if confidence_score < 75:  # Dinaikkan threshold dari 70 ke 75
+        low_factors = []
+        factors = forecast_confidence.get('factors', {})
+        
+        for factor, score in factors.items():
+            if score < 70:
+                low_factors.append(factor)
+        
+        if low_factors:
+            factor_list = ", ".join(low_factors)
             recommendations.append({
-                'priority': 'Critical',
-                'title': 'Mitigate High Risks',
-                'description': f"Found {high_risk_count} high-severity risks requiring immediate attention.",
+                'priority': 'High',
+                'title': 'Improve Forecast Confidence',
+                'description': f"Forecast confidence score is {confidence_score:.1f}% (target: ≥75%). Low scores in: {factor_list}.",
                 'actions': [
-                    'Develop contingency plans for key risks',
-                    'Increase monitoring of high-risk areas',
-                    'Review supplier contracts'
+                    'Review data completeness and accuracy',
+                    'Improve historical data collection process',
+                    'Implement forecast accuracy tracking dashboard',
+                    'Train team on forecasting best practices'
                 ]
             })
-    
-    # Recommendation 4: Based on seasonality
-    if seasonality:
-        peak_months = [m for m, data in seasonality.items() if data['type'] == 'Peak']
-        if peak_months:
+        else:
             recommendations.append({
                 'priority': 'Medium',
-                'title': 'Prepare for Peak Season',
-                'description': f"Peak season identified in {', '.join(peak_months)}. Plan inventory and operations accordingly.",
+                'title': 'Enhance Forecast Confidence',
+                'description': f"Forecast confidence score is {confidence_score:.1f}%. Aim for 75%+ confidence level.",
                 'actions': [
-                    'Increase safety stock before peak months',
-                    'Schedule additional staffing',
-                    'Plan marketing campaigns'
+                    'Review forecast assumptions and methodologies',
+                    'Compare with market benchmarks',
+                    'Conduct forecast accuracy post-mortem analysis'
                 ]
             })
     
-    # Default recommendation if none generated
-    if not recommendations:
+    # 2. Enhanced anomaly recommendations
+    if anomalies:
+        # Categorize anomalies
+        high_anomalies = [a for a in anomalies if a['Anomaly_Score'] > 2.5]
+        medium_anomalies = [a for a in anomalies if 2.0 <= a['Anomaly_Score'] <= 2.5]
+        
+        if high_anomalies:
+            anomaly_months = [a['Month'] for a in high_anomalies[:3]]
+            months_list = ", ".join(anomaly_months)
+            recommendations.append({
+                'priority': 'Critical',
+                'title': 'Address Critical Forecast Anomalies',
+                'description': f"Found {len(high_anomalies)} critical anomalies (>2.5σ) in months: {months_list}. These indicate significant deviations from expected patterns.",
+                'actions': [
+                    'Immediately review demand assumptions for affected months',
+                    'Verify data entry accuracy and completeness',
+                    'Check for unplanned promotions or events',
+                    'Adjust safety stock levels accordingly'
+                ]
+            })
+        
+        if medium_anomalies:
+            recommendations.append({
+                'priority': 'High',
+                'title': 'Investigate Forecast Irregularities',
+                'description': f"Found {len(medium_anomalies)} medium-severity anomalies (2.0-2.5σ). These patterns require investigation.",
+                'actions': [
+                    'Analyze sales patterns for similar historical periods',
+                    'Review promotional calendar alignment',
+                    'Check supplier lead time fluctuations'
+                ]
+            })
+    
+    # 3. Enhanced risk recommendations
+    if risks:
+        high_risks = [r for r in risks if r['severity'] == 'High']
+        medium_risks = [r for r in risks if r['severity'] == 'Medium']
+        
+        if high_risks:
+            risk_types = ", ".join(set([r['type'] for r in high_risks]))
+            recommendations.append({
+                'priority': 'Critical',
+                'title': 'Mitigate High-Risk Forecast Items',
+                'description': f"Found {len(high_risks)} high-severity risks: {risk_types}. These pose significant threat to forecast accuracy.",
+                'actions': [
+                    'Develop contingency plans for each high-risk item',
+                    'Increase monitoring frequency for high-risk SKUs',
+                    'Review supplier contracts and alternatives',
+                    'Implement phased rollout for new products'
+                ]
+            })
+        
+        if medium_risks:
+            risk_descriptions = [r['description'] for r in medium_risks[:2]]
+            desc_text = "; ".join(risk_descriptions)
+            recommendations.append({
+                'priority': 'Medium',
+                'title': 'Address Medium-Level Forecast Risks',
+                'description': f"Found {len(medium_risks)} medium-severity risks. Key issues: {desc_text}.",
+                'actions': [
+                    'Monitor risk indicators monthly',
+                    'Develop risk mitigation strategies',
+                    'Cross-train team on risk management'
+                ]
+            })
+    
+    # 4. Enhanced seasonality recommendations
+    if seasonality:
+        peak_months = [m for m, data in seasonality.items() if data['type'] == 'Peak']
+        low_months = [m for m, data in seasonality.items() if data['type'] == 'Low']
+        
+        if peak_months:
+            # Hitung berapa bulan peak season
+            peak_count = len(peak_months)
+            peak_indices = [seasonality[m]['index'] for m in peak_months]
+            avg_peak_index = sum(peak_indices) / len(peak_indices) if peak_indices else 1
+            
+            recommendations.append({
+                'priority': 'High' if peak_count >= 3 else 'Medium',
+                'title': 'Optimize for Peak Season Demand',
+                'description': f"Identified {peak_count} peak season months ({', '.join(peak_months)}) with average seasonal index of {avg_peak_index:.2f}x normal demand.",
+                'actions': [
+                    f'Increase inventory 2-3 months before {peak_months[0] if peak_months else "peak"} season',
+                    'Secure additional supplier capacity in advance',
+                    'Plan targeted marketing campaigns',
+                    'Adjust staffing and logistics planning'
+                ]
+            })
+        
+        if low_months:
+            recommendations.append({
+                'priority': 'Medium',
+                'title': 'Plan for Low Season Periods',
+                'description': f"Identified low season in {', '.join(low_months)}. Opportunity for cost optimization.",
+                'actions': [
+                    'Schedule inventory reduction before low season',
+                    'Plan maintenance and system upgrades',
+                    'Focus on new product development',
+                    'Negotiate better terms with suppliers'
+                ]
+            })
+    
+    # 5. Volume-based recommendations
+    if ecomm_forecast_month_cols:
+        monthly_totals = df_ecomm_forecast[ecomm_forecast_month_cols].sum()
+        
+        # Check for volatility
+        if len(monthly_totals) >= 3:
+            volatility = monthly_totals.pct_change().std() * 100
+            
+            if volatility > 30:
+                recommendations.append({
+                    'priority': 'High',
+                    'title': 'Reduce Forecast Volatility',
+                    'description': f"High forecast volatility detected ({volatility:.1f}% month-over-month). This increases inventory risk and costs.",
+                    'actions': [
+                        'Implement demand smoothing techniques',
+                        'Review promotional planning process',
+                        'Improve sales & operations planning (S&OP)',
+                        'Consider safety stock adjustments'
+                    ]
+                })
+            
+            # Check for growth trend
+            first_half_avg = monthly_totals.iloc[:len(monthly_totals)//2].mean() if len(monthly_totals) >= 6 else 0
+            second_half_avg = monthly_totals.iloc[len(monthly_totals)//2:].mean() if len(monthly_totals) >= 6 else 0
+            
+            if first_half_avg > 0 and second_half_avg > 0:
+                growth_rate = ((second_half_avg - first_half_avg) / first_half_avg * 100)
+                
+                if growth_rate > 20:
+                    recommendations.append({
+                        'priority': 'Medium',
+                        'title': 'Plan for Accelerated Growth',
+                        'description': f"Forecast shows {growth_rate:.1f}% growth from first to second half. Ensure capacity planning keeps pace.",
+                        'actions': [
+                            'Review production and logistics capacity',
+                            'Plan workforce expansion if needed',
+                            'Secure raw material commitments',
+                            'Update financial projections'
+                        ]
+                    })
+    
+    # 6. SKU-level recommendations
+    if 'Brand' in df_ecomm_forecast.columns:
+        # Check brand concentration
+        brand_volumes = df_ecomm_forecast.groupby('Brand')[ecomm_forecast_month_cols].sum().sum(axis=1)
+        top_brand_share = brand_volumes.nlargest(1).sum() / brand_volumes.sum() * 100 if brand_volumes.sum() > 0 else 0
+        
+        if top_brand_share > 40:
+            top_brand = brand_volumes.idxmax()
+            recommendations.append({
+                'priority': 'Medium',
+                'title': 'Diversify Brand Portfolio',
+                'description': f"High brand concentration: {top_brand} accounts for {top_brand_share:.1f}% of total forecast.",
+                'actions': [
+                    'Develop marketing plans for other brands',
+                    'Review new brand opportunities',
+                    'Create cross-selling initiatives',
+                    'Reduce dependency on single brand'
+                ]
+            })
+    
+    # 7. Data quality recommendations
+    if 'df_recommendations' in locals() and not df_recommendations.empty:
+        rec_count = len(df_recommendations)
         recommendations.append({
-            'priority': 'Low',
-            'title': 'Maintain Current Practices',
-            'description': "Forecast appears stable and well-managed. Continue current processes with regular reviews.",
+            'priority': 'High',
+            'title': 'Implement Automated Reordering',
+            'description': f"Forecast analysis identified {rec_count} SKUs requiring reorder. Automating this process can reduce stockouts.",
             'actions': [
-                'Continue monthly forecast reviews',
-                'Monitor key performance indicators',
-                'Stay updated on market trends'
+                'Implement automated reorder point system',
+                'Set up purchase order automation',
+                'Create supplier performance dashboard',
+                'Monitor lead time variability'
             ]
         })
     
-    # Display recommendations
+    # 8. Default recommendation ONLY if no others generated
+    if not recommendations:
+        # Add more insightful default based on metrics
+        if confidence_score >= 80 and not anomalies and not risks:
+            recommendations.append({
+                'priority': 'Low',
+                'title': 'Maintain and Optimize Current Processes',
+                'description': f"Excellent forecast management! Confidence score: {confidence_score:.1f}%, no anomalies or high risks detected.",
+                'actions': [
+                    'Continue monthly forecast review meetings',
+                    'Benchmark against industry best practices',
+                    'Explore advanced forecasting techniques (ML/AI)',
+                    'Document and share success stories'
+                ]
+            })
+        else:
+            # Generic but more specific default
+            recommendations.append({
+                'priority': 'Medium',
+                'title': 'Continuous Forecast Improvement',
+                'description': "Forecast analysis completed. Focus on incremental improvements.",
+                'actions': [
+                    'Review one forecasting process each month',
+                    'Conduct quarterly forecast accuracy analysis',
+                    'Stay updated on market intelligence',
+                    'Share insights with cross-functional teams'
+                ]
+            })
+    
+    # Sort recommendations by priority
+    priority_order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3}
+    recommendations.sort(key=lambda x: priority_order.get(x['priority'], 4))
+    
+    # Display recommendations dengan enhanced styling
     for rec in recommendations:
         priority_color = {
             'Critical': '#F44336',
@@ -6034,29 +6211,126 @@ with tab7:
         }.get(rec['priority'], '#9E9E9E')
         
         st.markdown(f"""
-        <div style="border-left: 5px solid {priority_color}; padding: 1rem; margin: 1rem 0; 
-                    background: white; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="border-left: 5px solid {priority_color}; padding: 1.2rem; margin: 1.2rem 0; 
+                    background: white; border-radius: 8px; box-shadow: 0 3px 10px rgba(0,0,0,0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem;">
                 <div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <div style="background: {priority_color}; color: white; padding: 0.2rem 0.8rem; 
-                                    border-radius: 12px; font-size: 0.8rem; font-weight: bold;">
-                            {rec['priority']} Priority
+                    <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.5rem;">
+                        <div style="background: {priority_color}; color: white; padding: 0.3rem 1rem; 
+                                    border-radius: 15px; font-size: 0.85rem; font-weight: bold; min-width: 80px; text-align: center;">
+                            {rec['priority']} PRIORITY
                         </div>
-                        <h4 style="margin: 0;">{rec['title']}</h4>
+                        <h4 style="margin: 0; color: #333; font-size: 1.1rem;">{rec['title']}</h4>
                     </div>
-                    <p style="margin: 0.5rem 0; color: #666;">{rec['description']}</p>
+                    <p style="margin: 0; color: #555; font-size: 0.95rem; line-height: 1.5;">{rec['description']}</p>
                 </div>
             </div>
             
-            <div style="margin-top: 1rem;">
-                <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.3rem;">Recommended Actions:</div>
-                <ul style="margin: 0; padding-left: 1.2rem;">
-                    {''.join([f'<li style="font-size: 0.85rem; margin-bottom: 0.2rem;">{action}</li>' for action in rec['actions']])}
-                </ul>
+            <div style="margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid #eee;">
+                <div style="font-size: 0.9rem; font-weight: bold; color: #666; margin-bottom: 0.5rem;">
+                    🛠️ Recommended Actions:
+                </div>
+                <div style="background: #F8F9FA; padding: 0.8rem; border-radius: 6px;">
+                    <ul style="margin: 0; padding-left: 1.2rem; color: #444;">
+                        {''.join([f'<li style="font-size: 0.9rem; margin-bottom: 0.4rem; padding-left: 0.3rem;">{action}</li>' for action in rec['actions']])}
+                    </ul>
+                </div>
+            </div>
+            
+            <div style="margin-top: 0.8rem; font-size: 0.8rem; color: #888; display: flex; gap: 1rem;">
+                <div>📅 Suggested timeline: {get_timeline_for_priority(rec['priority'])}</div>
+                <div>👥 Owner: {get_owner_for_priority(rec['priority'])}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
+    
+    # Helper functions untuk timeline dan owner
+    def get_timeline_for_priority(priority):
+        timelines = {
+            'Critical': 'Immediate (1-2 weeks)',
+            'High': 'Short-term (2-4 weeks)',
+            'Medium': 'Medium-term (1-2 months)',
+            'Low': 'Long-term (2-3 months)'
+        }
+        return timelines.get(priority, '1-2 months')
+    
+    def get_owner_for_priority(priority):
+        owners = {
+            'Critical': 'Supply Chain Manager',
+            'High': 'Demand Planner',
+            'Medium': 'Inventory Analyst',
+            'Low': 'Team Lead'
+        }
+        return owners.get(priority, 'Cross-functional team')
+    
+    # Summary statistics
+    st.markdown("#### 📊 Recommendations Summary")
+    col_rec1, col_rec2, col_rec3, col_rec4 = st.columns(4)
+    
+    with col_rec1:
+        critical_count = len([r for r in recommendations if r['priority'] == 'Critical'])
+        st.metric("Critical", critical_count, delta_color="off")
+    
+    with col_rec2:
+        high_count = len([r for r in recommendations if r['priority'] == 'High'])
+        st.metric("High", high_count)
+    
+    with col_rec3:
+        medium_count = len([r for r in recommendations if r['priority'] == 'Medium'])
+        st.metric("Medium", medium_count)
+    
+    with col_rec4:
+        low_count = len([r for r in recommendations if r['priority'] == 'Low'])
+        st.metric("Low", low_count)
+    
+    # Implementation timeline chart
+    if recommendations:
+        st.markdown("#### 📅 Implementation Timeline")
+        
+        timeline_data = []
+        for rec in recommendations:
+            weeks_to_complete = {
+                'Critical': 2,
+                'High': 4,
+                'Medium': 8,
+                'Low': 12
+            }.get(rec['priority'], 4)
+            
+            timeline_data.append({
+                'Recommendation': rec['title'][:40] + ("..." if len(rec['title']) > 40 else ""),
+                'Priority': rec['priority'],
+                'Weeks': weeks_to_complete
+            })
+        
+        if timeline_data:
+            df_timeline = pd.DataFrame(timeline_data)
+            
+            fig_timeline = go.Figure()
+            
+            # Bar chart untuk timeline
+            fig_timeline.add_trace(go.Bar(
+                x=df_timeline['Weeks'],
+                y=df_timeline['Recommendation'],
+                orientation='h',
+                marker_color=df_timeline['Priority'].map({
+                    'Critical': '#F44336',
+                    'High': '#FF9800',
+                    'Medium': '#FFC107',
+                    'Low': '#4CAF50'
+                }),
+                text=[f"{w} weeks" for w in df_timeline['Weeks']],
+                textposition='auto'
+            ))
+            
+            fig_timeline.update_layout(
+                height=max(300, len(timeline_data) * 30),
+                title='Estimated Implementation Timeline',
+                xaxis_title='Weeks to Implement',
+                yaxis_title='Recommendation',
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig_timeline, use_container_width=True)
     
     # ============================================
     # SECTION 5: FORECAST PERFORMANCE TRACKING
