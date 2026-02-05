@@ -1647,108 +1647,89 @@ if monthly_performance:
     
     summary_df = pd.DataFrame(summary_data)
     
-    # ALTERNATIVE: SUPER PREMIUM DUAL-AXIS CHART
+    # ALTERNATIVE: MINIMALIST PREMIUM CHART
     if not summary_df.empty:
-        # Create dual-axis chart
+        # Create minimalist premium chart
         fig = go.Figure()
         
-        # Primary axis: Accuracy Line with gradient
+        # Gradient line with smooth curve
         fig.add_trace(go.Scatter(
             x=summary_df['Month_Display'],
             y=summary_df['Accuracy (%)'],
-            name='Accuracy %',
-            mode='lines+markers',
-            line=dict(color='#667eea', width=4),
-            marker=dict(size=10, color='white', line=dict(width=2, color='#667eea')),
-            yaxis='y',
+            mode='lines',
+            line=dict(
+                color='#667eea',
+                width=5,
+                shape='spline',
+                smoothing=1.3
+            ),
+            name='Accuracy Trend'
+        ))
+        
+        # Add markers with custom styling
+        fig.add_trace(go.Scatter(
+            x=summary_df['Month_Display'],
+            y=summary_df['Accuracy (%)'],
+            mode='markers',
+            marker=dict(
+                size=15,
+                color='white',
+                line=dict(width=3, color='#667eea')
+            ),
+            name='Monthly Data Points',
             hovertemplate='<b>%{x}</b><br>Accuracy: <b>%{y:.1f}%</b><extra></extra>'
         ))
         
-        # Secondary axis: Total SKUs as area
-        fig.add_trace(go.Scatter(
-            x=summary_df['Month_Display'],
-            y=summary_df['Total SKUs'],
-            name='Total SKUs',
-            mode='lines',
-            line=dict(color='rgba(255, 152, 0, 0.3)', width=0),
-            fill='tozeroy',
-            fillcolor='rgba(255, 152, 0, 0.1)',
-            yaxis='y2',
-            hovertemplate='<b>%{x}</b><br>SKUs: <b>%{y:,.0f}</b><extra></extra>'
-        ))
+        # Add performance labels
+        for idx, row in summary_df.iterrows():
+            if idx == 0 or idx == len(summary_df)-1 or row['Accuracy (%)'] == summary_df['Accuracy (%)'].max():
+                fig.add_annotation(
+                    x=row['Month_Display'],
+                    y=row['Accuracy (%)'],
+                    text=f"{row['Accuracy (%)']:.0f}%",
+                    showarrow=True,
+                    arrowhead=1,
+                    arrowsize=1,
+                    arrowwidth=2,
+                    arrowcolor='#667eea',
+                    ax=0,
+                    ay=-30,
+                    font=dict(size=12, color='#333')
+                )
         
-        # Add accuracy bands
-        fig.add_hrect(y0=90, y1=110, line_width=0, 
-                      fillcolor="rgba(76, 175, 80, 0.1)", opacity=0.2, layer="below")
-        fig.add_hrect(y0=80, y1=90, line_width=0, 
-                      fillcolor="rgba(255, 152, 0, 0.1)", opacity=0.2, layer="below")
-        fig.add_hrect(y0=0, y1=80, line_width=0, 
-                      fillcolor="rgba(244, 67, 54, 0.1)", opacity=0.2, layer="below")
-        
-        # Add annotations for performance zones
-        fig.add_annotation(x=0.02, y=0.95, xref="paper", yref="paper",
-                          text="<b>EXCELLENT</b>", showarrow=False,
-                          font=dict(size=10, color="#4CAF50"))
-        fig.add_annotation(x=0.02, y=0.85, xref="paper", yref="paper",
-                          text="<b>GOOD</b>", showarrow=False,
-                          font=dict(size=10, color="#FF9800"))
-        fig.add_annotation(x=0.02, y=0.70, xref="paper", yref="paper",
-                          text="<b>NEEDS IMPROVEMENT</b>", showarrow=False,
-                          font=dict(size=10, color="#FF5252"))
-        
+        # Clean minimalist layout
         fig.update_layout(
-            height=550,
+            height=500,
             title=dict(
-                text='<b>📊 FORECAST ACCURACY PERFORMANCE DASHBOARD</b><br><span style="font-size:14px;color:#666">Accuracy Trend with SKU Volume</span>',
+                text='<span style="font-size:24px;font-weight:700;color:#333">Forecast Accuracy Trend</span><br>',
                 x=0.5,
-                font=dict(size=18, color='#333')
+                y=0.95
             ),
             xaxis=dict(
-                title='<b>PERIOD</b>',
-                showgrid=True,
-                gridcolor='rgba(0,0,0,0.05)',
-                tickangle=0
+                title=None,
+                showgrid=False,
+                showline=True,
+                linecolor='#e0e0e0',
+                linewidth=2,
+                tickfont=dict(size=12, color='#666')
             ),
             yaxis=dict(
-                title='<b>ACCURACY (%)</b>',
+                title=None,
+                showgrid=True,
+                gridcolor='rgba(0,0,0,0.05)',
+                showline=True,
+                linecolor='#e0e0e0',
+                linewidth=2,
                 range=[0, 110],
                 ticksuffix="%",
-                gridcolor='rgba(0,0,0,0.05)',
-                titlefont=dict(color='#667eea')
-            ),
-            yaxis2=dict(
-                title='<b>TOTAL SKUs</b>',
-                overlaying='y',
-                side='right',
-                showgrid=False,
-                titlefont=dict(color='#FF9800')
+                tickfont=dict(size=12, color='#666')
             ),
             plot_bgcolor='white',
             paper_bgcolor='white',
             hovermode='x unified',
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            ),
-            margin=dict(t=80, b=20, l=50, r=50),
-            font=dict(family="Arial, sans-serif")
+            showlegend=False,
+            margin=dict(t=80, b=40, l=40, r=40)
         )
-        
-        # Add trendline (optional)
-        if len(summary_df) >= 3:
-            z = np.polyfit(range(len(summary_df)), summary_df['Accuracy (%)'], 1)
-            p = np.poly1d(z)
-            fig.add_trace(go.Scatter(
-                x=summary_df['Month_Display'],
-                y=p(range(len(summary_df))),
-                mode='lines',
-                line=dict(color='rgba(0,0,0,0.3)', width=1, dash='dot'),
-                name='Trend Line',
-                showlegend=False
-            ))
         
         st.plotly_chart(fig, use_container_width=True)
 
