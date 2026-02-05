@@ -6389,7 +6389,7 @@ with tab7:
             st.cache_data.clear()
             st.rerun()
         
-        if st.button("📊 Generate Executive Summary", use_container_width=True):
+        if st.button("📊 Generate Executive Summary", use_container_width=True, key="tab7_gen_exec_summary"):
             # Create executive summary
             exec_summary = f"""
             ## 📈 FORECAST INTELLIGENCE EXECUTIVE SUMMARY
