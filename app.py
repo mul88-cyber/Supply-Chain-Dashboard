@@ -3881,7 +3881,7 @@ with tab3:
             st.rerun()
     
     with export_col3:
-        if st.button("📊 Generate Executive Summary", use_container_width=True):
+        if st.button("📊 Generate Executive Summary", use_container_width=True, key="exec_sum_inventory"):
             # Create executive summary
             summary_html = f"""
             <div style="background: white; border-radius: 12px; padding: 2rem; margin: 1rem 0; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
@@ -6389,7 +6389,7 @@ with tab7:
             st.cache_data.clear()
             st.rerun()
         
-        if st.button("📊 Generate Executive Summary", use_container_width=True):
+        if st.button("📊 Generate Executive Summary", use_container_width=True, key="exec_sum_forecast"):
             # Create executive summary
             exec_summary = f"""
             ## 📈 FORECAST INTELLIGENCE EXECUTIVE SUMMARY
