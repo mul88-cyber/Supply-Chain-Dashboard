@@ -1648,109 +1648,109 @@ if monthly_performance:
     summary_df = pd.DataFrame(summary_data)
     
     # ALTERNATIVE: SUPER PREMIUM DUAL-AXIS CHART
-if not summary_df.empty:
-    # Create dual-axis chart
-    fig = go.Figure()
-    
-    # Primary axis: Accuracy Line with gradient
-    fig.add_trace(go.Scatter(
-        x=summary_df['Month_Display'],
-        y=summary_df['Accuracy (%)'],
-        name='Accuracy %',
-        mode='lines+markers',
-        line=dict(color='#667eea', width=4),
-        marker=dict(size=10, color='white', line=dict(width=2, color='#667eea')),
-        yaxis='y',
-        hovertemplate='<b>%{x}</b><br>Accuracy: <b>%{y:.1f}%</b><extra></extra>'
-    ))
-    
-    # Secondary axis: Total SKUs as area
-    fig.add_trace(go.Scatter(
-        x=summary_df['Month_Display'],
-        y=summary_df['Total SKUs'],
-        name='Total SKUs',
-        mode='lines',
-        line=dict(color='rgba(255, 152, 0, 0.3)', width=0),
-        fill='tozeroy',
-        fillcolor='rgba(255, 152, 0, 0.1)',
-        yaxis='y2',
-        hovertemplate='<b>%{x}</b><br>SKUs: <b>%{y:,.0f}</b><extra></extra>'
-    ))
-    
-    # Add accuracy bands
-    fig.add_hrect(y0=90, y1=110, line_width=0, 
-                  fillcolor="rgba(76, 175, 80, 0.1)", opacity=0.2, layer="below")
-    fig.add_hrect(y0=80, y1=90, line_width=0, 
-                  fillcolor="rgba(255, 152, 0, 0.1)", opacity=0.2, layer="below")
-    fig.add_hrect(y0=0, y1=80, line_width=0, 
-                  fillcolor="rgba(244, 67, 54, 0.1)", opacity=0.2, layer="below")
-    
-    # Add annotations for performance zones
-    fig.add_annotation(x=0.02, y=0.95, xref="paper", yref="paper",
-                      text="<b>EXCELLENT</b>", showarrow=False,
-                      font=dict(size=10, color="#4CAF50"))
-    fig.add_annotation(x=0.02, y=0.85, xref="paper", yref="paper",
-                      text="<b>GOOD</b>", showarrow=False,
-                      font=dict(size=10, color="#FF9800"))
-    fig.add_annotation(x=0.02, y=0.70, xref="paper", yref="paper",
-                      text="<b>NEEDS IMPROVEMENT</b>", showarrow=False,
-                      font=dict(size=10, color="#FF5252"))
-    
-    fig.update_layout(
-        height=550,
-        title=dict(
-            text='<b>📊 FORECAST ACCURACY PERFORMANCE DASHBOARD</b><br><span style="font-size:14px;color:#666">Accuracy Trend with SKU Volume</span>',
-            x=0.5,
-            font=dict(size=18, color='#333')
-        ),
-        xaxis=dict(
-            title='<b>PERIOD</b>',
-            showgrid=True,
-            gridcolor='rgba(0,0,0,0.05)',
-            tickangle=0
-        ),
-        yaxis=dict(
-            title='<b>ACCURACY (%)</b>',
-            range=[0, 110],
-            ticksuffix="%",
-            gridcolor='rgba(0,0,0,0.05)',
-            titlefont=dict(color='#667eea')
-        ),
-        yaxis2=dict(
-            title='<b>TOTAL SKUs</b>',
-            overlaying='y',
-            side='right',
-            showgrid=False,
-            titlefont=dict(color='#FF9800')
-        ),
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        hovermode='x unified',
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        ),
-        margin=dict(t=80, b=20, l=50, r=50),
-        font=dict(family="Arial, sans-serif")
-    )
-    
-    # Add trendline (optional)
-    if len(summary_df) >= 3:
-        z = np.polyfit(range(len(summary_df)), summary_df['Accuracy (%)'], 1)
-        p = np.poly1d(z)
+    if not summary_df.empty:
+        # Create dual-axis chart
+        fig = go.Figure()
+        
+        # Primary axis: Accuracy Line with gradient
         fig.add_trace(go.Scatter(
             x=summary_df['Month_Display'],
-            y=p(range(len(summary_df))),
-            mode='lines',
-            line=dict(color='rgba(0,0,0,0.3)', width=1, dash='dot'),
-            name='Trend Line',
-            showlegend=False
+            y=summary_df['Accuracy (%)'],
+            name='Accuracy %',
+            mode='lines+markers',
+            line=dict(color='#667eea', width=4),
+            marker=dict(size=10, color='white', line=dict(width=2, color='#667eea')),
+            yaxis='y',
+            hovertemplate='<b>%{x}</b><br>Accuracy: <b>%{y:.1f}%</b><extra></extra>'
         ))
-    
-    st.plotly_chart(fig, use_container_width=True)
+        
+        # Secondary axis: Total SKUs as area
+        fig.add_trace(go.Scatter(
+            x=summary_df['Month_Display'],
+            y=summary_df['Total SKUs'],
+            name='Total SKUs',
+            mode='lines',
+            line=dict(color='rgba(255, 152, 0, 0.3)', width=0),
+            fill='tozeroy',
+            fillcolor='rgba(255, 152, 0, 0.1)',
+            yaxis='y2',
+            hovertemplate='<b>%{x}</b><br>SKUs: <b>%{y:,.0f}</b><extra></extra>'
+        ))
+        
+        # Add accuracy bands
+        fig.add_hrect(y0=90, y1=110, line_width=0, 
+                      fillcolor="rgba(76, 175, 80, 0.1)", opacity=0.2, layer="below")
+        fig.add_hrect(y0=80, y1=90, line_width=0, 
+                      fillcolor="rgba(255, 152, 0, 0.1)", opacity=0.2, layer="below")
+        fig.add_hrect(y0=0, y1=80, line_width=0, 
+                      fillcolor="rgba(244, 67, 54, 0.1)", opacity=0.2, layer="below")
+        
+        # Add annotations for performance zones
+        fig.add_annotation(x=0.02, y=0.95, xref="paper", yref="paper",
+                          text="<b>EXCELLENT</b>", showarrow=False,
+                          font=dict(size=10, color="#4CAF50"))
+        fig.add_annotation(x=0.02, y=0.85, xref="paper", yref="paper",
+                          text="<b>GOOD</b>", showarrow=False,
+                          font=dict(size=10, color="#FF9800"))
+        fig.add_annotation(x=0.02, y=0.70, xref="paper", yref="paper",
+                          text="<b>NEEDS IMPROVEMENT</b>", showarrow=False,
+                          font=dict(size=10, color="#FF5252"))
+        
+        fig.update_layout(
+            height=550,
+            title=dict(
+                text='<b>📊 FORECAST ACCURACY PERFORMANCE DASHBOARD</b><br><span style="font-size:14px;color:#666">Accuracy Trend with SKU Volume</span>',
+                x=0.5,
+                font=dict(size=18, color='#333')
+            ),
+            xaxis=dict(
+                title='<b>PERIOD</b>',
+                showgrid=True,
+                gridcolor='rgba(0,0,0,0.05)',
+                tickangle=0
+            ),
+            yaxis=dict(
+                title='<b>ACCURACY (%)</b>',
+                range=[0, 110],
+                ticksuffix="%",
+                gridcolor='rgba(0,0,0,0.05)',
+                titlefont=dict(color='#667eea')
+            ),
+            yaxis2=dict(
+                title='<b>TOTAL SKUs</b>',
+                overlaying='y',
+                side='right',
+                showgrid=False,
+                titlefont=dict(color='#FF9800')
+            ),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(t=80, b=20, l=50, r=50),
+            font=dict(family="Arial, sans-serif")
+        )
+        
+        # Add trendline (optional)
+        if len(summary_df) >= 3:
+            z = np.polyfit(range(len(summary_df)), summary_df['Accuracy (%)'], 1)
+            p = np.poly1d(z)
+            fig.add_trace(go.Scatter(
+                x=summary_df['Month_Display'],
+                y=p(range(len(summary_df))),
+                mode='lines',
+                line=dict(color='rgba(0,0,0,0.3)', width=1, dash='dot'),
+                name='Trend Line',
+                showlegend=False
+            ))
+        
+        st.plotly_chart(fig, use_container_width=True)
 
 # SECTION 1: LAST 3 MONTHS PERFORMANCE (DIPERBESAR)
 st.subheader("🎯 Forecast Performance - 3 Bulan Terakhir")
