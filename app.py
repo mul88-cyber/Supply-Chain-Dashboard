@@ -4789,8 +4789,12 @@ with tab6:
 with tab7:
     st.subheader("🔮 ADVANCED FORECAST INTELLIGENCE SYSTEM")
     st.markdown("#### **Predictive Analytics with ML Insights & Scenario Planning**")
-
-    # --- FUNGSI BANTU UNTUK TAB 7 ---
+    
+    # ============================================
+    # FUNGSI-FUNGSI BANTU HARUS DITARUH DI SINI DULU
+    # ============================================
+    
+    # 1. FUNGSI parse_month_str
     def parse_month_str(month_str):
         """Parse bulan dari string format - untuk sorting"""
         try:
@@ -4834,6 +4838,252 @@ with tab7:
         except Exception as e:
             st.warning(f"Error parsing month string '{month_str}': {str(e)}")
             return datetime.now()
+    
+    # 2. FUNGSI calculate_forecast_confidence
+    @st.cache_data
+    def calculate_forecast_confidence(df_forecast, df_sales=None, df_historical_forecast=None):
+        """Calculate forecast confidence score based on multiple factors"""
+        
+        confidence_score = 70  # Base score
+        factors = {}
+        
+        try:
+            # Factor 1: Data Completeness
+            total_cells = len(df_forecast) * len(ecomm_forecast_month_cols) if ecomm_forecast_month_cols else 1
+            non_zero_cells = (df_forecast[ecomm_forecast_month_cols] > 0).sum().sum() if ecomm_forecast_month_cols else 0
+            completeness_score = (non_zero_cells / total_cells * 100) if total_cells > 0 else 0
+            factors['Data Completeness'] = min(100, completeness_score * 1.2)  # Boost score
+            
+            # Factor 2: Historical Accuracy (if data available)
+            if df_sales is not None and df_historical_forecast is not None and not df_sales.empty and not df_historical_forecast.empty:
+                # Calculate accuracy for last 6 months
+                common_months = sorted(set(df_sales['Month'].unique()) & set(df_historical_forecast['Month'].unique()))
+                if len(common_months) >= 3:
+                    accuracies = []
+                    for month in common_months[-6:]:
+                        sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
+                        forecast_qty = df_historical_forecast[df_historical_forecast['Month'] == month]['Forecast_Qty'].sum()
+                        if forecast_qty > 0:
+                            accuracy = 100 - abs((sales_qty / forecast_qty * 100) - 100)
+                            accuracies.append(accuracy)
+                    
+                    if accuracies:
+                        avg_accuracy = sum(accuracies) / len(accuracies)
+                        factors['Historical Accuracy'] = avg_accuracy
+            
+            # Factor 3: Forecast Consistency
+            if len(ecomm_forecast_month_cols) >= 3:
+                monthly_totals = df_forecast[ecomm_forecast_month_cols].sum()
+                cv = monthly_totals.std() / monthly_totals.mean() if monthly_totals.mean() > 0 else 0
+                consistency_score = max(0, 100 - (cv * 100))  # Lower CV = higher score
+                factors['Forecast Consistency'] = consistency_score
+            
+            # Factor 4: SKU Coverage
+            total_skus = len(df_forecast)
+            active_skus = len(df_forecast[df_forecast[ecomm_forecast_month_cols].sum(axis=1) > 0])
+            coverage_score = (active_skus / total_skus * 100) if total_skus > 0 else 0
+            factors['SKU Coverage'] = coverage_score
+            
+            # Calculate weighted average
+            weights = {
+                'Data Completeness': 0.25,
+                'Historical Accuracy': 0.35,
+                'Forecast Consistency': 0.25,
+                'SKU Coverage': 0.15
+            }
+            
+            weighted_score = 0
+            weight_total = 0
+            
+            for factor, score in factors.items():
+                if factor in weights:
+                    weighted_score += score * weights[factor]
+                    weight_total += weights[factor]
+            
+            if weight_total > 0:
+                confidence_score = weighted_score / weight_total
+        
+        except Exception as e:
+            st.error(f"Confidence calculation error: {str(e)}")
+        
+        return {
+            'confidence_score': round(confidence_score, 1),
+            'factors': factors
+        }
+    
+    # 3. FUNGSI detect_forecast_anomalies
+    @st.cache_data
+    def detect_forecast_anomalies(df_forecast, threshold_std=2.0):
+        """Detect anomalies in forecast data"""
+        
+        anomalies = []
+        
+        if not ecomm_forecast_month_cols:
+            return anomalies
+        
+        try:
+            # Calculate monthly totals
+            monthly_totals = df_forecast[ecomm_forecast_month_cols].sum()
+            
+            # Calculate moving average and standard deviation
+            if len(monthly_totals) >= 3:
+                moving_avg = monthly_totals.rolling(window=3, min_periods=1).mean()
+                moving_std = monthly_totals.rolling(window=3, min_periods=1).std()
+                
+                for i, (month, value) in enumerate(monthly_totals.items()):
+                    if i >= 2:  # Need at least 2 previous months for comparison
+                        avg = moving_avg.iloc[i]
+                        std = moving_std.iloc[i]
+                        
+                        if std > 0 and abs(value - avg) > (threshold_std * std):
+                            anomaly_score = abs(value - avg) / std
+                            anomalies.append({
+                                'Month': month,
+                                'Forecast_Value': value,
+                                'Moving_Avg': avg,
+                                'Std_Dev': std,
+                                'Anomaly_Score': anomaly_score,
+                                'Deviation_Pct': ((value - avg) / avg * 100) if avg > 0 else 0
+                            })
+        
+        except Exception as e:
+            st.error(f"Anomaly detection error: {str(e)}")
+        
+        return anomalies
+    
+    # 4. FUNGSI calculate_seasonality_pattern
+    @st.cache_data
+    def calculate_seasonality_pattern(df_forecast):
+        """Calculate seasonality pattern from forecast"""
+        
+        seasonality = {}
+        
+        if not ecomm_forecast_month_cols:
+            return seasonality
+        
+        try:
+            # Group by month name (ignoring year)
+            month_patterns = {}
+            for month_col in ecomm_forecast_month_cols:
+                month_name = str(month_col).split('-')[0].upper()[:3]
+                if month_name not in month_patterns:
+                    month_patterns[month_name] = []
+                month_patterns[month_name].append(df_forecast[month_col].sum())
+            
+            # Calculate average for each month
+            for month, values in month_patterns.items():
+                if values:
+                    month_patterns[month] = sum(values) / len(values)
+            
+            # Calculate seasonal indices
+            overall_avg = sum(month_patterns.values()) / len(month_patterns) if month_patterns else 1
+            
+            for month, avg_value in month_patterns.items():
+                if overall_avg > 0:
+                    seasonal_index = avg_value / overall_avg
+                    seasonality[month] = {
+                        'value': avg_value,
+                        'index': seasonal_index,
+                        'type': 'Peak' if seasonal_index >= 1.2 else 'Normal' if seasonal_index >= 0.8 else 'Low'
+                    }
+        
+        except Exception as e:
+            st.error(f"Seasonality calculation error: {str(e)}")
+        
+        return seasonality
+    
+    # 5. FUNGSI perform_what_if_analysis
+    @st.cache_data
+    def perform_what_if_analysis(base_forecast, scenarios):
+        """Perform what-if scenario analysis"""
+        
+        results = {}
+        
+        try:
+            for scenario_name, params in scenarios.items():
+                modified_forecast = base_forecast.copy()
+                
+                # Apply scenario adjustments
+                if 'growth_rate' in params:
+                    growth = params['growth_rate'] / 100
+                    for month in ecomm_forecast_month_cols:
+                        modified_forecast[month] = modified_forecast[month] * (1 + growth)
+                
+                if 'specific_months_adjustment' in params:
+                    for month, adjustment in params['specific_months_adjustment'].items():
+                        if month in modified_forecast.columns:
+                            modified_forecast[month] = modified_forecast[month] * (1 + adjustment/100)
+                
+                # Calculate scenario totals
+                scenario_total = modified_forecast[ecomm_forecast_month_cols].sum().sum()
+                base_total = base_forecast[ecomm_forecast_month_cols].sum().sum()
+                
+                results[scenario_name] = {
+                    'total_forecast': scenario_total,
+                    'change_pct': ((scenario_total - base_total) / base_total * 100) if base_total > 0 else 0,
+                    'monthly_breakdown': modified_forecast[ecomm_forecast_month_cols].sum().to_dict()
+                }
+        
+        except Exception as e:
+            st.error(f"What-if analysis error: {str(e)}")
+        
+        return results
+    
+    # 6. FUNGSI identify_forecast_risks
+    @st.cache_data
+    def identify_forecast_risks(df_forecast, df_product):
+        """Identify potential risks in forecast"""
+        
+        risks = []
+        
+        try:
+            # Risk 1: New products with high forecast but no history
+            if 'Product_Name' in df_forecast.columns:
+                # For simplicity, assume new products are those without brand recognition
+                new_products = df_forecast[
+                    (df_forecast['Brand'].str.contains('New|New Product', case=False, na=False)) |
+                    (df_forecast['Product_Name'].str.contains('New|Launch', case=False, na=False))
+                ]
+                
+                if not new_products.empty:
+                    high_new_forecast = new_products[new_products[ecomm_forecast_month_cols].sum(axis=1) > 1000]
+                    if not high_new_forecast.empty:
+                        risks.append({
+                            'type': 'New Product Risk',
+                            'description': f"{len(high_new_forecast)} new products with forecast > 1,000 units",
+                            'severity': 'High',
+                            'impact': "Potential overstock if demand doesn't materialize"
+                        })
+            
+            # Risk 2: High concentration in few SKUs
+            sku_contributions = df_forecast[ecomm_forecast_month_cols].sum(axis=1).sort_values(ascending=False)
+            top_10_share = sku_contributions.head(10).sum() / sku_contributions.sum() * 100 if sku_contributions.sum() > 0 else 0
+            
+            if top_10_share > 50:
+                risks.append({
+                    'type': 'Concentration Risk',
+                    'description': f"Top 10 SKUs contribute {top_10_share:.1f}% of total forecast",
+                    'severity': 'Medium',
+                    'impact': 'High dependency on few products'
+                })
+            
+            # Risk 3: Seasonal peaks without inventory planning
+            seasonality = calculate_seasonality_pattern(df_forecast)
+            peak_months = [month for month, data in seasonality.items() if data['type'] == 'Peak']
+            
+            if len(peak_months) >= 2:
+                risks.append({
+                    'type': 'Seasonal Risk',
+                    'description': f"Multiple peak months detected: {', '.join(peak_months)}",
+                    'severity': 'Medium',
+                    'impact': 'Require advanced inventory planning'
+                })
+        
+        except Exception as e:
+            st.error(f"Risk identification error: {str(e)}")
+        
+        return risks
+    
     # ============================================
     # SECTION 0: DATA VALIDATION & PREPARATION
     # ============================================
@@ -4905,7 +5155,7 @@ with tab7:
         
         # Calculate month-over-month variance
         if len(ecomm_forecast_month_cols) >= 2:
-            sorted_months = sorted(ecomm_forecast_month_cols, key=parse_month_str)
+            sorted_months = sorted(ecomm_forecast_month_cols, key=parse_month_str)  # <-- SEKARANG SUDAH ADA FUNGSI NYA
             for i in range(1, min(6, len(sorted_months))):
                 current_month = sorted_months[i]
                 prev_month = sorted_months[i-1]
