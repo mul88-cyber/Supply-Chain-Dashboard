@@ -5264,7 +5264,7 @@ with tab7:
             <div style="margin: 0.5rem 0; padding: 0.5rem; background: #F5F5F5; border-radius: 5px;">
                 <div style="display: flex; justify-content: space-between;">
                     <span style="font-size: 0.85rem;">{factor}</span>
-                    <span style="font-weight: bold; color: {color};">{score}%</span>
+                    <span style="font-weight: bold; color: {color};">{score:.1f}%</span> 
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -6049,14 +6049,41 @@ with tab7:
                 </div>
             </div>
             
-            <div style="margin-top: 1rem;">
-                <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.3rem;">Recommended Actions:</div>
-                <ul style="margin: 0; padding-left: 1.2rem;">
-                    {''.join([f'<li style="font-size: 0.85rem; margin-bottom: 0.2rem;">{action}</li>' for action in rec['actions']])}
-                </ul>
+            for rec in recommendations:
+            priority_color = {
+                'Critical': '#F44336',
+                'High': '#FF9800',
+                'Medium': '#FFC107',
+                'Low': '#4CAF50'
+            }.get(rec['priority'], '#9E9E9E')
+            
+            # PERBAIKAN: Buat list action menggunakan format Markdown standar
+            action_list = "\n".join([f"- {action}" for action in rec['actions']])
+        
+            st.markdown(f"""
+            <div style="border-left: 5px solid {priority_color}; padding: 1rem; margin: 1rem 0; 
+                        background: white; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="background: {priority_color}; color: white; padding: 0.2rem 0.8rem; 
+                                        border-radius: 12px; font-size: 0.8rem; font-weight: bold;">
+                                {rec['priority']} Priority
+                            </div>
+                            <h4 style="margin: 0;">{rec['title']}</h4>
+                        </div>
+                        <p style="margin: 0.5rem 0; color: #666;">{rec['description']}</p>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid #eee;">
+                    <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem;">Recommended Actions:</div>
+                    </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            
+            # Render Action List sebagai Markdown murni agar rapi
+            st.markdown(action_list)
     
     # ============================================
     # SECTION 5: FORECAST PERFORMANCE TRACKING
