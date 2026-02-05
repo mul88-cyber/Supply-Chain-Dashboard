@@ -6252,6 +6252,7 @@ with tab7:
                 }.get(rec['priority'], 'Cross-functional team')}</div>
             </div>
         </div>
+        
         """, unsafe_allow_html=True)
     
     # Helper functions untuk timeline dan owner
