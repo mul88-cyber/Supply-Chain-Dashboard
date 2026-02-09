@@ -3129,7 +3129,7 @@ Kurang signifikan. Evaluasi portofolio SKU.</p>
     else:
         st.info("📊 Data tidak tersedia untuk analisis brand.")
 
-# --- TAB 3: INVENTORY HEALTH, COVERAGE & AGING (COMPLETE) ---
+# --- TAB 3: INVENTORY HEALTH, COVERAGE & AGING (FIXED VALUE) ---
 with tab3:
     st.subheader("📦 Inventory Health & Optimization Dashboard")
     st.caption("Comprehensive Stock Analysis: Value, Coverage, Warehouse Capacity, and Aging Profile")
@@ -3145,38 +3145,56 @@ with tab3:
         )
 
     # ==============================================================================
-    # 1. DATA PREPARATION & LOGIC ENGINE
+    # 1. DATA PREPARATION & CLEANING (ROBUST FIX)
     # ==============================================================================
-    df_batch = df_stock.copy()
-    
-    # 1.1. Standardize Columns
-    col_cat = 'Stock_Category'
-    if col_cat not in df_batch.columns:
-        candidates = [c for c in df_batch.columns if 'cat' in c.lower() or 'kategori' in c.lower()]
-        col_cat = candidates[0] if candidates else None
-    
-    if col_cat:
-        df_batch = df_batch.rename(columns={col_cat: 'Stock_Category'})
+    if not df_stock.empty:
+        df_batch = df_stock.copy()
+        
+        # 1.1. Standardize Category Column
+        col_cat = 'Stock_Category'
+        if col_cat not in df_batch.columns:
+            candidates = [c for c in df_batch.columns if 'cat' in c.lower() or 'kategori' in c.lower()]
+            col_cat = candidates[0] if candidates else None
+        
+        if col_cat:
+            df_batch = df_batch.rename(columns={col_cat: 'Stock_Category'})
+            
+        # Clean Category & Qty
+        if 'Stock_Category' in df_batch.columns:
+            df_batch['Stock_Category'] = df_batch['Stock_Category'].astype(str).str.strip()
+        else:
+            df_batch['Stock_Category'] = 'Uncategorized'
+            
         df_batch['Stock_Qty'] = pd.to_numeric(df_batch['Stock_Qty'], errors='coerce').fillna(0)
-        df_batch = df_batch[df_batch['Stock_Qty'] > 0]
-        df_batch['Stock_Category'] = df_batch['Stock_Category'].astype(str).str.strip()
+        df_batch = df_batch[df_batch['Stock_Qty'] > 0] # Filter stok > 0
 
-        # 1.2. Merge Product Info
+        # 1.2. MERGE PRODUCT INFO (THE FIX IS HERE)
+        # Hapus dulu kolom info produk yang mungkin menempel di df_stock (biar tidak double _x _y)
+        cols_to_drop = ['Product_Name', 'Brand', 'Status', 'Floor_Price', 'SKU_Tier', 'Net_Order_Price']
+        df_batch = df_batch.drop(columns=[c for c in cols_to_drop if c in df_batch.columns], errors='ignore')
+
+        # Merge fresh dari Product Master
         if not df_product.empty:
-            cols_needed = ['SKU_ID', 'Status', 'Product_Name', 'Brand', 'Floor_Price', 'SKU_Tier']
-            cols_to_merge = [c for c in cols_needed if c in df_product.columns]
+            # Pastikan kolom-kolom ini ada di df_product
+            master_cols = ['SKU_ID'] + [c for c in cols_to_drop if c in df_product.columns]
             
-            # Merge (Drop duplicates if needed)
-            df_batch = pd.merge(df_batch, df_product[cols_to_merge], on='SKU_ID', how='left')
-            df_batch['Status'] = df_batch['Status'].fillna('Unknown')
+            # Merge
+            df_batch = pd.merge(df_batch, df_product[master_cols], on='SKU_ID', how='left')
             
+            # Fill missing text
+            for txt_col in ['Status', 'Product_Name', 'Brand']:
+                if txt_col in df_batch.columns:
+                    df_batch[txt_col] = df_batch[txt_col].fillna('Unknown')
+
+            # 1.3. CALCULATE VALUE
             if 'Floor_Price' in df_batch.columns:
                 df_batch['Floor_Price'] = pd.to_numeric(df_batch['Floor_Price'], errors='coerce').fillna(0)
                 df_batch['Total_Value'] = df_batch['Stock_Qty'] * df_batch['Floor_Price']
             else:
                 df_batch['Total_Value'] = 0
+                st.warning("⚠️ Kolom 'Floor_Price' tidak ditemukan di Product Master. Nilai Aset = 0.")
 
-        # 1.3. EXPIRY LOGIC
+        # 1.4. EXPIRY LOGIC
         def get_expiry_desc(row):
             expiry_cols = [c for c in row.index if 'expir' in c.lower() or 'ed' in c.lower()]
             if not expiry_cols: return 'Not Defined'
@@ -3196,11 +3214,10 @@ with tab3:
 
         df_batch['Expiry_Category'] = df_batch.apply(get_expiry_desc, axis=1)
 
-        # 1.4. COVERAGE LOGIC (Regular SKU Identification)
-        # Aggregated Stock per SKU
+        # 1.5. COVERAGE LOGIC
         df_stock_agg = df_batch.groupby('SKU_ID')['Stock_Qty'].sum().reset_index()
         
-        # Get Average Sales (Last 3 Months)
+        # Get Sales Data
         df_avg_sales = pd.DataFrame()
         if not df_sales.empty:
             months = sorted(df_sales['Month'].unique())
@@ -3209,18 +3226,15 @@ with tab3:
             df_avg_sales = df_sales_3m.groupby('SKU_ID')['Sales_Qty'].mean().reset_index()
             df_avg_sales.rename(columns={'Sales_Qty': 'Avg_Sales'}, inplace=True)
         
-        # Merge Stock & Sales
         df_cover = pd.merge(df_stock_agg, df_avg_sales, on='SKU_ID', how='left')
         df_cover['Avg_Sales'] = df_cover['Avg_Sales'].fillna(0)
         
-        # Calculate Cover Days/Months
         df_cover['Cover_Months'] = np.where(
             df_cover['Avg_Sales'] > 0, 
             df_cover['Stock_Qty'] / df_cover['Avg_Sales'], 
-            999 # No sales
+            999
         )
         
-        # Calculate Global Metrics
         avg_cover_months = df_cover[df_cover['Avg_Sales'] > 0]['Cover_Months'].mean()
         if pd.isna(avg_cover_months): avg_cover_months = 0
         
@@ -3228,32 +3242,20 @@ with tab3:
         occupancy_pct = (current_occupancy / WH_CAPACITY * 100)
 
         # ==============================================================================
-        # 2. EXECUTIVE KPI CARDS (SMART UNIT VERSION - FIXED)
+        # 2. EXECUTIVE KPI CARDS (PASTEL & SMART VALUE)
         # ==============================================================================
-        
-        # Safe Calculation for Value
-        total_val = 0
-        if 'Total_Value' in df_batch.columns:
-            total_val = df_batch['Total_Value'].sum()
-            
+        total_val = df_batch['Total_Value'].sum()
         total_sku = df_batch['SKU_ID'].nunique()
         
-        # Hitung Risk Value (Safe Mode)
-        risk_val = 0
-        if 'Expiry_Category' in df_batch.columns and 'Total_Value' in df_batch.columns:
-            risk_mask = df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 Days)'])
-            risk_val = df_batch[risk_mask]['Total_Value'].sum()
-            
+        risk_mask = df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 Days)'])
+        risk_val = df_batch[risk_mask]['Total_Value'].sum()
         risk_pct = (risk_val / total_val * 100) if total_val > 0 else 0
 
-        # --- Helper: Format Uang Pintar (Otomatis M / Jt / Rb) ---
+        # Helper: Format Uang Pintar
         def format_currency_smart(value):
-            if value >= 1_000_000_000: # Di atas 1 Milyar
-                return f"Rp {value/1e9:,.1f} M"
-            elif value >= 1_000_000: # Di atas 1 Juta
-                return f"Rp {value/1e6:,.1f} Jt"
-            else: # Di bawah 1 Juta
-                return f"Rp {value:,.0f}"
+            if value >= 1_000_000_000: return f"Rp {value/1e9:,.1f} M"
+            elif value >= 1_000_000: return f"Rp {value/1e6:,.1f} Jt"
+            else: return f"Rp {value:,.0f}"
 
         val_display = format_currency_smart(total_val)
         risk_display = format_currency_smart(risk_val)
@@ -3285,44 +3287,25 @@ with tab3:
         c1, c2, c3, c4 = st.columns(4)
         
         with c1:
-            # Value - Indigo
+            # Soft Indigo
             st.markdown(render_inv_card("Total Asset Value", val_display, f"{total_sku:,} Items", 
-                "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)"), unsafe_allow_html=True)
+                "linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%)"), unsafe_allow_html=True)
         with c2:
-            # Qty - Teal
-            current_occupancy = df_batch['Stock_Qty'].sum()
-            occupancy_pct = (current_occupancy / WH_CAPACITY * 100) if 'WH_CAPACITY' in locals() and WH_CAPACITY > 0 else 0
-            
+            # Soft Teal
             st.markdown(render_inv_card("Total Quantity", f"{current_occupancy:,.0f}", f"{occupancy_pct:.1f}% Capacity", 
-                "linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)"), unsafe_allow_html=True)
+                "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
         with c3:
-            # Cover - Amber
+            # Soft Orange
             st.markdown(render_inv_card("Global Stock Cover", f"{avg_cover_months:.1f} Mo", "Avg across active SKUs", 
-                "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"), unsafe_allow_html=True)
+                "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
         with c4:
-            # Risk - Red
-            risk_bg = "linear-gradient(135deg, #F43F5E 0%, #BE123C 100%)" if risk_pct > 5 else "linear-gradient(135deg, #10B981 0%, #059669 100%)"
+            # Soft Red or Green depending on risk
+            risk_bg = "linear-gradient(135deg, #ef5350 0%, #e53935 100%)" if risk_pct > 5 else "linear-gradient(135deg, #66bb6a 0%, #43a047 100%)"
             st.markdown(render_inv_card("Expiry Risk Value", risk_display, f"{risk_pct:.1f}% of Total", 
                 risk_bg), unsafe_allow_html=True)
 
-        # --- DIAGNOSTIC TOOL (FIXED) ---
-        # Hanya jalankan jika kolom Floor_Price BENAR-BENAR ADA
-        if 'Floor_Price' in df_batch.columns:
-            missing_price = df_batch[df_batch['Floor_Price'] <= 0]
-            if not missing_price.empty:
-                with st.expander(f"⚠️ Warning: {len(missing_price)} SKU terdeteksi memiliki Harga 0 / Missing!", expanded=False):
-                    st.warning("SKU berikut tidak memiliki 'Floor_Price' di Product Master, sehingga Asset Value = 0.")
-                    # Tampilkan kolom yang aman saja
-                    cols_to_show = ['SKU_ID', 'Stock_Qty', 'Floor_Price']
-                    if 'Product_Name' in df_batch.columns: cols_to_show.insert(1, 'Product_Name')
-                    st.dataframe(missing_price[cols_to_show])
-        else:
-            # Opsional: Info jika kolom harga sama sekali tidak ada
-            # st.info("ℹ️ Kolom 'Floor_Price' tidak ditemukan di data stok. Total Value tidak dapat dihitung.")
-            pass
-
         # ==============================================================================
-        # 3. STOCK COVER & OCCUPANCY DASHBOARD (RESTORED & IMPROVED)
+        # 3. STOCK COVER & OCCUPANCY DASHBOARD
         # ==============================================================================
         st.write("")
         st.subheader("⚡ Inventory Health & Warehouse Utilization")
@@ -3338,22 +3321,22 @@ with tab3:
                 title={'text': "Avg Inventory Coverage (Months)", 'font': {'size': 16}},
                 gauge={
                     'axis': {'range': [0, 6]},
-                    'bar': {'color': "#6366F1"}, # Indigo
+                    'bar': {'color': "#7986cb"}, # Soft Indigo
                     'steps': [
-                        {'range': [0, 0.8], 'color': "#F87171"}, # Red (Low)
-                        {'range': [0.8, 2.0], 'color': "#34D399"}, # Green (Ideal)
-                        {'range': [2.0, 6], 'color': "#FBBF24"}  # Amber (High)
+                        {'range': [0, 0.8], 'color': "#ef5350"}, # Soft Red
+                        {'range': [0.8, 2.0], 'color': "#4db6ac"}, # Soft Green
+                        {'range': [2.0, 6], 'color': "#ffb74d"}  # Soft Orange
                     ],
                     'threshold': {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': 2.0}
                 }
             ))
             fig_cover.update_layout(height=250, margin=dict(t=40, b=20, l=30, r=30))
             st.plotly_chart(fig_cover, use_container_width=True)
-            st.caption("Target: **0.8 - 2.0 Bulan**. < 0.8 (Risk Stockout), > 2.0 (Overstock)")
+            st.caption("Target: **0.8 - 2.0 Bulan**")
 
         with col_speed2:
             # Gauge: WH Occupancy
-            occ_color = "#34D399" if occupancy_pct < 80 else "#F87171"
+            occ_color = "#4db6ac" if occupancy_pct < 80 else "#ef5350"
             fig_occ = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
                 value=occupancy_pct,
@@ -3364,16 +3347,16 @@ with tab3:
                     'axis': {'range': [0, 100]},
                     'bar': {'color': occ_color},
                     'steps': [
-                        {'range': [0, 60], 'color': "#E0F2F1"}, # Very Light Teal
-                        {'range': [60, 85], 'color': "#FFF3E0"}, # Very Light Orange
-                        {'range': [85, 100], 'color': "#FFEBEE"}  # Very Light Red
+                        {'range': [0, 60], 'color': "#e0f2f1"}, 
+                        {'range': [60, 85], 'color': "#fff3e0"}, 
+                        {'range': [85, 100], 'color': "#ffebee"}
                     ],
                     'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 85}
                 }
             ))
             fig_occ.update_layout(height=250, margin=dict(t=40, b=20, l=30, r=30))
             st.plotly_chart(fig_occ, use_container_width=True)
-            st.caption(f"Capacity: **{current_occupancy:,.0f}** used of **{WH_CAPACITY:,.0f}** pcs")
+            st.caption(f"Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs")
 
         # ==============================================================================
         # 4. AGING & CATEGORY ANALYSIS
@@ -3384,15 +3367,14 @@ with tab3:
         with col_age:
             st.subheader("📅 Aging Profile (Expiry)")
             age_dist = df_batch.groupby('Expiry_Category')['Stock_Qty'].sum().reset_index()
-            # Custom Order
             order_list = ['❌ EXPIRED', '🚨 Critical (<30 Days)', '⚠️ NED (1-3 Months)', '📅 NED (3-6 Months)', '✅ Safe (6-12 Months)', '🌟 Fresh (>1 Year)', 'Not Defined']
             age_dist['Expiry_Category'] = pd.Categorical(age_dist['Expiry_Category'], categories=order_list, ordered=True)
             age_dist = age_dist.sort_values('Expiry_Category')
             
             color_map = {
-                '❌ EXPIRED': '#EF4444', '🚨 Critical (<30 Days)': '#F87171',
-                '⚠️ NED (1-3 Months)': '#FBBF24', '📅 NED (3-6 Months)': '#FCD34D',
-                '✅ Safe (6-12 Months)': '#34D399', '🌟 Fresh (>1 Year)': '#10B981', 'Not Defined': '#9CA3AF'
+                '❌ EXPIRED': '#ef5350', '🚨 Critical (<30 Days)': '#ef9a9a',
+                '⚠️ NED (1-3 Months)': '#ffb74d', '📅 NED (3-6 Months)': '#ffe082',
+                '✅ Safe (6-12 Months)': '#4db6ac', '🌟 Fresh (>1 Year)': '#26a69a', 'Not Defined': '#90a4ae'
             }
             
             fig_age = px.bar(age_dist, x='Expiry_Category', y='Stock_Qty', text_auto='.2s', 
@@ -3402,20 +3384,19 @@ with tab3:
 
         with col_cat:
             st.subheader("📦 Space by Category")
-            cat_dist = df_batch.groupby('Stock_Category')['Stock_Qty'].sum().reset_index()
-            fig_pie = px.pie(cat_dist, values='Stock_Qty', names='Stock_Category', hole=0.4, 
+            cat_dist = df_batch.groupby('Stock_Category')['Total_Value'].sum().reset_index()
+            fig_pie = px.pie(cat_dist, values='Total_Value', names='Stock_Category', hole=0.4, 
                              color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_pie.update_layout(height=350, showlegend=False, margin=dict(t=30, b=10))
             st.plotly_chart(fig_pie, use_container_width=True)
 
         # ==============================================================================
-        # 5. INVENTORY MATRIX (IMPROVED)
+        # 5. INVENTORY MATRIX (CATEGORY VS EXPIRY)
         # ==============================================================================
         st.divider()
         st.subheader("🗓️ Inventory Matrix: Category vs Expiry")
         
         pivot = pd.pivot_table(df_batch, values='Stock_Qty', index='Stock_Category', columns='Expiry_Category', aggfunc='sum', fill_value=0)
-        # Reorder columns
         existing_cols = [c for c in order_list if c in pivot.columns]
         pivot = pivot[existing_cols]
         pivot['TOTAL'] = pivot.sum(axis=1)
@@ -3443,12 +3424,21 @@ with tab3:
             # Display
             cols = ['SKU_ID', 'Product_Name', 'Status', 'Stock_Category', 'Expiry_Category', 'Stock_Qty', 'Floor_Price', 'Total_Value']
             if 'Expiry_Date' in df_batch.columns: cols.insert(5, 'Expiry_Date')
+            
             final_cols = [c for c in cols if c in df_drill.columns]
             
-            st.dataframe(df_drill[final_cols].sort_values('Total_Value', ascending=False), use_container_width=True)
+            st.dataframe(
+                df_drill[final_cols].sort_values('Total_Value', ascending=False), 
+                column_config={
+                    "Total_Value": st.column_config.NumberColumn("Value", format="Rp %d"),
+                    "Floor_Price": st.column_config.NumberColumn("Price", format="Rp %d"),
+                    "Stock_Qty": st.column_config.NumberColumn("Qty")
+                },
+                use_container_width=True
+            )
 
     else:
-        st.warning("⚠️ Kolom 'Stock_Category' tidak ditemukan. Mohon cek format data stok.")
+        st.warning("⚠️ Data Stok Kosong.")
 
 # --- TAB 4: SKU EVALUATION (SKU 360 INSIGHT DECK) ---
 with tab4:
