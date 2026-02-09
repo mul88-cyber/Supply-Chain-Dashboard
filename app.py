@@ -1626,9 +1626,8 @@ if 'show_stats' in st.session_state and st.session_state.show_stats:
                     st.write(f"{check_name}: {check_result}")
 
 # --- MAIN DASHBOARD ---
-
 # =================================================================================
-# 📈 PREMIUM FORECAST ACCURACY DASHBOARD SECTION
+# 📈 PREMIUM FORECAST ACCURACY DASHBOARD SECTION (UPDATED)
 # =================================================================================
 st.subheader("📈 Forecast Accuracy Performance Trends")
 
@@ -1650,7 +1649,7 @@ if monthly_performance:
     summary_df = pd.DataFrame(summary_data).sort_values('Month')
 
     if not summary_df.empty:
-        # --- A. METRIC CARDS (Top Row) ---
+        # --- A. METRIC CARDS (Gradient Style) ---
         # Calculate Aggregates
         avg_acc = summary_df['Accuracy'].mean()
         last_acc = summary_df['Accuracy'].iloc[-1]
@@ -1658,118 +1657,189 @@ if monthly_performance:
         delta_acc = last_acc - prev_acc
         
         best_month = summary_df.loc[summary_df['Accuracy'].idxmax()]
-        
-        # Stability Score (100 - Standard Deviation)
         stability = max(0, 100 - summary_df['Accuracy'].std())
 
-        # CSS for Cards
+        # CSS khusus untuk Gradient Cards
         st.markdown("""
         <style>
-            .kpi-card {
-                background-color: white;
-                border-radius: 12px;
-                padding: 1.2rem;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-                border: 1px solid #f0f0f0;
-                transition: transform 0.2s;
+            .grad-card {
+                border-radius: 15px;
+                padding: 1.5rem;
+                color: white;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                transition: transform 0.3s ease;
+                margin-bottom: 1rem;
+                position: relative;
+                overflow: hidden;
             }
-            .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
-            .kpi-label { font-size: 0.85rem; color: #6b7280; font-weight: 600; margin-bottom: 0.25rem; }
-            .kpi-value { font-size: 1.8rem; font-weight: 800; color: #1f2937; }
-            .kpi-delta { font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
-            .delta-pos { color: #10B981; background: #D1FAE5; padding: 2px 8px; border-radius: 12px; }
-            .delta-neg { color: #EF4444; background: #FEE2E2; padding: 2px 8px; border-radius: 12px; }
-            .delta-neu { color: #6B7280; background: #F3F4F6; padding: 2px 8px; border-radius: 12px; }
+            .grad-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+            
+            /* Glassmorphism overlay effect */
+            .grad-card::before {
+                content: "";
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%);
+                opacity: 0.5;
+                pointer-events: none;
+            }
+
+            .grad-label { 
+                font-size: 0.85rem; 
+                font-weight: 600; 
+                text-transform: uppercase; 
+                letter-spacing: 1px;
+                opacity: 0.9;
+                margin-bottom: 0.5rem;
+                position: relative; 
+                z-index: 1;
+            }
+            .grad-value { 
+                font-size: 2.2rem; 
+                font-weight: 800; 
+                margin-bottom: 0.2rem;
+                position: relative; 
+                z-index: 1;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .grad-sub { 
+                font-size: 0.85rem; 
+                font-weight: 500; 
+                opacity: 0.9;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                position: relative; 
+                z-index: 1;
+            }
+            .pill {
+                background: rgba(255,255,255,0.25);
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 0.75rem;
+                backdrop-filter: blur(4px);
+            }
         </style>
         """, unsafe_allow_html=True)
 
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
-        # Helper untuk KPI HTML
-        def kpi_html(label, value, delta_val, delta_text, color_logic=True):
-            delta_cls = "delta-neu"
-            if color_logic:
-                if delta_val > 0: delta_cls = "delta-pos"
-                elif delta_val < 0: delta_cls = "delta-neg"
-            arrow = "▲" if delta_val > 0 else "▼" if delta_val < 0 else "−"
+        # Helper Function untuk membuat Gradient Card
+        def gradient_card(title, value, sub_text, pill_text, gradient_css):
             return f"""
-            <div class="kpi-card">
-                <div class="kpi-label">{label}</div>
-                <div class="kpi-value">{value}</div>
-                <div class="kpi-delta">
-                    <span class="{delta_cls}">{arrow} {abs(delta_val):.1f}%</span>
-                    <span style="color: #9CA3AF;">{delta_text}</span>
+            <div class="grad-card" style="{gradient_css}">
+                <div class="grad-label">{title}</div>
+                <div class="grad-value">{value}</div>
+                <div class="grad-sub">
+                    <span class="pill">{pill_text}</span> {sub_text}
                 </div>
             </div>
             """
 
         with kpi1:
-            st.markdown(kpi_html("Current Accuracy", f"{last_acc:.1f}%", delta_acc, "vs last month"), unsafe_allow_html=True)
+            # Current Accuracy - Blue/Indigo Gradient
+            arrow = "▲" if delta_acc >= 0 else "▼"
+            grad_css = "background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);"
+            st.markdown(gradient_card(
+                "Current Accuracy", 
+                f"{last_acc:.1f}%", 
+                "vs last month", 
+                f"{arrow} {abs(delta_acc):.1f}%", 
+                grad_css
+            ), unsafe_allow_html=True)
+
         with kpi2:
-            avg_delta = avg_acc - 80 # Target 80
-            st.markdown(kpi_html("Average (YTD)", f"{avg_acc:.1f}%", avg_delta, "vs 80% target"), unsafe_allow_html=True)
+            # Average YTD - Teal/Cyan Gradient
+            avg_diff = avg_acc - 80
+            pill_icon = "✅" if avg_diff >= 0 else "⚠️"
+            grad_css = "background: linear-gradient(135deg, #0891B2 0%, #22D3EE 100%);"
+            st.markdown(gradient_card(
+                "Average (YTD)", 
+                f"{avg_acc:.1f}%", 
+                "vs Target (80%)", 
+                f"{pill_icon} {abs(avg_diff):.1f}%", 
+                grad_css
+            ), unsafe_allow_html=True)
+
         with kpi3:
-            st.markdown(f"""
-            <div class="kpi-card" style="border-left: 4px solid #667eea;">
-                <div class="kpi-label">Best Performance</div>
-                <div class="kpi-value" style="color: #667eea;">{best_month['Accuracy']:.1f}%</div>
-                <div class="kpi-delta" style="color: #6b7280;">📅 {best_month['Month_Display']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Best Performance - Emerald/Green Gradient
+            grad_css = "background: linear-gradient(135deg, #059669 0%, #10B981 100%);"
+            st.markdown(gradient_card(
+                "Best Performance", 
+                f"{best_month['Accuracy']:.1f}%", 
+                "Highest Record", 
+                f"📅 {best_month['Month_Display']}", 
+                grad_css
+            ), unsafe_allow_html=True)
+
         with kpi4:
-            st.markdown(f"""
-            <div class="kpi-card" style="border-left: 4px solid #9C27B0;">
-                <div class="kpi-label">Stability Score</div>
-                <div class="kpi-value" style="color: #9C27B0;">{stability:.0f}/100</div>
-                <div class="kpi-delta" style="color: #6b7280;">Consistency metric</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Stability - Orange/Amber Gradient
+            grad_css = "background: linear-gradient(135deg, #EA580C 0%, #F59E0B 100%);"
+            st.markdown(gradient_card(
+                "Stability Score", 
+                f"{stability:.0f}", 
+                "Consistency Metric", 
+                "📈 0-100", 
+                grad_css
+            ), unsafe_allow_html=True)
 
         st.write("") # Spacer
 
-        # --- B. ADVANCED COMBO CHART ---
+        # --- B. ADVANCED COMBO CHART (Updated Logic) ---
         from plotly.subplots import make_subplots
 
         # Create figure with secondary y-axis
         fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-        # 1. Background Target Zones (Green Zone 80-100%)
+        # 1. Background Target Zones
         fig.add_hrect(
-            y0=80, y1=100,
+            y0=80, y1=110,
             fillcolor="rgba(16, 185, 129, 0.08)", layer="below", line_width=0,
-            annotation_text="Target Zone", annotation_position="top left",
+            secondary_y=False
+        )
+        fig.add_hrect(
+            y0=70, y1=80,
+            fillcolor="rgba(245, 158, 11, 0.08)", layer="below", line_width=0,
             secondary_y=False
         )
 
-        # 2. Context Layer: Bar Chart for Total SKUs (Secondary Axis)
-        # Memberikan konteks: Apakah akurasi turun karena SKU bertambah banyak?
+        # 2. Context Layer: Bar Chart for Total SKUs
         fig.add_trace(
             go.Bar(
                 x=summary_df['Month_Display'],
                 y=summary_df['Total_SKUs'],
                 name="Total SKUs",
-                marker_color='rgba(156, 163, 175, 0.2)', # Grey transparent
+                marker_color='rgba(156, 163, 175, 0.15)',
                 hoverinfo='y',
                 showlegend=True,
             ),
             secondary_y=True,
         )
 
-        # 3. Main Layer: Accuracy Line (Spline for smooth look)
-        # Warna dinamis untuk garis tidak mudah di Plotly lines, jadi kita pakai markers yg dinamis
+        # 3. Main Layer: Accuracy Line with 3-Color Logic
+        # Define colors list based on value
+        marker_colors = []
+        for val in summary_df['Accuracy']:
+            if val < 70:
+                marker_colors.append('#EF4444') # Merah
+            elif val < 80:
+                marker_colors.append('#F59E0B') # Kuning
+            else:
+                marker_colors.append('#10B981') # Hijau
+
         fig.add_trace(
             go.Scatter(
                 x=summary_df['Month_Display'],
                 y=summary_df['Accuracy'],
                 name="Accuracy %",
                 mode='lines+markers',
-                line=dict(color='#667eea', width=4, shape='spline', smoothing=1.3),
-                # Marker color logic
+                line=dict(color='#6366F1', width=3, shape='spline', smoothing=1.3), # Garis tetap warna Indigo/Ungu biar elegan
                 marker=dict(
-                    size=12,
-                    color=summary_df['Accuracy'],
-                    colorscale=[[0, '#EF4444'], [0.79, '#EF4444'], [0.8, '#10B981'], [1.0, '#10B981']],
-                    showscale=False,
+                    size=14, # Sedikit diperbesar
+                    color=marker_colors, # Pakai list warna yg sudah dilogika di atas
                     line=dict(width=2, color='white')
                 ),
                 hovertemplate=(
@@ -1783,78 +1853,64 @@ if monthly_performance:
             secondary_y=False,
         )
 
-        # 4. Add Fill Area (Gradient-like effect)
-        fig.add_trace(
-            go.Scatter(
-                x=summary_df['Month_Display'],
-                y=summary_df['Accuracy'],
-                mode='none',
-                fill='tozeroy',
-                fillcolor='rgba(102, 126, 234, 0.05)', # Very light purple fill
-                showlegend=False,
-                hoverinfo='skip'
-            ),
-            secondary_y=False
-        )
-
-        # 5. Layout Styling
+        # 4. Layout Styling
         fig.update_layout(
-            height=450,
+            height=480,
             title=dict(
-                text='<b>📊 Forecast Accuracy vs SKU Volume</b>',
-                font=dict(size=18, color='#1f2937'),
+                text='<b>📊 Accuracy Trend vs Volume</b> (Merah <70%, Kuning 70-80%, Hijau >80%)',
+                font=dict(size=16, color='#374151'),
                 x=0, y=0.98
             ),
             plot_bgcolor='white',
             paper_bgcolor='white',
             hovermode='x unified',
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             margin=dict(t=60, b=40, l=40, r=40)
         )
 
-        # Axis styling
         fig.update_yaxes(
             title="<b>Accuracy (%)</b>", 
             range=[40, 110], 
             gridcolor='rgba(0,0,0,0.05)',
             secondary_y=False,
-            tickfont=dict(color='#667eea', weight='bold')
+            tickfont=dict(color='#4F46E5', weight='bold')
         )
         
         fig.update_yaxes(
             title="Total SKUs", 
             showgrid=False, 
-            visible=False, # Hide axis numbers to keep clean, bars are contextual
+            visible=False,
             secondary_y=True
         )
         
-        fig.update_xaxes(
-            showgrid=False,
-            tickfont=dict(weight='bold')
-        )
+        fig.update_xaxes(showgrid=False, tickfont=dict(weight='bold'))
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- C. INSIGHT GENERATOR (AUTO-TEXT) ---
-        # Logic sederhana untuk memberi narasi otomatis
-        trend_status = "STABLE"
-        if delta_acc > 2: trend_status = "IMPROVING 📈"
-        elif delta_acc < -2: trend_status = "DECLINING 📉"
-        
-        insight_color = "#10B981" if last_acc >= 80 else "#F59E0B" if last_acc >= 70 else "#EF4444"
+        # --- C. AUTO INSIGHT ---
+        # Logic warna insight
+        if last_acc >= 80:
+            insight_color = "#10B981" # Hijau
+            status_text = "EXCELLENT PERFORMANCE 🚀"
+        elif last_acc >= 70:
+            insight_color = "#F59E0B" # Kuning
+            status_text = "MODERATE PERFORMANCE ⚠️"
+        else:
+            insight_color = "#EF4444" # Merah
+            status_text = "CRITICAL ATTENTION NEEDED 🚨"
         
         st.markdown(f"""
-        <div style="background-color: #F9FAFB; border-radius: 8px; padding: 1rem; border-left: 4px solid {insight_color}; font-size: 0.9rem; color: #374151;">
-            <strong>💡 AI Insight:</strong> Performance is currently <strong>{trend_status}</strong>. 
-            The latest accuracy is <strong style="color:{insight_color}">{last_acc:.1f}%</strong>.
-            {'Great job! You are within the target zone.' if last_acc >= 80 else 'Attention needed to reach the 80% target.'}
-            The data includes <strong>{summary_df['Total_SKUs'].iloc[-1]}</strong> active SKUs for the last period.
+        <div style="background-color: white; border-radius: 10px; padding: 1rem; border-left: 6px solid {insight_color}; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #4B5563;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="font-size: 1.5rem;">💡</div>
+                <div>
+                    <div style="font-weight: 800; font-size: 0.8rem; color: {insight_color}; letter-spacing: 1px;">{status_text}</div>
+                    <div style="font-size: 0.95rem;">
+                        Current accuracy is <strong>{last_acc:.1f}%</strong>. 
+                        {'Stable performance.' if abs(delta_acc) < 2 else ('Improved by ' + f'{delta_acc:.1f}%' if delta_acc > 0 else 'Dropped by ' + f'{abs(delta_acc):.1f}%')} from previous month.
+                    </div>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
