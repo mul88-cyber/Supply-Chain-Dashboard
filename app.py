@@ -2536,17 +2536,38 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🚚 Fulfillment Cost Analysis" # <-- TAB BARU
 ])
 
-# --- TAB 1: MONTHLY PERFORMANCE DETAILS ---
+# --- TAB 1: MONTHLY PERFORMANCE DETAILS (PREMIUM HEATMAP) ---
 with tab1:
     st.subheader("📅 Monthly Performance Details")
     
     if monthly_performance:
-        # Create monthly performance summary table
+        # 1. Prepare Data
         summary_data = []
-        for month, data in sorted(monthly_performance.items()):
+        prev_accuracy = 0
+        
+        for i, (month, data) in enumerate(sorted(monthly_performance.items())):
+            # Tentukan Status & Icon
+            acc = data['accuracy']
+            if acc >= 90:
+                status_icon = "🌟 Excellent"
+            elif acc >= 80:
+                status_icon = "✅ Good"
+            elif acc >= 70:
+                status_icon = "⚠️ Fair"
+            else:
+                status_icon = "🛑 Poor"
+            
+            # Hitung MoM Change (Delta)
+            delta = acc - prev_accuracy if i > 0 else 0
+            delta_str = f"{delta:+.1f}%" if i > 0 else "-"
+            prev_accuracy = acc
+
             summary_data.append({
+                'Month_Raw': month,
                 'Month': month.strftime('%b %Y'),
-                'Accuracy (%)': data['accuracy'],
+                'Status': status_icon,
+                'Accuracy': acc,
+                'MoM': delta_str, # Month over Month Change
                 'Under': data['status_counts'].get('Under', 0),
                 'Accurate': data['status_counts'].get('Accurate', 0),
                 'Over': data['status_counts'].get('Over', 0),
@@ -2556,21 +2577,63 @@ with tab1:
         
         summary_df = pd.DataFrame(summary_data)
         
-        # Display summary table
+        # 2. Styling dengan Pandas Styler (Soft Pastel Heatmap)
+        # Kita gunakan background_gradient untuk menyoroti angka yang tinggi
+        
+        def highlight_accuracy(val):
+            color = '#d1fae5' if val >= 80 else '#fef3c7' if val >= 70 else '#fee2e2'
+            return f'background-color: {color}; color: #374151; font-weight: bold;'
+
+        # Create Styler Object
+        styler = summary_df.style\
+            .background_gradient(subset=['Under'], cmap='Reds', vmin=0, vmax=summary_df['Under'].max()*1.5)\
+            .background_gradient(subset=['Accurate'], cmap='Greens', vmin=0, vmax=summary_df['Accurate'].max())\
+            .background_gradient(subset=['Over'], cmap='Oranges', vmin=0, vmax=summary_df['Over'].max()*1.5)\
+            .applymap(highlight_accuracy, subset=['Accuracy'])\
+            .format({
+                'Accuracy': '{:.1f}%',
+                'MAPE': '{:.1f}%',
+                'Under': '{:,}',
+                'Accurate': '{:,}',
+                'Over': '{:,}',
+                'Total SKUs': '{:,}'
+            })
+
+        # 3. Render Dataframe
         st.dataframe(
-            summary_df,
+            styler,
+            column_order=['Month', 'Status', 'Accuracy', 'MoM', 'Under', 'Accurate', 'Over', 'Total SKUs', 'MAPE'],
             column_config={
-                "Accuracy (%)": st.column_config.ProgressColumn(
+                "Month": st.column_config.TextColumn("Period", help="Month of analysis"),
+                "Status": st.column_config.TextColumn("Health Score"),
+                "Accuracy": st.column_config.ProgressColumn(
                     "Accuracy %",
                     format="%.1f%%",
                     min_value=0,
-                    max_value=100
+                    max_value=100,
                 ),
-                "MAPE": st.column_config.NumberColumn("MAPE %", format="%.1f%%")
+                "MoM": st.column_config.TextColumn("Trend (MoM)", help="Change from previous month"),
+                "Under": st.column_config.NumberColumn("📉 Under", help="Count of Under-forecast SKUs"),
+                "Accurate": st.column_config.NumberColumn("🎯 Accurate", help="Count of Accurate SKUs"),
+                "Over": st.column_config.NumberColumn("📈 Over", help="Count of Over-forecast SKUs"),
+                "Total SKUs": st.column_config.NumberColumn("Total Items"),
+                "MAPE": st.column_config.NumberColumn("MAPE", help="Mean Absolute Percentage Error")
             },
             use_container_width=True,
-            height=400
+            height=500,
+            hide_index=True
         )
+        
+        # Legend Kecil
+        st.caption("""
+        🎨 **Color Legend:** - **Accuracy:** 🟩 Hijau (>80%), 🟨 Kuning (70-80%), 🟥 Merah (<70%).
+        - **Under/Over:** Semakin pekat warnanya, semakin banyak SKU yang bermasalah di kategori tersebut.
+        """)
+
+        # Add forecast bias analysis (Existing code)
+        if not forecast_bias.empty:
+            # ... (kode existing bias analysis tetap ada di sini jika mau ditampilkan di bawah tabel)
+            pass
         
         # ==============================================================================
         # 3. PREMIUM FORECAST BIAS ANALYSIS (Diverging Chart Version)
