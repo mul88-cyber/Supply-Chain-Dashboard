@@ -2766,667 +2766,264 @@ with tab1:
             - **Zona Hijau:** Bias ±10% dianggap sehat.
             """)
 
-# --- TAB 2: FORECAST PERFORMANCE BY BRAND & TIER ANALYSIS ---
+# --- TAB 2: FORECAST PERFORMANCE BY BRAND & TIER ANALYSIS (PREMIUM UPGRADE) ---
 with tab2:
-    # Brand Performance Analysis
-    st.subheader("🏷️ Forecast Performance by Brand")
-    
+    st.subheader("🏷️ Brand & Tier Strategic Analysis")
+    st.caption("Portfolio Management: Brand Performance Positioning & Tier Health")
+
+    # 1. PREPARE DATA
     brand_performance = calculate_brand_performance(df_forecast, df_po, df_product)
     
     if not brand_performance.empty:
-        # ================ KPI CARDS SECTION ================
-        st.subheader("📊 Brand Performance KPIs")
+        # --- A. BRAND KPI CARDS (Soft Gradient) ---
         
-        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+        # Identify Leaders
+        best_acc_brand = brand_performance.loc[brand_performance['Accuracy'].idxmax()]
+        high_vol_brand = brand_performance.loc[brand_performance['Total_Forecast'].idxmax()]
+        most_sku_brand = brand_performance.loc[brand_performance['SKU_Count'].idxmax()]
         
-        with col_kpi1:
-            # Best accuracy brand
-            best_acc = brand_performance.loc[brand_performance['Accuracy'].idxmax()]
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%); 
-                        border-radius: 10px; padding: 1rem; margin: 0.5rem 0; 
-                        border-left: 5px solid #4CAF50;">
-                <div style="font-size: 0.9rem; color: #2E7D32; font-weight: 600;">🎯 Best Accuracy</div>
-                <div style="font-size: 1.5rem; font-weight: 800; color: #1B5E20;">{best_acc['Brand']}</div>
-                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: #666;">Accuracy:</span>
-                    <span style="font-size: 1rem; font-weight: 700; color: #1B5E20;">{best_acc['Accuracy']:.1f}%</span>
+        # Calculate weighted accuracy (Total accuracy of all brands weighted by volume)
+        total_vol = brand_performance['Total_Forecast'].sum()
+        weighted_acc = (brand_performance['Accuracy'] * brand_performance['Total_Forecast']).sum() / total_vol if total_vol > 0 else 0
+
+        # CSS Styles (Reused & Adapted)
+        st.markdown("""
+        <style>
+            .b-card {
+                border-radius: 12px;
+                padding: 1.2rem;
+                color: white;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+                position: relative;
+                overflow: hidden;
+                transition: transform 0.3s ease;
+            }
+            .b-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); }
+            .b-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-bottom: 5px; }
+            .b-val { font-size: 1.4rem; font-weight: 800; margin-bottom: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .b-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; display: flex; align-items: center; gap: 5px; }
+            .b-badge { background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; backdrop-filter: blur(4px); }
+        </style>
+        """, unsafe_allow_html=True)
+
+        def render_brand_card(label, brand_name, metric_val, metric_label, gradient):
+            return f"""
+            <div class="b-card" style="background: {gradient};">
+                <div class="b-label">{label}</div>
+                <div class="b-val">{brand_name}</div>
+                <div class="b-sub">
+                    <span class="b-badge">{metric_val}</span> {metric_label}
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """
+
+        bc1, bc2, bc3, bc4 = st.columns(4)
         
-        with col_kpi2:
-            # Most SKUs brand
-            most_skus = brand_performance.loc[brand_performance['SKU_Count'].idxmax()]
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); 
-                        border-radius: 10px; padding: 1rem; margin: 0.5rem 0; 
-                        border-left: 5px solid #2196F3;">
-                <div style="font-size: 0.9rem; color: #1565C0; font-weight: 600;">📦 Most SKUs</div>
-                <div style="font-size: 1.5rem; font-weight: 800; color: #0D47A1;">{most_skus['Brand']}</div>
-                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: #666;">SKUs:</span>
-                    <span style="font-size: 1rem; font-weight: 700; color: #0D47A1;">{most_skus['SKU_Count']}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_kpi3:
-            # Highest volume brand
-            highest_rofo = brand_performance.loc[brand_performance['Total_Forecast'].idxmax()]
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #F3E5F5 0%, #E1BEE7 100%); 
-                        border-radius: 10px; padding: 1rem; margin: 0.5rem 0; 
-                        border-left: 5px solid #9C27B0;">
-                <div style="font-size: 0.9rem; color: #7B1FA2; font-weight: 600;">📈 Highest Volume</div>
-                <div style="font-size: 1.5rem; font-weight: 800; color: #4A148C;">{highest_rofo['Brand']}</div>
-                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
-                    <span style="font-size: 0.8rem; color: #666;">Rofo Qty:</span>
-                    <span style="font-size: 1rem; font-weight: 700; color: #4A148C;">{highest_rofo['Total_Forecast']:,.0f}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # ================ FINANCIAL ANALYSIS PER BRAND ================
-        st.divider()
-        st.subheader("💰 Brand - Forecast Amount (Full Year)")
-        
-        if not df_financial.empty:
-            brand_financial = df_financial.groupby('Brand').agg({
-                'Revenue': 'sum',
-                'Gross_Margin': 'sum',
-                'Sales_Qty': 'sum'
-            }).reset_index()
+        with bc1:
+            st.markdown(render_brand_card(
+                "🏆 Best Accuracy", best_acc_brand['Brand'], f"{best_acc_brand['Accuracy']:.1f}%", "Accuracy",
+                "linear-gradient(135deg, #10B981 0%, #059669 100%)" # Emerald
+            ), unsafe_allow_html=True)
             
-            brand_financial['Margin_Percentage'] = np.where(
-                brand_financial['Revenue'] > 0,
-                (brand_financial['Gross_Margin'] / brand_financial['Revenue'] * 100),
-                0
+        with bc2:
+            st.markdown(render_brand_card(
+                "📦 Highest Volume", high_vol_brand['Brand'], f"{high_vol_brand['Total_Forecast']:,.0f}", "Units Fcst",
+                "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)" # Indigo
+            ), unsafe_allow_html=True)
+            
+        with bc3:
+            st.markdown(render_brand_card(
+                "🗂️ Most SKUs", most_sku_brand['Brand'], f"{most_sku_brand['SKU_Count']}", "Active Items",
+                "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" # Amber
+            ), unsafe_allow_html=True)
+            
+        with bc4:
+            st.markdown(render_brand_card(
+                "⚖️ Portfolio Health", "Weighted Avg", f"{weighted_acc:.1f}%", "Global Accuracy",
+                "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" # Blue
+            ), unsafe_allow_html=True)
+
+        # --- B. STRATEGIC MAGIC QUADRANT (SCATTER PLOT) ---
+        st.write("")
+        st.subheader("🎯 Strategic Brand Positioning (Magic Quadrant)")
+        st.caption("Visualizing Brand Performance: Volume vs Accuracy")
+        
+        col_quad1, col_quad2 = st.columns([3, 1])
+        
+        with col_quad1:
+            # Prepare Data for Scatter
+            scatter_data = brand_performance.copy()
+            median_vol = scatter_data['Total_Forecast'].median()
+            target_acc = 80
+            
+            # Create Custom Hover Text
+            scatter_data['hover_text'] = scatter_data.apply(
+                lambda row: f"<b>{row['Brand']}</b><br>SKUs: {row['SKU_Count']}<br>Rofo: {row['Total_Forecast']:,.0f}<br>Acc: {row['Accuracy']:.1f}%", axis=1
             )
             
-            brand_financial = brand_financial.sort_values('Gross_Margin', ascending=False)
+            fig_quad = px.scatter(
+                scatter_data,
+                x='Total_Forecast',
+                y='Accuracy',
+                size='SKU_Count',
+                color='Accuracy', # Color by accuracy
+                text='Brand',     # Show brand label
+                color_continuous_scale='RdYlGn', # Red to Green
+                size_max=60,
+                custom_data=['Brand', 'SKU_Count', 'Total_Forecast', 'Accuracy']
+            )
             
-            col1, col2 = st.columns(2)
+            # Add Quadrant Zones (Background Shapes)
+            # 1. High Risk (High Vol, Low Acc) - Bottom Right
+            fig_quad.add_shape(type="rect",
+                x0=median_vol, y0=0, x1=scatter_data['Total_Forecast'].max()*1.1, y1=target_acc,
+                fillcolor="rgba(239, 68, 68, 0.1)", line_width=0, layer="below"
+            )
+            # 2. Stars (High Vol, High Acc) - Top Right
+            fig_quad.add_shape(type="rect",
+                x0=median_vol, y0=target_acc, x1=scatter_data['Total_Forecast'].max()*1.1, y1=110,
+                fillcolor="rgba(16, 185, 129, 0.1)", line_width=0, layer="below"
+            )
             
-            with col1:
-                # --- UPDATE: Format angka jadi String biar ada komanya (Rp 1,000,000) ---
-                brand_disp = brand_financial.head(10).copy()
-                brand_disp['Revenue'] = brand_disp['Revenue'].apply(lambda x: f"Rp {x:,.0f}")
-                brand_disp['Gross_Margin'] = brand_disp['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}")
+            # Add Reference Lines
+            fig_quad.add_hline(y=target_acc, line_dash="dash", line_color="gray", annotation_text="Target 80%")
+            fig_quad.add_vline(x=median_vol, line_dash="dash", line_color="gray", annotation_text="Median Vol")
+
+            fig_quad.update_traces(
+                textposition='top center',
+                hovertemplate="<b>%{customdata[0]}</b><br>Accuracy: %{y:.1f}%<br>Volume: %{x:,.0f}<br>SKUs: %{marker.size}<extra></extra>"
+            )
+            
+            fig_quad.update_layout(
+                height=500,
+                xaxis_title="Forecast Volume (Log Scale)",
+                yaxis_title="Forecast Accuracy (%)",
+                xaxis_type="log", # Log scale for better visibility of volume diff
+                yaxis_range=[40, 105],
+                plot_bgcolor="white",
+                margin=dict(t=20, l=20, r=20, b=20)
+            )
+            
+            st.plotly_chart(fig_quad, use_container_width=True)
+
+        with col_quad2:
+            # Quadrant Explainer
+            st.markdown("""
+            <div style="background:#f9fafb; padding:15px; border-radius:10px; border:1px solid #eee; font-size:0.85rem;">
+                <h5 style="margin-top:0;">Quadrant Guide</h5>
                 
-                st.dataframe(
-                    brand_disp,
-                    column_config={
-                        # Revenue & Gross Margin gak perlu config lagi karena sudah jadi Text di atas
-                        "Margin_Percentage": st.column_config.ProgressColumn("Margin %", format="%.1f%%", min_value=0, max_value=100)
-                    },
-                    use_container_width=True
-                )
-            
-            with col2:
-                # Chart brand profitability (Tidak berubah)
-                fig = px.bar(brand_financial.head(10), x='Brand', y='Margin_Percentage',
-                            title='Top 10 Brands by Margin %',
-                            color='Margin_Percentage',
-                            color_continuous_scale='RdYlGn')
+                <p><strong>🌟 STARS (Top Right)</strong><br>
+                <span style="color:#10B981;">High Vol / High Acc</span><br>
+                Brand performa terbaik. Pertahankan stok & service level.</p>
                 
-                fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # ================ DATA TABLE SECTION ================
+                <p><strong>🚨 RISK AREA (Bottom Right)</strong><br>
+                <span style="color:#EF4444;">High Vol / Low Acc</span><br>
+                <b>Prioritas Perbaikan!</b> Kesalahan forecast di sini berdampak besar pada stok/sales.</p>
+                
+                <p><strong>❓ QUESTION (Top Left)</strong><br>
+                <span style="color:#F59E0B;">Low Vol / High Acc</span><br>
+                Niche player yang stabil. Potensi untuk di-scale up?</p>
+                
+                <p><strong>💤 SLEEPERS (Bottom Left)</strong><br>
+                <span style="color:#6B7280;">Low Vol / Low Acc</span><br>
+                Kurang signifikan. Evaluasi portofolio SKU.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # --- C. TIER & BRAND HIERARCHY (SUNBURST CHART) ---
         st.divider()
-        st.subheader("📋 Brand Performance Data")
+        c_tier1, c_tier2 = st.columns(2)
         
-        # Format the display
-        display_brand_df = brand_performance.copy()
-        
-        # Format columns
-        display_brand_df['Accuracy'] = display_brand_df['Accuracy'].apply(lambda x: f"{x:.1f}%")
-        display_brand_df['PO_vs_Forecast_Ratio'] = display_brand_df['PO_vs_Forecast_Ratio'].apply(lambda x: f"{x:.1f}%")
-        display_brand_df['Total_Forecast'] = display_brand_df['Total_Forecast'].apply(lambda x: f"{x:,.0f}")
-        display_brand_df['Total_PO'] = display_brand_df['Total_PO'].apply(lambda x: f"{x:,.0f}")
-        display_brand_df['Qty_Difference'] = display_brand_df['Qty_Difference'].apply(lambda x: f"{x:+,.0f}")
-        
-        # Rename columns
-        column_names = {
-            'Brand': 'Brand',
-            'SKU_Count': 'SKU Count',
-            'Total_Forecast': 'Total Rofo',
-            'Total_PO': 'Total PO',
-            'Accuracy': 'Accuracy %',
-            'PO_vs_Forecast_Ratio': 'PO/Rofo %',
-            'Qty_Difference': 'Qty Diff',
-            'Under': 'Under',
-            'Accurate': 'Accurate',
-            'Over': 'Over'
-        }
-        
-        display_brand_df = display_brand_df.rename(columns=column_names)
-        
-        # Display table
-        st.dataframe(
-            display_brand_df,
-            use_container_width=True,
-            height=400
-        )
-        
-        # ================ GROUPED BAR CHART SECTION ================
-        st.divider()
-        st.subheader("📊 Brand Performance Comparison")
-        
-        # PENTING: Cari bulan terakhir yang ADA DATA SALES-nya
-        sales_months = sorted(df_sales['Month'].unique()) if not df_sales.empty else []
-        forecast_months = sorted(df_forecast['Month'].unique()) if not df_forecast.empty else []
-        po_months = sorted(df_po['Month'].unique()) if not df_po.empty else []
-        
-        # Cari bulan terakhir yang ADA di ketiga dataset
-        common_months = sorted(set(sales_months) & set(forecast_months) & set(po_months))
-        if common_months:
-            last_month = common_months[-1]
-        else:
-            # Kalau ngga ada bulan yang sama, ambil bulan terakhir dari forecast saja
-            last_month = forecast_months[-1] if forecast_months else None
-        
-        if last_month:
-            st.caption(f"📅 Data untuk bulan: {last_month.strftime('%b %Y')}")
+        with c_tier1:
+            st.subheader("🧬 Tier & Brand Hierarchy")
+            st.caption("Distribution of SKUs by Tier -> Brand")
             
-            # Get data untuk bulan terakhir
-            df_forecast_last = df_forecast[df_forecast['Month'] == last_month]
-            df_po_last = df_po[df_po['Month'] == last_month]
-            df_sales_last = df_sales[df_sales['Month'] == last_month]
-            
-            # Debug info
-            st.caption(f"Forecast SKUs: {len(df_forecast_last)} | PO SKUs: {len(df_po_last)} | Sales SKUs: {len(df_sales_last)}")
-            
-            # Add product info
-            df_forecast_last = add_product_info_to_data(df_forecast_last, df_product)
-            df_po_last = add_product_info_to_data(df_po_last, df_product)
-            df_sales_last = add_product_info_to_data(df_sales_last, df_product)
-            
-            if 'Brand' in df_forecast_last.columns:
-                # Get UNIQUE BRANDS dari semua dataset
-                forecast_brands = set(df_forecast_last['Brand'].dropna().unique())
-                po_brands = set(df_po_last['Brand'].dropna().unique()) if 'Brand' in df_po_last.columns else set()
-                sales_brands = set(df_sales_last['Brand'].dropna().unique()) if 'Brand' in df_sales_last.columns else set()
+            # Prepare Data for Sunburst
+            if not df_product.empty and 'SKU_Tier' in df_product.columns:
+                # Use product master active items
+                sunburst_data = df_product[df_product['Status'].str.upper() == 'ACTIVE'].groupby(['SKU_Tier', 'Brand']).size().reset_index(name='Count')
                 
-                # Gabungkan semua brand
-                all_brands = forecast_brands.union(po_brands).union(sales_brands)
-                
-                brand_comparison = []
-                
-                for brand in sorted(all_brands):
-                    # Forecast
-                    rofo_qty = df_forecast_last[df_forecast_last['Brand'] == brand]['Forecast_Qty'].sum()
-                    
-                    # PO
-                    po_qty = df_po_last[df_po_last['Brand'] == brand]['PO_Qty'].sum() if 'Brand' in df_po_last.columns else 0
-                    
-                    # Sales
-                    sales_qty = 0
-                    if not df_sales_last.empty and 'Brand' in df_sales_last.columns:
-                        sales_qty = df_sales_last[df_sales_last['Brand'] == brand]['Sales_Qty'].sum()
-                    
-                    brand_comparison.append({
-                        'Brand': brand,
-                        'Rofo': rofo_qty,
-                        'PO': po_qty,
-                        'Sales': sales_qty,
-                        'PO_Rofo_Ratio': (po_qty / rofo_qty * 100) if rofo_qty > 0 else 0
-                    })
-                
-                comparison_df = pd.DataFrame(brand_comparison)
-                
-                # TAMPILKAN SEMUA BRAND (tanpa .head())
-                comparison_df = comparison_df.sort_values('Rofo', ascending=False)
-                
-                # Tampilkan jumlah brand
-                st.caption(f"📊 Menampilkan {len(comparison_df)} brand")
-                
-                # Cek apakah ada data Sales
-                total_sales = comparison_df['Sales'].sum()
-                
-                if total_sales > 0:
-                    # Buat chart dengan 3 bar (Rofo, PO, Sales)
-                    fig = go.Figure()
-                    
-                    fig.add_trace(go.Bar(
-                        x=comparison_df['Brand'],
-                        y=comparison_df['Rofo'],
-                        name='Rofo',
-                        marker_color='#667eea',
-                        hovertemplate='<b>%{x}</b><br>Rofo: %{y:,.0f}<extra></extra>'
-                    ))
-                    
-                    fig.add_trace(go.Bar(
-                        x=comparison_df['Brand'],
-                        y=comparison_df['PO'],
-                        name='PO',
-                        marker_color='#FF9800',
-                        hovertemplate='<b>%{x}</b><br>PO: %{y:,.0f}<extra></extra>'
-                    ))
-                    
-                    fig.add_trace(go.Bar(
-                        x=comparison_df['Brand'],
-                        y=comparison_df['Sales'],
-                        name='Sales',
-                        marker_color='#4CAF50',
-                        hovertemplate='<b>%{x}</b><br>Sales: %{y:,.0f}<extra></extra>'
-                    ))
-                    
-                    chart_title = f'Brand Performance - {last_month.strftime("%b %Y")} (Rofo vs PO vs Sales)'
-                else:
-                    # Kalau ngga ada Sales, tampilkan cuma Rofo vs PO
-                    st.info("ℹ️ Data Sales tidak tersedia untuk bulan ini, menampilkan Rofo vs PO saja")
-                    
-                    fig = go.Figure()
-                    
-                    fig.add_trace(go.Bar(
-                        x=comparison_df['Brand'],
-                        y=comparison_df['Rofo'],
-                        name='Rofo',
-                        marker_color='#667eea',
-                        hovertemplate='<b>%{x}</b><br>Rofo: %{y:,.0f}<extra></extra>'
-                    ))
-                    
-                    fig.add_trace(go.Bar(
-                        x=comparison_df['Brand'],
-                        y=comparison_df['PO'],
-                        name='PO',
-                        marker_color='#FF9800',
-                        hovertemplate='<b>%{x}</b><br>PO: %{y:,.0f}<extra></extra>'
-                    ))
-                    
-                    chart_title = f'Brand Performance - {last_month.strftime("%b %Y")} (Rofo vs PO)'
-                
-                fig.update_layout(
-                    height=500,
-                    title=chart_title,
-                    xaxis_title='Brand',
-                    yaxis_title='Quantity',
-                    barmode='group',
-                    hovermode='x unified',
-                    plot_bgcolor='white',
-                    xaxis={'categoryorder': 'total descending'}
+                fig_sun = px.sunburst(
+                    sunburst_data,
+                    path=['SKU_Tier', 'Brand'],
+                    values='Count',
+                    color='SKU_Tier',
+                    color_discrete_sequence=px.colors.qualitative.Pastel
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # ================ ACCURACY VISUALIZATION SECTION ================
-        st.divider()
-        st.subheader("🎯 Brand Accuracy Overview")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Gauge chart for top brand accuracy
-            if 'comparison_df' in locals() and not comparison_df.empty:
-                top_brand = comparison_df.iloc[0]
-                
-                # Hitung accuracy untuk top brand
-                top_accuracy = 0
-                if top_brand['Rofo'] > 0:
-                    top_accuracy = 100 - abs(top_brand['PO_Rofo_Ratio'] - 100)
-                
-                fig_gauge = go.Figure(go.Indicator(
-                    mode="gauge+number+delta",
-                    value=top_accuracy,
-                    domain={'x': [0, 1], 'y': [0, 1]},
-                    title={'text': f"Top Brand: {top_brand['Brand']}"},
-                    delta={'reference': 80, 'increasing': {'color': "green"}},
-                    gauge={
-                        'axis': {'range': [0, 100], 'tickwidth': 1},
-                        'bar': {'color': "#667eea"},
-                        'steps': [
-                            {'range': [0, 70], 'color': "#FF5252"},
-                            {'range': [70, 85], 'color': "#FF9800"},
-                            {'range': [85, 100], 'color': "#4CAF50"}
-                        ],
-                        'threshold': {
-                            'line': {'color': "red", 'width': 4},
-                            'thickness': 0.75,
-                            'value': 80
-                        }
-                    }
-                ))
-                
-                fig_gauge.update_layout(height=300)
-                st.plotly_chart(fig_gauge, use_container_width=True)
-        
-        with col2:
-            # Horizontal bar chart for accuracy ranking
-            if 'comparison_df' in locals() and not comparison_df.empty:
-                # Hitung accuracy untuk semua brand
-                comparison_df['Accuracy'] = comparison_df.apply(
-                    lambda row: 100 - abs(row['PO_Rofo_Ratio'] - 100) if row['Rofo'] > 0 else 0,
-                    axis=1
-                )
-                
-                accuracy_sorted = comparison_df.sort_values('Accuracy', ascending=True)
-                
-                fig_accuracy = go.Figure()
-                
-                fig_accuracy.add_trace(go.Bar(
-                    y=accuracy_sorted['Brand'],
-                    x=accuracy_sorted['Accuracy'],
-                    orientation='h',
-                    marker_color=accuracy_sorted['Accuracy'].apply(
-                        lambda x: '#4CAF50' if x >= 80 else '#FF9800' if x >= 70 else '#FF5252'
-                    ),
-                    text=accuracy_sorted['Accuracy'].apply(lambda x: f"{x:.1f}%"),
-                    textposition='outside'
-                ))
-                
-                fig_accuracy.update_layout(
-                    height=300,
-                    title='Brand Accuracy Ranking',
-                    xaxis_title='Accuracy (%)',
-                    yaxis_title='Brand',
-                    xaxis_range=[0, 100]
-                )
-                
-                st.plotly_chart(fig_accuracy, use_container_width=True)
-        
-        # ================ HEATMAP SECTION ================
-        st.divider()
-        st.subheader("📊 Brand Performance Status Heatmap")
-        
-        # Prepare data for heatmap
-        status_data = []
-        for _, row in display_brand_df.iterrows():
-            brand = row['Brand']
-            total_skus = int(str(row['SKU Count']).replace(',', ''))
-            under = int(row['Under']) if pd.notnull(row['Under']) else 0
-            accurate = int(row['Accurate']) if pd.notnull(row['Accurate']) else 0
-            over = int(row['Over']) if pd.notnull(row['Over']) else 0
+                fig_sun.update_layout(height=400, margin=dict(t=0, l=0, r=0, b=0))
+                st.plotly_chart(fig_sun, use_container_width=True)
+            else:
+                st.info("Insufficient data for hierarchy chart")
+
+        with c_tier2:
+            st.subheader("🕸️ Tier Performance Radar")
+            st.caption("Comparing Forecast Accuracy across Tiers")
             
-            status_data.append({
-                'Brand': brand,
-                'Under': (under/total_skus*100) if total_skus > 0 else 0,
-                'Accurate': (accurate/total_skus*100) if total_skus > 0 else 0,
-                'Over': (over/total_skus*100) if total_skus > 0 else 0
-            })
-        
-        status_df = pd.DataFrame(status_data)
-        status_df = status_df.sort_values('Accurate', ascending=False)
-        
-        fig_heatmap = go.Figure()
-        
-        fig_heatmap.add_trace(go.Heatmap(
-            z=[status_df['Under'], status_df['Accurate'], status_df['Over']],
-            x=status_df['Brand'].tolist(),
-            y=['Under %', 'Accurate %', 'Over %'],
-            colorscale=[[0, '#FF5252'], [0.5, '#FF9800'], [1, '#4CAF50']],
-            text=np.round([status_df['Under'], status_df['Accurate'], status_df['Over']], 1),
-            texttemplate='%{text:.1f}%',
-            hovertemplate='<b>%{y}</b><br>Brand: %{x}<br>Percentage: %{text:.1f}%<extra></extra>'
-        ))
-        
-        fig_heatmap.update_layout(
-            height=400,
-            title='Brand Performance Distribution',
-            xaxis_title='Brand',
-            yaxis_title='Performance Status'
-        )
-        
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-        
-        # ================ SCATTER PLOT SECTION ================
+            # Prepare Data for Radar
+            # We need accuracy per Tier
+            if monthly_performance:
+                last_month = sorted(monthly_performance.keys())[-1]
+                last_month_data = monthly_performance[last_month]['data']
+                
+                if 'SKU_Tier' in last_month_data.columns:
+                    tier_perf = last_month_data.groupby('SKU_Tier').apply(
+                        lambda x: pd.Series({
+                            'Accuracy': 100 - abs(x['PO_Rofo_Ratio'] - 100).mean(),
+                            'Volume': x['Forecast_Qty'].sum()
+                        })
+                    ).reset_index()
+                    
+                    # Normalize volume for chart context if needed, but let's stick to Accuracy for Radar
+                    
+                    fig_radar = go.Figure()
+                    
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=tier_perf['Accuracy'],
+                        theta=tier_perf['SKU_Tier'],
+                        fill='toself',
+                        name='Accuracy %',
+                        line_color='#8B5CF6', # Violet
+                        fillcolor='rgba(139, 92, 246, 0.2)'
+                    ))
+                    
+                    # Add Target Line (80%)
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=[80] * len(tier_perf),
+                        theta=tier_perf['SKU_Tier'],
+                        mode='lines',
+                        name='Target (80%)',
+                        line=dict(color='gray', dash='dash'),
+                        hoverinfo='skip'
+                    ))
+                    
+                    fig_radar.update_layout(
+                        polar=dict(
+                            radialaxis=dict(visible=True, range=[0, 100])
+                        ),
+                        showlegend=True,
+                        height=400,
+                        margin=dict(t=20, b=20)
+                    )
+                    
+                    st.plotly_chart(fig_radar, use_container_width=True)
+
+        # --- D. DETAILED BRAND TABLE ---
         st.divider()
-        st.subheader("🔍 Brand Performance Scatter Analysis")
-        
-        # Prepare data for scatter plot
-        scatter_data = brand_performance.copy()
-        
-        # Create scatter plot
-        fig_scatter = px.scatter(
-            scatter_data,
-            x='Total_Forecast',
-            y='Accuracy',
-            size='SKU_Count',
-            color='PO_vs_Forecast_Ratio',
-            hover_name='Brand',
-            hover_data=['SKU_Count', 'Total_PO', 'Under', 'Accurate', 'Over'],
-            title='Brand Performance: Accuracy vs Forecast Volume',
-            labels={
-                'Total_Forecast': 'Total Forecast Volume',
-                'Accuracy': 'Forecast Accuracy (%)',
-                'SKU_Count': 'Number of SKUs',
-                'PO_vs_Forecast_Ratio': 'PO/Rofo Ratio (%)'
-            },
-            color_continuous_scale='RdYlGn',
-            size_max=50
-        )
-        
-        # Add quadrant lines
-        fig_scatter.add_hline(y=80, line_dash="dash", line_color="gray", 
-                             annotation_text="Accuracy Target (80%)")
-        fig_scatter.add_vline(x=scatter_data['Total_Forecast'].median(), 
-                             line_dash="dash", line_color="gray",
-                             annotation_text="Median Volume")
-        
-        fig_scatter.update_layout(
-            height=500,
-            xaxis_title='Total Forecast Volume (log scale)',
-            xaxis_type='log',
-            plot_bgcolor='white'
-        )
-        
-        st.plotly_chart(fig_scatter, use_container_width=True)
-        
-        # Quadrant analysis
-        st.subheader("📊 Brand Performance Quadrants")
-        
-        # Calculate quadrant metrics
-        median_volume = scatter_data['Total_Forecast'].median()
-        
-        quadrants = {
-            'High Accuracy, High Volume': scatter_data[
-                (scatter_data['Accuracy'] >= 80) & 
-                (scatter_data['Total_Forecast'] >= median_volume)
-            ],
-            'High Accuracy, Low Volume': scatter_data[
-                (scatter_data['Accuracy'] >= 80) & 
-                (scatter_data['Total_Forecast'] < median_volume)
-            ],
-            'Low Accuracy, High Volume': scatter_data[
-                (scatter_data['Accuracy'] < 80) & 
-                (scatter_data['Total_Forecast'] >= median_volume)
-            ],
-            'Low Accuracy, Low Volume': scatter_data[
-                (scatter_data['Accuracy'] < 80) & 
-                (scatter_data['Total_Forecast'] < median_volume)
-            ]
-        }
-        
-        # Display quadrant summary
-        quad_cols = st.columns(4)
-        quad_colors = ['#4CAF50', '#8BC34A', '#FF9800', '#F44336']
-        
-        for idx, (quadrant_name, quadrant_data) in enumerate(quadrants.items()):
-            with quad_cols[idx]:
-                count = len(quadrant_data)
-                percent = (count / len(scatter_data) * 100) if len(scatter_data) > 0 else 0
-                
-                # Get top brand in quadrant
-                top_brand = quadrant_data.iloc[0]['Brand'] if not quadrant_data.empty else "N/A"
-                
-                st.markdown(f"""
-                <div style="background: white; border-radius: 10px; padding: 1rem; 
-                            margin: 0.5rem 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-                            border-left: 5px solid {quad_colors[idx]};">
-                    <div style="font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
-                        {quadrant_name}
-                    </div>
-                    <div style="font-size: 1.8rem; font-weight: 800; color: #333;">
-                        {count}
-                    </div>
-                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.3rem;">
-                        {percent:.1f}% of brands
-                    </div>
-                    <div style="font-size: 0.7rem; color: #999; margin-top: 0.5rem; border-top: 1px solid #eee; padding-top: 0.3rem;">
-                        Top: {top_brand}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
+        with st.expander("📋 View Detailed Brand Performance Data", expanded=False):
+            # Clean up dataframe for display
+            disp_brand_df = brand_performance.copy()
+            disp_brand_df['Accuracy'] = disp_brand_df['Accuracy'].apply(lambda x: f"{x:.1f}%")
+            disp_brand_df['PO_vs_Forecast_Ratio'] = disp_brand_df['PO_vs_Forecast_Ratio'].apply(lambda x: f"{x:.1f}%")
+            disp_brand_df['Total_Forecast'] = disp_brand_df['Total_Forecast'].apply(lambda x: f"{x:,.0f}")
+            disp_brand_df['Total_PO'] = disp_brand_df['Total_PO'].apply(lambda x: f"{x:,.0f}")
+            
+            # Reorder
+            cols = ['Brand', 'SKU_Count', 'Total_Forecast', 'Total_PO', 'Accuracy', 'PO_vs_Forecast_Ratio', 'Under', 'Accurate', 'Over']
+            st.dataframe(disp_brand_df[cols], use_container_width=True)
+
     else:
-        st.info("📊 No brand performance data available")
-    
-    st.divider()
-    
-    # ================ TIER ANALYSIS SECTION ================
-    st.subheader("🏷️ SKU Tier Analysis")
-    
-    if monthly_performance and not df_product.empty:
-        # Get last month data for tier analysis
-        last_month = sorted(monthly_performance.keys())[-1]
-        last_month_data = monthly_performance[last_month]['data']
-        
-        # Tier analysis
-        if 'SKU_Tier' in last_month_data.columns:
-            tier_summary = last_month_data.groupby('SKU_Tier').agg({
-                'SKU_ID': 'count',
-                'PO_Rofo_Ratio': 'mean',
-                'Forecast_Qty': 'sum',
-                'PO_Qty': 'sum'
-            }).reset_index()
-            
-            tier_summary.columns = ['Tier', 'SKU Count', 'Avg PO/Rofo %', 'Total Forecast', 'Total PO']
-            tier_summary['Avg PO/Rofo %'] = tier_summary['Avg PO/Rofo %'].apply(lambda x: f"{x:.1f}%")
-            
-            col_t1, col_t2 = st.columns(2)
-            
-            with col_t1:
-                st.dataframe(
-                    tier_summary,
-                    use_container_width=True,
-                    height=300
-                )
-            
-            with col_t2:
-                # Pie chart for tier distribution
-                fig_pie = go.Figure(data=[go.Pie(
-                    labels=tier_summary['Tier'],
-                    values=tier_summary['SKU Count'],
-                    hole=0.3,
-                    marker_colors=['#667eea', '#FF9800', '#4CAF50', '#FF5252', '#9C27B0'],
-                    textinfo='label+percent',
-                    hovertemplate='<b>%{label}</b><br>SKUs: %{value}<br>%{percent}<extra></extra>'
-                )])
-                
-                fig_pie.update_layout(
-                    height=300,
-                    title='SKU Distribution by Tier',
-                    showlegend=False
-                )
-                
-                st.plotly_chart(fig_pie, use_container_width=True)
-            
-            # Tier Performance Comparison
-            st.subheader("📈 Tier Performance Comparison")
-            
-            # Prepare data for radar chart
-            tiers = tier_summary['Tier'].tolist()
-            accuracy_values = []
-            po_rofo_values = []
-            
-            for tier in tiers:
-                tier_data = last_month_data[last_month_data['SKU_Tier'] == tier]
-                if not tier_data.empty:
-                    # Calculate accuracy
-                    accuracy = 100 - abs(tier_data['PO_Rofo_Ratio'] - 100).mean()
-                    accuracy_values.append(accuracy)
-                    
-                    # Calculate PO/Rofo ratio
-                    po_rofo = (tier_data['PO_Qty'].sum() / tier_data['Forecast_Qty'].sum() * 100) if tier_data['Forecast_Qty'].sum() > 0 else 0
-                    po_rofo_values.append(po_rofo)
-            
-            # Radar chart
-            fig_radar = go.Figure()
-            
-            fig_radar.add_trace(go.Scatterpolar(
-                r=accuracy_values,
-                theta=tiers,
-                fill='toself',
-                name='Accuracy %',
-                line_color='#667eea',
-                fillcolor='rgba(102, 126, 234, 0.3)'
-            ))
-            
-            fig_radar.add_trace(go.Scatterpolar(
-                r=po_rofo_values,
-                theta=tiers,
-                fill='toself',
-                name='PO/Rofo %',
-                line_color='#FF9800',
-                fillcolor='rgba(255, 152, 0, 0.3)'
-            ))
-            
-            fig_radar.update_layout(
-                height=400,
-                title='Tier Performance Radar Chart',
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, max(max(accuracy_values), max(po_rofo_values)) * 1.1]
-                    )
-                ),
-                showlegend=True
-            )
-            
-            st.plotly_chart(fig_radar, use_container_width=True)
-        
-        # Inventory tier analysis
-        if 'tier_analysis' in inventory_metrics:
-            st.divider()
-            st.subheader("📦 Inventory by Tier")
-            
-            tier_inv = inventory_metrics['tier_analysis']
-            
-            # Treemap for inventory distribution
-            fig_treemap = px.treemap(
-                tier_inv,
-                path=['Tier'],
-                values='Total_Stock',
-                color='Avg_Cover_Months',
-                color_continuous_scale='RdYlGn',
-                title='Inventory Distribution by Tier (Size = Total Stock, Color = Cover Months)',
-                hover_data=['SKU_Count', 'Total_Sales_3M_Avg', 'Turnover']
-            )
-            
-            fig_treemap.update_layout(height=400)
-            st.plotly_chart(fig_treemap, use_container_width=True)
-            
-            # Additional metrics
-            col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
-            
-            with col_metrics1:
-                if not tier_inv.empty:
-                    best_tier = tier_inv.loc[tier_inv['Turnover'].idxmax()]
-                    st.metric(
-                        "Highest Turnover Tier",
-                        best_tier['Tier'],
-                        delta=f"{best_tier['Turnover']:.2f} Turnover"
-                    )
-            
-            with col_metrics2:
-                if not tier_inv.empty:
-                    best_cover = tier_inv.loc[tier_inv['Avg_Cover_Months'].idxmax()]
-                    st.metric(
-                        "Highest Cover Tier",
-                        best_cover['Tier'],
-                        delta=f"{best_cover['Avg_Cover_Months']:.1f} months"
-                    )
-            
-            with col_metrics3:
-                if not tier_inv.empty:
-                    total_stock = tier_inv['Total_Stock'].sum()
-                    st.metric("Total Stock All Tiers", f"{total_stock:,.0f}")
-            
-            with col_metrics4:
-                if not tier_inv.empty:
-                    avg_cover = tier_inv['Avg_Cover_Months'].mean()
-                    st.metric("Average Cover All Tiers", f"{avg_cover:.1f} months")
+        st.info("📊 No brand performance data available. Ensure Product Master has 'Brand' column and Forecast/PO data is loaded.")
 
 # --- TAB 3: INVENTORY ANALYSIS (FINAL VISUAL VERSION + TIER LOGIC) ---
 with tab3:
