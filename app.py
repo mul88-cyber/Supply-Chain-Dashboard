@@ -2137,7 +2137,7 @@ if last_3_months_performance:
         sales_vs_po = (sales_tot / po_tot * 100) if po_tot > 0 else 0
 
         st.write("") # Spacer
-        st.subheader(f"🔄 Business Flow Performance: {last_month.strftime('%B %Y')}")
+        st.subheader(f"🔄 Business Flow Performance (Rofo -> PO -> Sales Performance): {last_month.strftime('%B %Y')}")
 
         # HTML Structure - TANPA INDENTASI SAMA SEKALI
         html_process = f"""
