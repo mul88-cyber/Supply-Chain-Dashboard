@@ -3974,317 +3974,329 @@ with tab6:
     else:
         st.warning("No data available for selected dataset")
 
-# --- TAB 7: ECOMMERCE FORECAST INTELLIGENCE (SCENARIO PLANNING) ---
+# --- TAB 7: ECOMMERCE FORECAST INTELLIGENCE (MERGED & IMPROVED) ---
 with tab7:
     st.subheader("🔮 Ecommerce Forecast Intelligence")
     st.caption("Future Planning: Seasonality Analysis, Scenario Testing & Anomaly Detection")
 
     # ==============================================================================
-    # 1. DATA PREPARATION (ROBUST MONTH PARSING)
+    # 1. DATA PREPARATION & LOADING (ROBUST FALLBACK LOGIC)
     # ==============================================================================
-    if not df_ecomm_forecast.empty:
-        # Coba deteksi kolom bulan forecast (biasanya format MMM-YY atau MMM YY)
-        # Kita ambil kolom yang bukan identitas produk
-        id_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Status', 'Floor_Price', 'Net_Order_Price']
-        forecast_cols = [c for c in df_ecomm_forecast.columns if c not in id_cols]
+    
+    # Check if main ecomm dataframe is empty
+    if df_ecomm_forecast.empty:
+        st.warning("⚠️ **Forecast_2026_Ecomm sheet not found** - Trying fallback options")
         
-        # Validasi sederhana: Kolom harus mengandung angka
-        valid_fcst_cols = []
-        for c in forecast_cols:
-            # Cek apakah kolom bisa dikonversi jadi angka
+        # Try to use standard forecast data as fallback
+        if not df_forecast.empty:
             try:
-                if df_ecomm_forecast[c].dtype == object:
-                    # Cek sample data
-                    sample = df_ecomm_forecast[c].iloc[0]
-                    if isinstance(sample, str) and any(i.isdigit() for i in sample):
-                        valid_fcst_cols.append(c)
-                elif np.issubdtype(df_ecomm_forecast[c].dtype, np.number):
-                    valid_fcst_cols.append(c)
-            except:
-                pass
-        
-        # Helper: Sort bulan secara kronologis (bukan abjad)
-        def parse_month_sort(col_name):
-            try:
-                # Coba berbagai format: Jan-26, Jan 2026, 01-2026
-                return pd.to_datetime(col_name, errors='coerce')
-            except:
-                return pd.Timestamp.max
-
-        # Sort kolom bulan
-        if valid_fcst_cols:
-            # Buat mapping tanggal
-            col_date_map = []
-            for c in valid_fcst_cols:
-                # Bersihkan nama kolom agar mudah diparse
-                clean_c = str(c).strip()
-                # Coba parse manual jika format susah
-                for fmt in ['%b-%y', '%b %y', '%b-%Y', '%B %Y', '%Y-%m']:
-                    try:
-                        dt = datetime.strptime(clean_c, fmt)
-                        col_date_map.append({'col': c, 'date': dt})
-                        break
-                    except:
-                        continue
-            
-            # Sort list
-            col_date_map.sort(key=lambda x: x['date'])
-            sorted_fcst_cols = [x['col'] for x in col_date_map]
-            
-            # Update dataframe fokus
-            df_fcst_active = df_ecomm_forecast.copy()
-            
-            # Convert values to numeric
-            for c in sorted_fcst_cols:
-                df_fcst_active[c] = pd.to_numeric(df_fcst_active[c], errors='coerce').fillna(0)
-
-            # ==============================================================================
-            # 2. FORECAST HEALTH KPI (PASTEL)
-            # ==============================================================================
-            total_fcst_qty = df_fcst_active[sorted_fcst_cols].sum().sum()
-            avg_monthly = total_fcst_qty / len(sorted_fcst_cols) if sorted_fcst_cols else 0
-            
-            # Value Calculation (jika ada harga)
-            total_fcst_val = 0
-            has_price = False
-            if 'Floor_Price' in df_fcst_active.columns:
-                # Pastikan harga numeric
-                df_fcst_active['Floor_Price'] = pd.to_numeric(df_fcst_active['Floor_Price'], errors='coerce').fillna(0)
-                # Hitung per baris lalu sum
-                row_sums = df_fcst_active[sorted_fcst_cols].sum(axis=1)
-                total_fcst_val = (row_sums * df_fcst_active['Floor_Price']).sum()
-                has_price = True
-
-            # CSS
-            st.markdown("""
-            <style>
-                .fcst-card {
-                    border-radius: 12px; padding: 1.2rem; color: white;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s;
-                }
-                .fcst-card:hover { transform: translateY(-3px); }
-                .fcst-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
-                .fcst-val { font-size: 1.8rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-                .fcst-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
-            </style>
-            """, unsafe_allow_html=True)
-
-            c1, c2, c3 = st.columns(3)
-            
-            with c1:
-                st.markdown(f"""
-                <div class="fcst-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
-                    <div class="fcst-title">Total Forecast Volume</div>
-                    <div class="fcst-val">{total_fcst_qty:,.0f}</div>
-                    <div class="fcst-sub">Units across {len(sorted_fcst_cols)} months</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with c2:
-                val_text = f"Rp {total_fcst_val/1e9:,.1f} M" if has_price else "N/A"
-                sub_text = "Gross Revenue Projection" if has_price else "No Price Data Found"
-                st.markdown(f"""
-                <div class="fcst-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
-                    <div class="fcst-title">Total Forecast Value</div>
-                    <div class="fcst-val">{val_text}</div>
-                    <div class="fcst-sub">{sub_text}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                # Pivot forecast data to wide format
+                forecast_pivot = df_forecast.pivot_table(
+                    index=['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier'],
+                    columns='Month',
+                    values='Forecast_Qty',
+                    aggfunc='sum',
+                    fill_value=0
+                ).reset_index()
                 
-            with c3:
-                peak_month_idx = df_fcst_active[sorted_fcst_cols].sum().argmax()
-                peak_month = sorted_fcst_cols[peak_month_idx]
-                peak_val = df_fcst_active[sorted_fcst_cols].sum().max()
+                # Rename columns to string format
+                forecast_pivot.columns.name = None
+                new_cols = {}
+                for col in forecast_pivot.columns:
+                    if isinstance(col, datetime):
+                        new_cols[col] = col.strftime('%b-%y')
+                forecast_pivot = forecast_pivot.rename(columns=new_cols)
                 
-                st.markdown(f"""
-                <div class="fcst-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
-                    <div class="fcst-title">Peak Season Month</div>
-                    <div class="fcst-val">{peak_month}</div>
-                    <div class="fcst-sub">Vol: {peak_val:,.0f} units</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # ==============================================================================
-            # 3. SEASONALITY & TREND CHART
-            # ==============================================================================
-            st.divider()
-            st.subheader("📈 Monthly Forecast Trend (Seasonality)")
-            
-            # Aggregate per month
-            monthly_agg = df_fcst_active[sorted_fcst_cols].sum().reset_index()
-            monthly_agg.columns = ['Month', 'Qty']
-            
-            # Calculate Average Line
-            avg_line = monthly_agg['Qty'].mean()
-            
-            fig_trend = go.Figure()
-            
-            # Bar Chart
-            fig_trend.add_trace(go.Bar(
-                x=monthly_agg['Month'], y=monthly_agg['Qty'],
-                name='Monthly Forecast',
-                marker_color='#818CF8', # Soft Indigo
-                text=[f"{x:,.0f}" for x in monthly_agg['Qty']],
-                textposition='auto'
-            ))
-            
-            # Average Line
-            fig_trend.add_trace(go.Scatter(
-                x=monthly_agg['Month'], y=[avg_line]*len(monthly_agg),
-                name='Average',
-                mode='lines',
-                line=dict(color='#F59E0B', width=2, dash='dash')
-            ))
-            
-            fig_trend.update_layout(
-                height=400,
-                xaxis_title="Month", yaxis_title="Quantity",
-                plot_bgcolor='white',
-                hovermode="x unified",
-                margin=dict(t=20, b=20, l=20, r=20)
-            )
-            
-            st.plotly_chart(fig_trend, use_container_width=True)
-
-            # ==============================================================================
-            # 4. SCENARIO PLANNER (WHAT-IF ANALYSIS)
-            # ==============================================================================
-            st.divider()
-            st.subheader("🎮 What-If Scenario Planner")
-            st.caption("Simulasikan perubahan demand untuk melihat dampak pada total volume.")
-            
-            col_input, col_viz = st.columns([1, 2])
-            
-            with col_input:
-                st.markdown("##### Scenario Settings")
+                # Identify month columns
+                ecomm_forecast_month_cols = [col for col in forecast_pivot.columns 
+                                           if any(m in str(col).lower() for m in 
+                                           ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+                                            'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])]
                 
-                # Baseline is always 0%
-                growth_pct = st.slider(
-                    "Adjust Growth Rate (%)", 
-                    min_value=-50, max_value=50, value=0, step=5,
-                    help="Geser untuk menaikkan/menurunkan forecast secara global"
-                )
-                
-                tier_filter = st.multiselect(
-                    "Apply to Specific Tier (Optional)",
-                    options=df_fcst_active['SKU_Tier'].unique() if 'SKU_Tier' in df_fcst_active.columns else [],
-                    default=[]
-                )
-                
-                st.info(f"💡 **Scenario:** {'Baseline' if growth_pct==0 else ('Aggressive' if growth_pct>0 else 'Conservative')} ({growth_pct:+}% Growth)")
-
-            with col_viz:
-                # Calculate Scenario
-                df_scenario = df_fcst_active.copy()
-                
-                # Filter Tier if selected
-                mask = pd.Series([True]*len(df_scenario))
-                if tier_filter and 'SKU_Tier' in df_scenario.columns:
-                    mask = df_scenario['SKU_Tier'].isin(tier_filter)
-                
-                # Apply Growth
-                for c in sorted_fcst_cols:
-                    df_scenario.loc[mask, c] = df_scenario.loc[mask, c] * (1 + growth_pct/100)
-                
-                # Aggregate
-                scen_agg = df_scenario[sorted_fcst_cols].sum().reset_index()
-                scen_agg.columns = ['Month', 'Qty_Scenario']
-                
-                # Merge with Baseline
-                merged_scen = pd.merge(monthly_agg, scen_agg, on='Month')
-                merged_scen['Diff'] = merged_scen['Qty_Scenario'] - merged_scen['Qty']
-                
-                # Visualization
-                fig_scen = go.Figure()
-                
-                # Baseline Area
-                fig_scen.add_trace(go.Scatter(
-                    x=merged_scen['Month'], y=merged_scen['Qty'],
-                    name='Baseline Forecast',
-                    mode='lines',
-                    fill='tozeroy',
-                    fillcolor='rgba(129, 140, 248, 0.2)',
-                    line=dict(color='#818CF8', width=2)
-                ))
-                
-                # Scenario Line
-                color_scen = '#10B981' if growth_pct >= 0 else '#EF4444'
-                fig_scen.add_trace(go.Scatter(
-                    x=merged_scen['Month'], y=merged_scen['Qty_Scenario'],
-                    name=f'Scenario ({growth_pct:+}%)',
-                    mode='lines+markers',
-                    line=dict(color=color_scen, width=3, dash='dot')
-                ))
-                
-                fig_scen.update_layout(
-                    height=350,
-                    title="Baseline vs Scenario Projection",
-                    hovermode="x unified",
-                    plot_bgcolor='white',
-                    yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.05)'),
-                    margin=dict(t=30, b=20, l=20, r=20)
-                )
-                st.plotly_chart(fig_scen, use_container_width=True)
-                
-                # Impact Summary
-                diff_total = merged_scen['Diff'].sum()
-                st.caption(f"**Impact Summary:** Total Volume Delta = **{diff_total:+,.0f} units**")
-
-            # ==============================================================================
-            # 5. ANOMALY DETECTION (DATA QUALITY)
-            # ==============================================================================
-            st.divider()
-            st.subheader("🚨 Forecast Anomaly Detection")
-            st.caption("Mendeteksi SKU dengan lonjakan forecast yang tidak wajar (Spike > 3x Rata-rata)")
-            
-            # Logic: Cari SKU yang punya bulan tertentu > 3x rata-rata bulan lainnya (Spike)
-            # Atau SKU yang tiba-tiba 0 (Drop)
-            
-            anomalies = []
-            
-            # Limit check to top 500 SKUs by volume for performance
-            top_skus = df_fcst_active.sort_values(by=sorted_fcst_cols[-1], ascending=False).head(500)
-            
-            for idx, row in top_skus.iterrows():
-                vals = row[sorted_fcst_cols].values
-                avg_val = np.mean(vals)
-                max_val = np.max(vals)
-                
-                # Simple Outlier Logic: Max > 3 * Avg (dan Avg > 10 unit biar ga false alarm di angka kecil)
-                if avg_val > 10 and max_val > (3 * avg_val):
-                    peak_idx = np.argmax(vals)
-                    peak_m = sorted_fcst_cols[peak_idx]
-                    anomalies.append({
-                        'SKU_ID': row['SKU_ID'],
-                        'Product': row.get('Product_Name', 'N/A'),
-                        'Avg_Qty': avg_val,
-                        'Spike_Qty': max_val,
-                        'Spike_Month': peak_m,
-                        'Factor': max_val / avg_val
-                    })
-            
-            if anomalies:
-                df_anom = pd.DataFrame(anomalies).sort_values('Factor', ascending=False)
-                
-                st.warning(f"⚠️ Ditemukan **{len(df_anom)} SKU** dengan pola forecast yang mencurigakan (Lonjakan Ekstrim).")
-                
-                st.dataframe(
-                    df_anom,
-                    column_config={
-                        "Avg_Qty": st.column_config.NumberColumn("Avg Monthly", format="%.0f"),
-                        "Spike_Qty": st.column_config.NumberColumn("Spike Value", format="%.0f"),
-                        "Factor": st.column_config.NumberColumn("Multiplier", format="%.1fx")
-                    },
-                    use_container_width=True
-                )
-            else:
-                st.success("✅ Data Forecast terlihat stabil. Tidak ada lonjakan ekstrim (>3x Rata-rata) pada Top SKU.")
-
+                if ecomm_forecast_month_cols:
+                    df_ecomm_forecast = forecast_pivot
+                    st.success(f"✅ Created fallback data: {len(df_ecomm_forecast)} SKUs, {len(ecomm_forecast_month_cols)} months")
+                else:
+                    st.error("❌ Could not identify month columns in forecast data")
+                    st.stop()
+            except Exception as e:
+                st.error(f"❌ Error creating fallback data: {str(e)}")
+                st.stop()
         else:
-            st.warning("⚠️ Tidak ditemukan kolom bulan (format tanggal) yang valid di data forecast.")
-            st.write("Columns detected:", forecast_cols)
+            st.error("❌ No forecast data available anywhere!")
+            st.stop()
+    
+    # --- At this point, df_ecomm_forecast and ecomm_forecast_month_cols are ready ---
+
+    # Helper: Date Parsing for Sorting
+    def parse_month_sort_safe(col_name):
+        try:
+            clean_name = str(col_name).strip()
+            for fmt in ['%b-%y', '%b %y', '%b-%Y', '%B %Y', '%Y-%m', '%b_%y']:
+                try:
+                    return datetime.strptime(clean_name, fmt)
+                except:
+                    continue
+            return pd.Timestamp.max # Push to end if fail
+        except:
+            return pd.Timestamp.max
+
+    # Helper: Number Formatting
+    def format_kpi_value(val, is_currency=False):
+        if is_currency:
+            if val >= 1_000_000_000: return f"Rp {val/1e9:,.1f} M"
+            elif val >= 1_000_000: return f"Rp {val/1e6:,.1f} Jt"
+            else: return f"Rp {val:,.0f}"
+        else:
+            if val >= 1_000_000: return f"{val/1e6:,.1f} M"
+            elif val >= 1_000: return f"{val:,.0f}"
+            else: return f"{val:.0f}"
+
+    # Sort Columns Chronologically
+    sorted_fcst_cols = sorted(ecomm_forecast_month_cols, key=parse_month_sort_safe)
+    
+    # Ensure numeric data
+    df_fcst_active = df_ecomm_forecast.copy()
+    for c in sorted_fcst_cols:
+        df_fcst_active[c] = pd.to_numeric(df_fcst_active[c], errors='coerce').fillna(0)
+
+    # ==============================================================================
+    # 2. FORECAST HEALTH KPI (PASTEL CARDS)
+    # ==============================================================================
+    total_fcst_qty = df_fcst_active[sorted_fcst_cols].sum().sum()
+    avg_monthly_qty = total_fcst_qty / len(sorted_fcst_cols) if sorted_fcst_cols else 0
+    
+    # Calculate Value
+    total_fcst_val = 0
+    has_price = False
+    
+    # Merge price if not present
+    if 'Floor_Price' not in df_fcst_active.columns:
+        df_fcst_active = add_product_info_to_data(df_fcst_active, df_product)
+        
+    if 'Floor_Price' in df_fcst_active.columns:
+        df_fcst_active['Floor_Price'] = pd.to_numeric(df_fcst_active['Floor_Price'], errors='coerce').fillna(0)
+        # Vectorized calculation
+        qty_sum_per_sku = df_fcst_active[sorted_fcst_cols].sum(axis=1)
+        total_fcst_val = (qty_sum_per_sku * df_fcst_active['Floor_Price']).sum()
+        has_price = True
+
+    # CSS for Cards
+    st.markdown("""
+    <style>
+        .fcst-card {
+            border-radius: 12px; padding: 1.2rem; color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s;
+            position: relative; overflow: hidden;
+        }
+        .fcst-card:hover { transform: translateY(-3px); }
+        .fcst-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
+        .fcst-val { font-size: 1.8rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .fcst-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    
+    with c1:
+        st.markdown(f"""
+        <div class="fcst-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
+            <div class="fcst-title">Total Forecast Volume</div>
+            <div class="fcst-val">{format_kpi_value(total_fcst_qty)}</div>
+            <div class="fcst-sub">Across {len(sorted_fcst_cols)} Months</div>
+        </div>
+        """, unsafe_allow_html=True) # Indigo
+        
+    with c2:
+        val_str = format_kpi_value(total_fcst_val, True) if has_price else "N/A"
+        st.markdown(f"""
+        <div class="fcst-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+            <div class="fcst-title">Total Forecast Value</div>
+            <div class="fcst-val">{val_str}</div>
+            <div class="fcst-sub">Gross Revenue Projection</div>
+        </div>
+        """, unsafe_allow_html=True) # Emerald
+        
+    with c3:
+        st.markdown(f"""
+        <div class="fcst-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+            <div class="fcst-title">Avg Monthly Volume</div>
+            <div class="fcst-val">{format_kpi_value(avg_monthly_qty)}</div>
+            <div class="fcst-sub">Units / Month</div>
+        </div>
+        """, unsafe_allow_html=True) # Amber
+        
+    with c4:
+        monthly_sums = df_fcst_active[sorted_fcst_cols].sum()
+        peak_idx = monthly_sums.argmax() if not monthly_sums.empty else -1
+        peak_month = sorted_fcst_cols[peak_idx] if peak_idx != -1 else "N/A"
+        peak_val = monthly_sums.max() if not monthly_sums.empty else 0
+        
+        st.markdown(f"""
+        <div class="fcst-card" style="background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);">
+            <div class="fcst-title">Peak Season</div>
+            <div class="fcst-val">{str(peak_month).split('.')[0]}</div>
+            <div class="fcst-sub">Vol: {format_kpi_value(peak_val)}</div>
+        </div>
+        """, unsafe_allow_html=True) # Pink
+
+    # ==============================================================================
+    # 3. SEASONALITY & TREND ANALYSIS
+    # ==============================================================================
+    st.divider()
+    st.subheader("📈 Monthly Forecast Trend")
+    
+    # Prepare Data
+    monthly_agg = df_fcst_active[sorted_fcst_cols].sum().reset_index()
+    monthly_agg.columns = ['Month', 'Qty']
+    avg_line = monthly_agg['Qty'].mean()
+    
+    fig_trend = go.Figure()
+    
+    # Bar Chart
+    fig_trend.add_trace(go.Bar(
+        x=monthly_agg['Month'], y=monthly_agg['Qty'],
+        name='Monthly Forecast',
+        marker_color='#818CF8', # Soft Indigo
+        text=[f"{x:,.0f}" for x in monthly_agg['Qty']],
+        textposition='auto'
+    ))
+    
+    # Average Line
+    fig_trend.add_trace(go.Scatter(
+        x=monthly_agg['Month'], y=[avg_line]*len(monthly_agg),
+        name='Average',
+        mode='lines',
+        line=dict(color='#F59E0B', width=2, dash='dash')
+    ))
+    
+    fig_trend.update_layout(
+        height=400,
+        xaxis_title="Month", 
+        yaxis_title="Quantity",
+        plot_bgcolor='white',
+        hovermode="x unified",
+        margin=dict(t=20, b=20, l=20, r=20),
+        legend=dict(orientation="h", y=1.1)
+    )
+    st.plotly_chart(fig_trend, use_container_width=True)
+
+    # ==============================================================================
+    # 4. SCENARIO PLANNER (NEW FEATURE)
+    # ==============================================================================
+    st.divider()
+    st.subheader("🎮 What-If Scenario Planner")
+    
+    col_input, col_viz = st.columns([1, 2])
+    
+    with col_input:
+        st.markdown("##### ⚙️ Scenario Settings")
+        growth_pct = st.slider("Adjust Growth Rate (%)", -50, 50, 0, 5)
+        
+        # Filter Tier
+        tier_opts = df_fcst_active['SKU_Tier'].unique().tolist() if 'SKU_Tier' in df_fcst_active.columns else []
+        tier_filter = st.multiselect("Apply to Tier (Optional)", tier_opts, default=[])
+        
+        scenario_label = 'Baseline' if growth_pct==0 else ('Aggressive' if growth_pct>0 else 'Conservative')
+        st.info(f"💡 **Scenario:** {scenario_label} ({growth_pct:+}% Growth)")
+
+    with col_viz:
+        # Calculate Scenario
+        df_scenario = df_fcst_active.copy()
+        
+        # Apply Growth
+        mask = pd.Series([True]*len(df_scenario))
+        if tier_filter and 'SKU_Tier' in df_scenario.columns:
+            mask = df_scenario['SKU_Tier'].isin(tier_filter)
+        
+        for c in sorted_fcst_cols:
+            df_scenario.loc[mask, c] = df_scenario.loc[mask, c] * (1 + growth_pct/100)
+        
+        # Aggregate
+        scen_agg = df_scenario[sorted_fcst_cols].sum().reset_index()
+        scen_agg.columns = ['Month', 'Qty_Scenario']
+        
+        merged_scen = pd.merge(monthly_agg, scen_agg, on='Month')
+        diff_total = merged_scen['Qty_Scenario'].sum() - merged_scen['Qty'].sum()
+        
+        # Visualization
+        fig_scen = go.Figure()
+        
+        # Baseline Area
+        fig_scen.add_trace(go.Scatter(
+            x=merged_scen['Month'], y=merged_scen['Qty'],
+            name='Baseline',
+            mode='lines',
+            fill='tozeroy',
+            fillcolor='rgba(129, 140, 248, 0.2)',
+            line=dict(color='#818CF8', width=2)
+        ))
+        
+        # Scenario Line
+        color_scen = '#10B981' if growth_pct >= 0 else '#EF4444'
+        fig_scen.add_trace(go.Scatter(
+            x=merged_scen['Month'], y=merged_scen['Qty_Scenario'],
+            name=f'Scenario ({growth_pct:+}%',
+            mode='lines+markers',
+            line=dict(color=color_scen, width=3, dash='dot')
+        ))
+        
+        fig_scen.update_layout(
+            height=350,
+            title=f"Projection Impact: {diff_total:+,.0f} units",
+            hovermode="x unified",
+            plot_bgcolor='white',
+            margin=dict(t=40, b=20, l=20, r=20),
+            legend=dict(orientation="h", y=1.1)
+        )
+        st.plotly_chart(fig_scen, use_container_width=True)
+
+    # ==============================================================================
+    # 5. ANOMALY DETECTION (NEW FEATURE)
+    # ==============================================================================
+    st.divider()
+    st.subheader("🚨 Forecast Anomaly Detection")
+    st.caption("Detecting suspicious forecast spikes (>3x average monthly volume)")
+    
+    anomalies = []
+    # Check top 500 SKUs by volume
+    top_skus = df_fcst_active.copy()
+    top_skus['Total_Vol'] = top_skus[sorted_fcst_cols].sum(axis=1)
+    top_skus = top_skus.sort_values('Total_Vol', ascending=False).head(500)
+    
+    for idx, row in top_skus.iterrows():
+        vals = row[sorted_fcst_cols].values
+        avg_val = np.mean(vals)
+        max_val = np.max(vals)
+        
+        # Logic: Spike > 3x Average AND Avg > 10 units (to avoid noise)
+        if avg_val > 10 and max_val > (3 * avg_val):
+            peak_idx = np.argmax(vals)
+            peak_m = sorted_fcst_cols[peak_idx]
+            anomalies.append({
+                'SKU_ID': row['SKU_ID'],
+                'Product': row.get('Product_Name', 'N/A'),
+                'Avg_Monthly': avg_val,
+                'Spike_Value': max_val,
+                'Spike_Month': peak_m,
+                'Multiplier': max_val / avg_val
+            })
+    
+    if anomalies:
+        df_anom = pd.DataFrame(anomalies).sort_values('Multiplier', ascending=False)
+        st.warning(f"⚠️ Found **{len(df_anom)} SKUs** with extreme forecast spikes.")
+        
+        st.dataframe(
+            df_anom,
+            column_config={
+                "Avg_Monthly": st.column_config.NumberColumn("Avg Qty", format="%.0f"),
+                "Spike_Value": st.column_config.NumberColumn("Spike Qty", format="%.0f"),
+                "Multiplier": st.column_config.NumberColumn("Factor", format="%.1fx")
+            },
+            use_container_width=True
+        )
     else:
-        st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
+        st.success("✅ Forecast data looks stable. No extreme anomalies detected in top items.")
 
 # --- TAB 8: PROFITABILITY ANALYSIS ---
 with tab8:
