@@ -1996,60 +1996,132 @@ if last_3_months_performance:
         under_forecast_pct = (under_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
         accurate_forecast_pct = (accurate_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
         over_forecast_pct = (over_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
-    
-        # Layout untuk Total Metrics bulan terakhir
-    col_total1, col_total2, col_total3, col_total4 = st.columns(4)
-    
-    with col_total1:
-        html_under = (
-            f'<div style="background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid #F44336;">'
-            f'<div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">UNDER FORECAST</div>'
-            f'<div style="font-size: 1.5rem; font-weight: 800; color: #F44336;">{under_count} SKUs</div>'
-            f'<div style="font-size: 0.9rem; color: #888;">Qty: {under_forecast_qty:,.0f}</div>'
-            f'<div style="font-size: 0.8rem; color: #999;">SKU: {under_pct:.1f}% | Qty: {under_forecast_pct:.1f}%</div>'
-            f'</div>'
-        )
-        st.markdown(html_under, unsafe_allow_html=True)
-    
-    with col_total2:
-        html_accurate = (
-            f'<div style="background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid #4CAF50;">'
-            f'<div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">ACCURATE FORECAST</div>'
-            f'<div style="font-size: 1.5rem; font-weight: 800; color: #4CAF50;">{accurate_count} SKUs</div>'
-            f'<div style="font-size: 0.9rem; color: #888;">Qty: {accurate_forecast_qty:,.0f}</div>'
-            f'<div style="font-size: 0.8rem; color: #999;">SKU: {accurate_pct:.1f}% | Qty: {accurate_forecast_pct:.1f}%</div>'
-            f'</div>'
-        )
-        st.markdown(html_accurate, unsafe_allow_html=True)
-    
-    with col_total3:
-        html_over = (
-            f'<div style="background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid #FF9800;">'
-            f'<div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">OVER FORECAST</div>'
-            f'<div style="font-size: 1.5rem; font-weight: 800; color: #FF9800;">{over_count} SKUs</div>'
-            f'<div style="font-size: 0.9rem; color: #888;">Qty: {over_forecast_qty:,.0f}</div>'
-            f'<div style="font-size: 0.8rem; color: #999;">SKU: {over_pct:.1f}% | Qty: {over_forecast_pct:.1f}%</div>'
-            f'</div>'
-        )
-        st.markdown(html_over, unsafe_allow_html=True)
-    
-    with col_total4:
-        # Calculate overall accuracy for last month
+
+        # Overall Accuracy
         last_month_accuracy = monthly_performance[last_month]['accuracy']
-        html_overall = (
-            f'<div style="background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 4px solid #667eea;">'
-            f'<div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">OVERALL</div>'
-            f'<div style="font-size: 1.8rem; font-weight: 800; color: #667eea;">{last_month_accuracy:.1f}%</div>'
-            f'<div style="font-size: 0.9rem; color: #888;">{last_month.strftime("%b %Y")}</div>'
-            f'<div style="font-size: 0.8rem; color: #999;">Total SKUs: {total_count_last_month}</div>'
-            f'</div>'
-        )
-        st.markdown(html_overall, unsafe_allow_html=True)
-    
-    # Summary stats for last month
-    st.caption(f"""
-    **Bulan {last_month.strftime('%b %Y')}:** Total Forecast: {total_forecast_qty:,.0f} | Total SKUs: {total_count_last_month} | Overall Accuracy: {last_month_accuracy:.1f}%
-    """)
+
+        # --- STYLE CSS KHUSUS BAGIAN INI ---
+        st.markdown("""
+        <style>
+            .tm-card {
+                border-radius: 16px;
+                padding: 1.5rem;
+                color: white;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+                position: relative;
+                overflow: hidden;
+                transition: all 0.3s ease;
+                height: 100%;
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+            .tm-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
+            }
+            .tm-icon {
+                font-size: 1.5rem;
+                margin-bottom: 0.5rem;
+                opacity: 0.8;
+            }
+            .tm-title {
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                opacity: 0.9;
+                margin-bottom: 0.2rem;
+            }
+            .tm-main-val {
+                font-size: 2rem;
+                font-weight: 800;
+                margin-bottom: 0.2rem;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .tm-sub-val {
+                font-size: 0.9rem;
+                font-weight: 500;
+                opacity: 0.95;
+                margin-bottom: 1rem;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .tm-footer {
+                background: rgba(0, 0, 0, 0.15);
+                padding: 6px 12px;
+                border-radius: 8px;
+                font-size: 0.75rem;
+                display: flex;
+                justify-content: space-between;
+                backdrop-filter: blur(5px);
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # Helper function untuk render card
+        def render_tm_card(title, icon, count, qty, sku_pct, qty_pct, gradient):
+            return f"""
+            <div class="tm-card" style="background: {gradient};">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <div class="tm-title">{title}</div>
+                        <div class="tm-main-val">{count} <span style="font-size:1rem; font-weight:600;">SKUs</span></div>
+                    </div>
+                    <div class="tm-icon">{icon}</div>
+                </div>
+                <div class="tm-sub-val">📦 Qty: {qty:,.0f}</div>
+                <div class="tm-footer">
+                    <span>SKU: <strong>{sku_pct:.1f}%</strong></span>
+                    <span>|</span>
+                    <span>Qty: <strong>{qty_pct:.1f}%</strong></span>
+                </div>
+            </div>
+            """
+
+        # Layout untuk Total Metrics bulan terakhir
+        col_total1, col_total2, col_total3, col_total4 = st.columns(4)
+        
+        with col_total1:
+            # UNDER - Red Gradient
+            st.markdown(render_tm_card(
+                "Under Forecast", "📉", under_count, under_forecast_qty, under_pct, under_forecast_pct,
+                "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)"
+            ), unsafe_allow_html=True)
+        
+        with col_total2:
+            # ACCURATE - Green Gradient
+            st.markdown(render_tm_card(
+                "Accurate Forecast", "🎯", accurate_count, accurate_forecast_qty, accurate_pct, accurate_forecast_pct,
+                "linear-gradient(135deg, #10B981 0%, #047857 100%)"
+            ), unsafe_allow_html=True)
+        
+        with col_total3:
+            # OVER - Orange Gradient
+            st.markdown(render_tm_card(
+                "Over Forecast", "📈", over_count, over_forecast_qty, over_pct, over_forecast_pct,
+                "linear-gradient(135deg, #F59E0B 0%, #B45309 100%)"
+            ), unsafe_allow_html=True)
+        
+        with col_total4:
+            # OVERALL - Indigo/Purple Gradient
+            st.markdown(f"""
+            <div class="tm-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <div class="tm-title">OVERALL ACCURACY</div>
+                        <div class="tm-main-val">{last_month_accuracy:.1f}%</div>
+                    </div>
+                    <div class="tm-icon">🏆</div>
+                </div>
+                <div class="tm-sub-val" style="margin-bottom: 1.3rem;">📅 {last_month.strftime("%B %Y")}</div>
+                <div class="tm-footer" style="justify-content: center;">
+                    <strong>Total Active SKUs: {total_count_last_month}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Summary stats text (kecil di bawah cards)
+        st.caption(f"💡 **Snapshot {last_month.strftime('%B %Y')}:** Dari total forecast **{total_forecast_qty:,.0f} units**, tingkat akurasi quantity secara global mencapai **{accurate_forecast_pct:.1f}%**.")
     
     # TOTAL ROFO DAN PO BULAN TERAKHIR
     if monthly_performance:
