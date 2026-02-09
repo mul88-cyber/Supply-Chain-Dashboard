@@ -5323,24 +5323,26 @@ with tab9:
                     key="dl_po"
                 )
 
-# --- TAB 10: FULFILLMENT COST ANALYSIS (CORRECTED LOGIC) ---
+# --- TAB 10: FULFILLMENT COST ANALYSIS (UNIT ECONOMICS) ---
 with tab10:
     st.subheader("🚚 Fulfillment Cost Intelligence")
-    st.caption("Operational Efficiency: Cost per Order (CPO), Contribution, and BS Cost Projection")
+    st.caption("Operational Efficiency: Cost per Order (CPO), Contribution, and Unit Economics Analysis")
 
     # ==============================================================================
-    # 1. DATA PREPARATION (HISTORICAL)
+    # 1. DATA PREPARATION
     # ==============================================================================
     df_bs = all_data.get('fulfillment', pd.DataFrame())
 
     if not df_bs.empty:
         # Sort kronologis
         if 'Month_Date' not in df_bs.columns:
+             # Fallback parsing jika kolom date belum ada
              df_bs['Month_Date'] = pd.to_datetime(df_bs['Month'], format='%b-%y', errors='coerce')
         
         df_bs = df_bs.sort_values('Month_Date')
 
-        # CALCULATE METRICS
+        # CALCULATE METRICS (Termasuk CPO)
+        # Pastikan numeric
         num_cols = ['Total Order(BS)', 'Total Cost', 'GMV (Fullfil By BS)', 'GMV Total (MP)']
         for c in num_cols:
             if c in df_bs.columns:
@@ -5351,12 +5353,12 @@ with tab10:
             lambda x: x['Total Cost'] / x['Total Order(BS)'] if x['Total Order(BS)'] > 0 else 0, axis=1
         )
 
-        # 2. Basket Size (BSA)
+        # 2. Basket Size (BSA) - Recalculate to be safe
         df_bs['BSA_Calc'] = df_bs.apply(
             lambda x: x['GMV (Fullfil By BS)'] / x['Total Order(BS)'] if x['Total Order(BS)'] > 0 else 0, axis=1
         )
 
-        # 3. Contribution % (Share BS vs Total MP)
+        # 3. Contribution %
         df_bs['Contrib_Pct'] = df_bs.apply(
             lambda x: (x['GMV (Fullfil By BS)'] / x['GMV Total (MP)'] * 100) if x['GMV Total (MP)'] > 0 else 0, axis=1
         )
@@ -5369,6 +5371,7 @@ with tab10:
         # 2. EFFICIENCY KPI CARDS (PASTEL GRADIENT)
         # ==============================================================================
         
+        # Helper Format
         def fmt_kpi(val, is_money=False):
             if is_money:
                 if val >= 1e9: return f"Rp {val/1e9:,.1f} M"
@@ -5377,11 +5380,13 @@ with tab10:
             else:
                 return f"{val:,.0f}"
 
+        # Calculate Deltas
         d_cpo = last_row['CPO'] - prev_row['CPO']
         d_gmv = last_row['GMV (Fullfil By BS)'] - prev_row['GMV (Fullfil By BS)']
         d_ord = last_row['Total Order(BS)'] - prev_row['Total Order(BS)']
         d_share = last_row['Contrib_Pct'] - prev_row['Contrib_Pct']
 
+        # CSS (Reused for Consistency)
         st.markdown("""
         <style>
             .eff-card {
@@ -5400,214 +5405,217 @@ with tab10:
         c1, c2, c3, c4 = st.columns(4)
 
         with c1:
+            # Cost Per Order (Primary Efficiency Metric)
+            # Hijau kalau turun, Merah kalau naik (karena Cost)
             bg_cpo = "linear-gradient(135deg, #10B981 0%, #059669 100%)" if d_cpo <= 0 else "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"
             icon_cpo = "▼" if d_cpo <= 0 else "▲"
             st.markdown(f"""
             <div class="eff-card" style="background: {bg_cpo};">
                 <div class="eff-title">Cost Per Order (CPO)</div>
                 <div class="eff-val">Rp {last_row['CPO']:,.0f}</div>
-                <div class="eff-sub"><span class="eff-badge">{icon_cpo} Rp {abs(d_cpo):,.0f}</span> vs Last Mo</div>
-            </div>""", unsafe_allow_html=True)
+                <div class="eff-sub">
+                    <span class="eff-badge">{icon_cpo} Rp {abs(d_cpo):,.0f}</span> vs Last Mo
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
         with c2:
+            # Total Orders (Volume) - Blue
             icon_ord = "▲" if d_ord >= 0 else "▼"
             st.markdown(f"""
             <div class="eff-card" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);">
                 <div class="eff-title">Total Processed Orders</div>
                 <div class="eff-val">{last_row['Total Order(BS)']:,.0f}</div>
-                <div class="eff-sub"><span class="eff-badge">{icon_ord} {abs(d_ord):,.0f}</span> Transactions</div>
-            </div>""", unsafe_allow_html=True)
+                <div class="eff-sub">
+                    <span class="eff-badge">{icon_ord} {abs(d_ord):,.0f}</span> Transactions
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
         with c3:
+            # Contribution - Indigo
             icon_share = "▲" if d_share >= 0 else "▼"
             st.markdown(f"""
             <div class="eff-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
                 <div class="eff-title">BS Contribution %</div>
                 <div class="eff-val">{last_row['Contrib_Pct']:.1f}%</div>
-                <div class="eff-sub"><span class="eff-badge">{icon_share} {abs(d_share):.1f}%</span> of Total GMV</div>
-            </div>""", unsafe_allow_html=True)
+                <div class="eff-sub">
+                    <span class="eff-badge">{icon_share} {abs(d_share):.1f}%</span> of Total GMV
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
         with c4:
+            # Total Cost - Orange/Red
+            # Cost naik wajar kalau order naik, jadi warna netral (Orange)
             st.markdown(f"""
             <div class="eff-card" style="background: linear-gradient(135deg, #F97316 0%, #C2410C 100%);">
                 <div class="eff-title">Total Fulfillment Cost</div>
                 <div class="eff-val">{fmt_kpi(last_row['Total Cost'], True)}</div>
-                <div class="eff-sub">Ratio: {last_row['%Cost']:.1f}% of GMV BS</div>
-            </div>""", unsafe_allow_html=True)
+                <div class="eff-sub">Ratio: {last_row['%Cost']:.1f}% of GMV</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # ==============================================================================
-        # 3. UNIT ECONOMICS & TREND CHARTS
+        # 3. UNIT ECONOMICS CHART (NEW!)
         # ==============================================================================
         st.divider()
-        col_unit, col_trend = st.columns(2)
+        st.subheader("⚖️ Unit Economics: Basket Size vs Cost per Order")
+        st.caption("Membandingkan rata-rata nilai belanja customer (BSA) dengan biaya per transaksi (CPO). **Gap yang melebar (BSA naik, CPO turun) = Efisiensi Meningkat.**")
 
-        with col_unit:
-            st.subheader("⚖️ Unit Economics")
-            st.caption("Gap Analysis: Basket Size (BSA) vs Cost per Order (CPO)")
-            fig_unit = go.Figure()
-            fig_unit.add_trace(go.Scatter(x=df_bs['Month'], y=df_bs['BSA_Calc'], name='Basket Size (BSA)', mode='lines+markers', line=dict(color='#6366F1', width=3)))
-            fig_unit.add_trace(go.Scatter(x=df_bs['Month'], y=df_bs['CPO'], name='Cost Per Order', mode='lines+markers', line=dict(color='#EF4444', width=3, dash='dot'), yaxis='y2'))
-            fig_unit.update_layout(height=350, yaxis=dict(title="BSA (Rp)", showgrid=False), yaxis2=dict(title="CPO (Rp)", overlaying='y', side='right', showgrid=True), hovermode="x unified", legend=dict(orientation="h", y=1.1))
-            st.plotly_chart(fig_unit, use_container_width=True)
+        fig_unit = go.Figure()
 
-        with col_trend:
+        # Line: Basket Size (Higher is better)
+        fig_unit.add_trace(go.Scatter(
+            x=df_bs['Month'], y=df_bs['BSA_Calc'],
+            name='Basket Size (BSA)',
+            mode='lines+markers',
+            line=dict(color='#6366F1', width=3), # Indigo
+            marker=dict(size=8, color='#6366F1'),
+            hovertemplate='BSA: Rp %{y:,.0f}'
+        ))
+
+        # Line: Cost Per Order (Lower is better)
+        fig_unit.add_trace(go.Scatter(
+            x=df_bs['Month'], y=df_bs['CPO'],
+            name='Cost Per Order (CPO)',
+            mode='lines+markers',
+            line=dict(color='#EF4444', width=3, dash='dot'), # Red Dotted
+            marker=dict(size=8, color='#EF4444', symbol='diamond'),
+            hovertemplate='CPO: Rp %{y:,.0f}',
+            yaxis='y2' # Dual Axis biar skalanya pas
+        ))
+
+        fig_unit.update_layout(
+            height=450,
+            xaxis_title="Month",
+            yaxis=dict(title="Basket Size (Rp)", showgrid=False),
+            yaxis2=dict(
+                title="Cost per Order (Rp)", 
+                overlaying='y', side='right', 
+                showgrid=True, gridcolor='rgba(0,0,0,0.05)'
+            ),
+            hovermode="x unified",
+            legend=dict(orientation="h", y=1.1),
+            plot_bgcolor='white'
+        )
+        st.plotly_chart(fig_unit, use_container_width=True)
+
+        # ==============================================================================
+        # 4. EFFICIENCY TREND & SCALE ANALYSIS
+        # ==============================================================================
+        st.divider()
+        col_scale, col_ratio = st.columns(2)
+
+        with col_scale:
+            st.subheader("📦 Volume vs Cost Trend")
+            st.caption("Hubungan antara kenaikan volume order dengan total biaya.")
+            
+            fig_eff = go.Figure()
+            
+            # Bar: Total Orders
+            fig_eff.add_trace(go.Bar(
+                x=df_bs['Month'], y=df_bs['Total Order(BS)'],
+                name='Total Orders',
+                marker_color='#3B82F6', # Blue
+                opacity=0.6
+            ))
+            
+            # Line: Total Cost
+            fig_eff.add_trace(go.Scatter(
+                x=df_bs['Month'], y=df_bs['Total Cost'],
+                name='Total Cost (Rp)',
+                mode='lines+markers',
+                line=dict(color='#F97316', width=3), # Orange
+                yaxis='y2'
+            ))
+            
+            fig_eff.update_layout(
+                height=400,
+                xaxis_title="Month",
+                yaxis=dict(title="Orders (Qty)", showgrid=False),
+                yaxis2=dict(title="Total Cost (Rp)", overlaying='y', side='right', showgrid=True),
+                legend=dict(orientation="h", y=1.1),
+                plot_bgcolor='white'
+            )
+            st.plotly_chart(fig_eff, use_container_width=True)
+
+        with col_ratio:
             st.subheader("📉 % Cost Ratio Trend")
-            st.caption("Efficiency Trend: Cost / GMV Fulfilled by BS")
+            st.caption("Persentase biaya terhadap GMV (Target: Semakin rendah semakin baik).")
+            
             fig_ratio = go.Figure()
-            fig_ratio.add_trace(go.Scatter(x=df_bs['Month'], y=df_bs['%Cost'], mode='lines+markers', fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.1)', line=dict(color='#10B981', width=3), name='% Cost'))
+            
+            fig_ratio.add_trace(go.Scatter(
+                x=df_bs['Month'], y=df_bs['%Cost'],
+                mode='lines+markers',
+                fill='tozeroy',
+                fillcolor='rgba(16, 185, 129, 0.1)', # Soft Green fill
+                line=dict(color='#10B981', width=3), # Emerald
+                marker=dict(size=8),
+                name='% Cost'
+            ))
+            
+            # Add Average Line
             avg_cost_pct = df_bs['%Cost'].mean()
-            fig_ratio.add_hline(y=avg_cost_pct, line_dash="dash", line_color="gray", annotation_text="Avg")
-            fig_ratio.update_layout(height=350, yaxis=dict(title="% Cost Ratio"), plot_bgcolor='white')
+            fig_ratio.add_hline(y=avg_cost_pct, line_dash="dash", line_color="gray", annotation_text="Avg Ratio")
+            
+            fig_ratio.update_layout(
+                height=400,
+                xaxis_title="Month",
+                yaxis=dict(title="% Cost Ratio", range=[0, max(df_bs['%Cost'])*1.2]),
+                plot_bgcolor='white'
+            )
             st.plotly_chart(fig_ratio, use_container_width=True)
 
         # ==============================================================================
-        # 4. FULFILLMENT COST PROJECTION 2026 (CORRECTED LOGIC)
+        # 5. MARKET SHARE VISUALIZATION
         # ==============================================================================
         st.divider()
-        st.subheader("🔮 Fulfillment Cost Projection 2026")
-        st.caption("Simulasi Estimasi Biaya Logistik berdasarkan Forecast Revenue & BS Contribution Share.")
-
-        # --- 4.1. Prepare 2026 Revenue Data ---
-        def get_forecast_revenue(df_fcst):
-            if df_fcst.empty: return pd.DataFrame()
-            cols = [c for c in df_fcst.columns if any(char.isdigit() for char in str(c))]
-            if not cols: return pd.DataFrame()
-            
-            df_m = df_fcst.copy()
-            if 'Floor_Price' not in df_m.columns:
-                df_m = add_product_info_to_data(df_m, df_product)
-            
-            df_m['Floor_Price'] = pd.to_numeric(df_m['Floor_Price'], errors='coerce').fillna(0)
-            
-            monthly_rev = []
-            for m in cols:
-                rev = (pd.to_numeric(df_m[m], errors='coerce').fillna(0) * df_m['Floor_Price']).sum()
-                monthly_rev.append({'Month_Raw': m, 'Revenue': rev})
-            return pd.DataFrame(monthly_rev)
-
-        df_rev_ecomm = get_forecast_revenue(df_ecomm_forecast)
-        df_rev_res = get_forecast_revenue(df_reseller_forecast)
+        st.subheader("🏢 Market Share: BS vs Non-BS")
         
-        df_proj = pd.concat([df_rev_ecomm, df_rev_res], ignore_index=True)
+        # Calculate Non-BS GMV
+        df_bs['GMV Non-BS'] = df_bs['GMV Total (MP)'] - df_bs['GMV (Fullfil By BS)']
         
-        if not df_proj.empty:
-            # Parse dates
-            def parse_date_sort(d):
-                try: 
-                    clean = str(d).replace('_', '-').replace(' ', '-')
-                    return datetime.strptime(clean, '%b-%y')
-                except: return pd.Timestamp.max
-            
-            df_proj_agg = df_proj.groupby('Month_Raw')['Revenue'].sum().reset_index()
-            df_proj_agg['Month_Date'] = df_proj_agg['Month_Raw'].apply(parse_date_sort)
-            df_proj_agg = df_proj_agg.sort_values('Month_Date')
-            
-            # --- 4.2. Simulation Controls (NEW SLIDERS) ---
-            c_sim1, c_sim2 = st.columns([1, 2])
-            
-            with c_sim1:
-                st.markdown("##### ⚙️ Simulation Drivers")
-                
-                # Default values from historical
-                curr_bs_share = df_bs['Contrib_Pct'].iloc[-1] if not df_bs.empty else 50.0
-                curr_cost_ratio = df_bs['%Cost'].iloc[-1] if not df_bs.empty else 5.0
-                
-                # 1. Slider Contribution (Share BS)
-                target_bs_share = st.slider(
-                    "BS Market Share (%)", 
-                    min_value=10.0, max_value=100.0, 
-                    value=float(round(curr_bs_share, 1)), 
-                    step=5.0,
-                    help="Asumsi berapa % dari total revenue yang akan di-fulfill oleh BS."
-                )
-                
-                # 2. Slider Cost Efficiency
-                target_cost_ratio = st.slider(
-                    "Target Cost Ratio (%)", 
-                    min_value=1.0, max_value=15.0, 
-                    value=float(round(curr_cost_ratio, 1)), 
-                    step=0.1,
-                    help="Biaya sebagai % dari GMV yang di-fulfill BS."
-                )
-                
-                st.info(f"📝 **Logic:**\nEst GMV BS = Total Revenue x {target_bs_share}%\nEst Cost = GMV BS x {target_cost_ratio}%")
+        fig_share = go.Figure()
+        
+        fig_share.add_trace(go.Bar(
+            x=df_bs['Month'], y=df_bs['GMV (Fullfil By BS)'],
+            name='Fulfilled by BS',
+            marker_color='#6366F1' # Indigo
+        ))
+        
+        fig_share.add_trace(go.Bar(
+            x=df_bs['Month'], y=df_bs['GMV Non-BS'],
+            name='Non-BS',
+            marker_color='#E5E7EB' # Light Gray
+        ))
+        
+        fig_share.update_layout(
+            height=400,
+            title="Monthly GMV Contribution (Stacked)",
+            barmode='stack',
+            plot_bgcolor='white',
+            yaxis=dict(title="GMV (Rp)"),
+            legend=dict(orientation="h", y=1.1)
+        )
+        st.plotly_chart(fig_share, use_container_width=True)
 
-            with c_sim2:
-                # Calculate Projected Cost (Correct Logic)
-                # Step 1: Hitung Estimasi GMV yang masuk ke BS
-                df_proj_agg['GMV_BS_Est'] = df_proj_agg['Revenue'] * (target_bs_share / 100)
-                
-                # Step 2: Hitung Cost dari GMV BS tersebut
-                df_proj_agg['Projected_Cost'] = df_proj_agg['GMV_BS_Est'] * (target_cost_ratio / 100)
-                
-                # Visualisasi
-                fig_proj = go.Figure()
-                
-                # Bar: GMV BS (Reference)
-                fig_proj.add_trace(go.Bar(
-                    x=df_proj_agg['Month_Raw'], 
-                    y=df_proj_agg['GMV_BS_Est'],
-                    name='Est. GMV BS',
-                    marker_color='#E0E7FF', # Very Light Indigo
-                    opacity=0.5
-                ))
-                
-                # Bar: Cost (Main Focus)
-                fig_proj.add_trace(go.Bar(
-                    x=df_proj_agg['Month_Raw'], 
-                    y=df_proj_agg['Projected_Cost'],
-                    name='Est. Fulfillment Cost',
-                    marker_color='#F59E0B', # Amber
-                    text=[f"Rp {x/1e6:,.0f}jt" for x in df_proj_agg['Projected_Cost']],
-                    textposition='auto'
-                ))
-                
-                fig_proj.update_layout(
-                    height=350, 
-                    title="📊 2026 Cost Projection (Based on BS Share)",
-                    yaxis_title="Rupiah",
-                    xaxis_title="Month",
-                    plot_bgcolor='white',
-                    barmode='overlay',
-                    legend=dict(orientation="h", y=1.1)
-                )
-                st.plotly_chart(fig_proj, use_container_width=True)
-
-            # --- 4.3. Quarterly Breakdown Table ---
-            st.markdown("##### 📅 Quarterly Budget Plan")
+        # Detail Data
+        with st.expander("📋 View Detail Data"):
+            disp_cols = ['Month', 'Total Order(BS)', 'GMV (Fullfil By BS)', 'Total Cost', 'CPO', '%Cost']
+            df_disp = df_bs[disp_cols].copy()
             
-            def get_quarter(dt): return f"Q{(dt.month-1)//3 + 1} {dt.year}"
-            df_proj_agg['Quarter'] = df_proj_agg['Month_Date'].apply(get_quarter)
+            # Formatting
+            df_disp['Total Cost'] = df_disp['Total Cost'].apply(lambda x: f"Rp {x:,.0f}")
+            df_disp['GMV (Fullfil By BS)'] = df_disp['GMV (Fullfil By BS)'].apply(lambda x: f"Rp {x:,.0f}")
+            df_disp['CPO'] = df_disp['CPO'].apply(lambda x: f"Rp {x:,.0f}")
+            df_disp['%Cost'] = df_disp['%Cost'].apply(lambda x: f"{x:.2f}%")
             
-            df_quarterly = df_proj_agg.groupby('Quarter').agg({
-                'Revenue': 'sum',
-                'GMV_BS_Est': 'sum',
-                'Projected_Cost': 'sum'
-            }).reset_index().sort_values('Quarter')
-            
-            df_quarterly['Avg_Monthly_Cost'] = df_quarterly['Projected_Cost'] / 3
-            
-            # Display
-            df_q_disp = df_quarterly.copy()
-            df_q_disp['Total Forecast (All)'] = df_q_disp['Revenue'].apply(lambda x: f"Rp {x/1e9:,.1f} M")
-            df_q_disp['Est. GMV (BS Only)'] = df_q_disp['GMV_BS_Est'].apply(lambda x: f"Rp {x/1e9:,.1f} M")
-            df_q_disp['Est. Cost Budget'] = df_q_disp['Projected_Cost'].apply(lambda x: f"Rp {x/1e6:,.0f} Jt")
-            df_q_disp['Avg Monthly Cost'] = df_q_disp['Avg_Monthly_Cost'].apply(lambda x: f"Rp {x/1e6:,.0f} Jt")
-            
-            st.dataframe(
-                df_q_disp[['Quarter', 'Total Forecast (All)', 'Est. GMV (BS Only)', 'Est. Cost Budget', 'Avg Monthly Cost']], 
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            total_proj_cost = df_proj_agg['Projected_Cost'].sum()
-            st.caption(f"💰 **Total Budget 2026:** Rp {total_proj_cost:,.0f} (Assuming BS handles {target_bs_share}% of volume)")
-
-        else:
-            st.warning("⚠️ Data Forecast Revenue 2026 tidak tersedia. Cek Tab 7/8.")
+            st.dataframe(df_disp, use_container_width=True)
 
     else:
-        st.warning("⚠️ Data 'BS_Fullfilment_Cost' belum tersedia.")
+        st.warning("⚠️ Data 'BS_Fullfilment_Cost' belum tersedia atau format tidak sesuai.")
 
 # --- FOOTER ---
 st.divider()
