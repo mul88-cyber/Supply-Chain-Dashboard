@@ -3228,14 +3228,29 @@ with tab3:
         occupancy_pct = (current_occupancy / WH_CAPACITY * 100)
 
         # ==============================================================================
-        # 2. EXECUTIVE KPI CARDS (PASTEL GRADIENT)
+        # 2. EXECUTIVE KPI CARDS (SMART UNIT VERSION)
         # ==============================================================================
         total_val = df_batch['Total_Value'].sum() if 'Total_Value' in df_batch.columns else 0
         total_sku = df_batch['SKU_ID'].nunique()
-        risk_val = df_batch[df_batch['Expiry_Category'].str.contains('EXPIRED|Critical', na=False)]['Total_Value'].sum() if 'Total_Value' in df_batch.columns else 0
+        
+        # Hitung Risk Value
+        risk_mask = df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 Days)'])
+        risk_val = df_batch[risk_mask]['Total_Value'].sum() if 'Total_Value' in df_batch.columns else 0
         risk_pct = (risk_val / total_val * 100) if total_val > 0 else 0
 
-        # CSS
+        # --- Helper: Format Uang Pintar (Otomatis M / Jt / Rb) ---
+        def format_currency_smart(value):
+            if value >= 1_000_000_000: # Di atas 1 Milyar
+                return f"Rp {value/1e9:,.1f} M"
+            elif value >= 1_000_000: # Di atas 1 Juta
+                return f"Rp {value/1e6:,.1f} Jt"
+            else: # Di bawah 1 Juta
+                return f"Rp {value:,.0f}"
+
+        val_display = format_currency_smart(total_val)
+        risk_display = format_currency_smart(risk_val)
+
+        # CSS Styles
         st.markdown("""
         <style>
             .inv-card {
@@ -3260,15 +3275,35 @@ with tab3:
             """
 
         c1, c2, c3, c4 = st.columns(4)
+        
         with c1:
-            st.markdown(render_inv_card("Total Asset Value", f"Rp {total_val/1e9:,.1f} M", f"{total_sku:,} Items", "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)"), unsafe_allow_html=True)
+            # Value - Indigo
+            st.markdown(render_inv_card("Total Asset Value", val_display, f"{total_sku:,} Items", 
+                "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)"), unsafe_allow_html=True)
         with c2:
-            st.markdown(render_inv_card("Current Occupancy", f"{occupancy_pct:.1f}%", f"{current_occupancy:,.0f} / {WH_CAPACITY/1e3:,.0f}K", "linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)"), unsafe_allow_html=True)
+            # Qty - Teal
+            current_occupancy = df_batch['Stock_Qty'].sum()
+            occupancy_pct = (current_occupancy / WH_CAPACITY * 100) if 'WH_CAPACITY' in locals() and WH_CAPACITY > 0 else 0
+            
+            st.markdown(render_inv_card("Total Quantity", f"{current_occupancy:,.0f}", f"{occupancy_pct:.1f}% Capacity", 
+                "linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)"), unsafe_allow_html=True)
         with c3:
-            st.markdown(render_inv_card("Global Stock Cover", f"{avg_cover_months:.1f} Mo", "Avg across active SKUs", "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"), unsafe_allow_html=True)
+            # Cover - Amber
+            st.markdown(render_inv_card("Global Stock Cover", f"{avg_cover_months:.1f} Mo", "Avg across active SKUs", 
+                "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"), unsafe_allow_html=True)
         with c4:
+            # Risk - Red
             risk_bg = "linear-gradient(135deg, #F43F5E 0%, #BE123C 100%)" if risk_pct > 5 else "linear-gradient(135deg, #10B981 0%, #059669 100%)"
-            st.markdown(render_inv_card("Expiry Risk Value", f"Rp {risk_val/1e6:,.0f} Jt", f"{risk_pct:.1f}% of Total", risk_bg), unsafe_allow_html=True)
+            st.markdown(render_inv_card("Expiry Risk Value", risk_display, f"{risk_pct:.1f}% of Total", 
+                risk_bg), unsafe_allow_html=True)
+
+        # --- DIAGNOSTIC TOOL (CEK HARGA KOSONG) ---
+        # Ini akan muncul kalau ada masalah harga
+        missing_price = df_batch[df_batch['Floor_Price'] <= 0]
+        if not missing_price.empty:
+            with st.expander(f"⚠️ Warning: {len(missing_price)} SKU terdeteksi memiliki Harga 0 / Missing!", expanded=False):
+                st.warning("SKU berikut tidak memiliki 'Floor_Price' di Product Master, sehingga Asset Value = 0.")
+                st.dataframe(missing_price[['SKU_ID', 'Product_Name', 'Stock_Qty', 'Floor_Price', 'Total_Value']])
 
         # ==============================================================================
         # 3. STOCK COVER & OCCUPANCY DASHBOARD (RESTORED & IMPROVED)
