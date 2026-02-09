@@ -4303,258 +4303,345 @@ with tab4:
     else:
         st.info("👋 Please ensure Sales and Monthly Performance data are loaded to view SKU insights.")
 
-# --- TAB 5: SALES & FORECAST ANALYSIS ---
+# --- TAB 5: SALES & FORECAST ANALYSIS (PREMIUM GAP & PARETO) ---
 with tab5:
-    st.subheader("📈 Sales & Forecast Analysis")
-    
-    if sales_vs_forecast:
-        last_month = sales_vs_forecast['last_month']
-        last_month_name = last_month.strftime('%b %Y')
+    st.subheader("📈 Sales & Forecast Performance Analytics")
+    st.caption("Gap Analysis: Comparing Planning (Forecast), Execution (PO), and Realization (Sales)")
+
+    if not df_sales.empty and not df_forecast.empty:
+        # ==============================================================================
+        # 1. DATA PREPARATION & AGGREGATION
+        # ==============================================================================
         
-                # SECTION 1: SIMPLE MONTHLY TREND
-        st.markdown("### 📊 Monthly Trend")
+        # Merge Monthly Data Global
+        # Get all unique months
+        all_months = sorted(list(set(df_sales['Month'].unique()) | set(df_forecast['Month'].unique()) | set(df_po['Month'].unique())))
         
-        # Get ALL available months, not just last 6
-        monthly_trend = []
+        monthly_data = []
+        cumulative_rofo = 0
+        cumulative_sales = 0
         
-        # Get unique months from ALL datasets
-        all_months = set()
-        if not df_sales.empty:
-            all_months.update(df_sales['Month'].unique())
-        if not df_forecast.empty:
-            all_months.update(df_forecast['Month'].unique())
-        if not df_po.empty:
-            all_months.update(df_po['Month'].unique())
-        
-        if all_months:
-            sorted_months = sorted(all_months)
+        for month in all_months:
+            # Sales
+            s_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
+            # Forecast
+            f_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
+            # PO
+            p_qty = df_po[df_po['Month'] == month]['PO_Qty'].sum()
             
-            for month in sorted_months:  # PAKAI SEMUA BULAN, bukan cuma 6 terakhir
-                month_name = month.strftime('%b-%Y')
-                sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum() if not df_sales.empty else 0
-                forecast_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum() if not df_forecast.empty else 0
-                po_qty = df_po[df_po['Month'] == month]['PO_Qty'].sum() if not df_po.empty else 0
-                
-                monthly_trend.append({
-                    'Month': month_name,
-                    'Rofo': forecast_qty,
-                    'PO': po_qty,
-                    'Sales': sales_qty
-                })
+            cumulative_rofo += f_qty
+            cumulative_sales += s_qty
+            
+            # Gap
+            gap = s_qty - f_qty
+            gap_pct = (gap / f_qty * 100) if f_qty > 0 else 0
+            
+            achievement = (s_qty / f_qty * 100) if f_qty > 0 else 0
+            compliance = (p_qty / f_qty * 100) if f_qty > 0 else 0
+            
+            monthly_data.append({
+                'Month': month,
+                'Month_Txt': month.strftime('%b-%y'),
+                'Rofo': f_qty,
+                'Sales': s_qty,
+                'PO': p_qty,
+                'Gap': gap,
+                'Gap_Pct': gap_pct,
+                'Achievement': achievement,
+                'Compliance': compliance,
+                'Cum_Rofo': cumulative_rofo,
+                'Cum_Sales': cumulative_sales
+            })
+            
+        df_trend = pd.DataFrame(monthly_data)
         
-        if monthly_trend:
-            trend_df = pd.DataFrame(monthly_trend)
+        # ==============================================================================
+        # 2. REALIZATION KPI CARDS (Soft Pastel)
+        # ==============================================================================
+        
+        # Calculate YTD / Total Metrics
+        total_rofo = df_trend['Rofo'].sum()
+        total_sales = df_trend['Sales'].sum()
+        total_po = df_trend['PO'].sum()
+        
+        ytd_achievement = (total_sales / total_rofo * 100) if total_rofo > 0 else 0
+        ytd_compliance = (total_po / total_rofo * 100) if total_rofo > 0 else 0
+        sales_vs_po = (total_sales / total_po * 100) if total_po > 0 else 0
+        
+        # CSS Style (Reused)
+        st.markdown("""
+        <style>
+            .gap-card {
+                border-radius: 12px;
+                padding: 1.2rem;
+                color: white;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+                transition: transform 0.3s ease;
+                margin-bottom: 10px;
+            }
+            .gap-card:hover { transform: translateY(-3px); }
+            .gap-label { font-size: 0.8rem; font-weight: 600; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.5px; }
+            .gap-val { font-size: 1.6rem; font-weight: 800; margin: 5px 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+            .gap-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.9; display: flex; justify-content: space-between; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        def render_gap_card(title, value, sub_left, sub_right, gradient):
+            return f"""
+            <div class="gap-card" style="background: {gradient};">
+                <div class="gap-label">{title}</div>
+                <div class="gap-val">{value}</div>
+                <div class="gap-sub">
+                    <span>{sub_left}</span>
+                    <span>{sub_right}</span>
+                </div>
+            </div>
+            """
+
+        c1, c2, c3, c4 = st.columns(4)
+        
+        with c1:
+            st.markdown(render_gap_card(
+                "Total Forecast (Plan)", f"{total_rofo:,.0f}", "Baseline Target", f"{len(df_trend)} Months",
+                "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)" # Indigo
+            ), unsafe_allow_html=True)
             
-            # Tampilkan info bulan yang tersedia
-            st.caption(f"📅 Showing data for {len(trend_df)} months")
+        with c2:
+            ach_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)" if ytd_achievement >= 90 else "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"
+            st.markdown(render_gap_card(
+                "Sales Achievement", f"{ytd_achievement:.1f}%", f"Act: {total_sales:,.0f}", "vs Forecast",
+                ach_color
+            ), unsafe_allow_html=True)
             
-            # CHART 1: Quantity Trend
-            fig1 = go.Figure()
+        with c3:
+            st.markdown(render_gap_card(
+                "PO Compliance", f"{ytd_compliance:.1f}%", f"Exe: {total_po:,.0f}", "vs Forecast",
+                "linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)" # Sky Blue
+            ), unsafe_allow_html=True)
             
-            fig1.add_trace(go.Bar(
-                x=trend_df['Month'],
-                y=trend_df['Rofo'],
-                name='Rofo',
-                marker_color='#667eea'
+        with c4:
+            st.markdown(render_gap_card(
+                "Sales vs PO", f"{sales_vs_po:.1f}%", "Conversion Rate", "Sold / Ordered",
+                "linear-gradient(135deg, #EC4899 0%, #DB2777 100%)" # Pink
+            ), unsafe_allow_html=True)
+
+        # ==============================================================================
+        # 3. TREND & CUMULATIVE GAP ANALYSIS
+        # ==============================================================================
+        st.write("")
+        st.subheader("📈 Monthly Trend & Cumulative Performance")
+        
+        col_chart, col_metric = st.columns([3, 1])
+        
+        with col_chart:
+            # Combo Chart: Bar (Monthly) + Line (Cumulative)
+            fig_trend = go.Figure()
+            
+            # Bar: Sales
+            fig_trend.add_trace(go.Bar(
+                x=df_trend['Month_Txt'], y=df_trend['Sales'],
+                name='Sales (Actual)',
+                marker_color='#34D399', # Soft Emerald
+                opacity=0.8
             ))
             
-            fig1.add_trace(go.Bar(
-                x=trend_df['Month'],
-                y=trend_df['PO'],
-                name='PO',
-                marker_color='#FF9800'
+            # Bar: Forecast
+            fig_trend.add_trace(go.Bar(
+                x=df_trend['Month_Txt'], y=df_trend['Rofo'],
+                name='Forecast (Plan)',
+                marker_color='#818CF8', # Soft Indigo
+                opacity=0.6
             ))
             
-            fig1.add_trace(go.Bar(
-                x=trend_df['Month'],
-                y=trend_df['Sales'],
-                name='Sales',
-                marker_color='#4CAF50'
+            # Line: Cumulative Achievement Rate (Secondary Axis)
+            fig_trend.add_trace(go.Scatter(
+                x=df_trend['Month_Txt'], y=df_trend['Cum_Sales'],
+                name='Cumulative Sales',
+                mode='lines',
+                line=dict(color='#059669', width=3),
+                yaxis='y2'
             ))
+             # Line: Cumulative Forecast (Secondary Axis)
+            fig_trend.add_trace(go.Scatter(
+                x=df_trend['Month_Txt'], y=df_trend['Cum_Rofo'],
+                name='Cumulative Plan',
+                mode='lines',
+                line=dict(color='#4338CA', width=3, dash='dot'),
+                yaxis='y2'
+            ))
+
+            fig_trend.update_layout(
+                height=450,
+                title="Monthly Performance vs Cumulative Trajectory",
+                xaxis_title="Month",
+                yaxis=dict(title="Monthly Quantity", showgrid=False),
+                yaxis2=dict(
+                    title="Cumulative Quantity", 
+                    overlaying='y', side='right', 
+                    showgrid=True, gridcolor='rgba(0,0,0,0.05)'
+                ),
+                barmode='group',
+                legend=dict(orientation="h", y=1.1),
+                hovermode="x unified",
+                plot_bgcolor='white'
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+        with col_metric:
+            # Monthly Achievement Table (Mini Heatmap)
+            st.write("###### 🗓️ Monthly Achievement %")
             
-            fig1.update_layout(
+            # Simple dataframe for display
+            disp_trend = df_trend[['Month_Txt', 'Achievement']].copy()
+            disp_trend['Status'] = disp_trend['Achievement'].apply(
+                lambda x: "✅ Hit" if x >= 95 else "⚠️ Miss" if x >= 80 else "🛑 Poor"
+            )
+            disp_trend['Achievement'] = disp_trend['Achievement'].apply(lambda x: f"{x:.1f}%")
+            
+            st.dataframe(
+                disp_trend,
+                column_config={
+                    "Month_Txt": "Month",
+                    "Achievement": "Achv %"
+                },
+                use_container_width=True,
                 height=400,
-                title='Monthly Trend: Rofo vs PO vs Sales (All Available Months)',
-                xaxis_title='Month',
-                yaxis_title='Quantity',
-                barmode='group'
+                hide_index=True
             )
-            
-            st.plotly_chart(fig1, use_container_width=True)
-            
-            # CHART 2: Accuracy Trend
-            if not df_forecast.empty and not df_po.empty:
-                accuracy_trend = []
-                
-                for month in sorted_months:  # PAKAI SEMUA BULAN
-                    month_name = month.strftime('%b-%Y')
-                    forecast_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
-                    po_qty = df_po[df_po['Month'] == month]['PO_Qty'].sum()
-                    
-                    if forecast_qty > 0:
-                        accuracy = 100 - abs((po_qty / forecast_qty * 100) - 100)
-                        accuracy_trend.append({
-                            'Month': month_name,
-                            'Accuracy': accuracy
-                        })
-                
-                if accuracy_trend:
-                    acc_df = pd.DataFrame(accuracy_trend)
-                    
-                    fig2 = go.Figure()
-                    
-                    fig2.add_trace(go.Scatter(
-                        x=acc_df['Month'],
-                        y=acc_df['Accuracy'],
-                        mode='lines+markers',
-                        name='Accuracy %',
-                        line=dict(color='#FF5252', width=3),
-                        marker=dict(size=8, color='#FF5252')
-                    ))
-                    
-                    fig2.update_layout(
-                        height=300,
-                        title='Forecast Accuracy Trend (All Available Months)',
-                        xaxis_title='Month',
-                        yaxis_title='Accuracy %',
-                        yaxis_range=[0, 110]
-                    )
-                    
-                    st.plotly_chart(fig2, use_container_width=True)
-        
-        # SECTION 2: BRAND PERFORMANCE
+
+        # ==============================================================================
+        # 4. PARETO DEVIATION ANALYSIS (80/20 RULE)
+        # ==============================================================================
         st.divider()
-        st.markdown("### 🏷️ Brand Performance")
+        st.subheader("📉 Pareto Analysis: Forecast Error Contributors")
+        st.caption("Fokus perbaikan pada **Top 20% SKU** yang menyumbang **80% total error** (Selisih Absolut antara Sales vs Forecast).")
         
-        if not df_forecast.empty and not df_po.empty and not df_sales.empty:
-            # Get last month brand data
-            forecast_last = df_forecast[df_forecast['Month'] == last_month].copy()
-            po_last = df_po[df_po['Month'] == last_month].copy()
-            sales_last = df_sales[df_sales['Month'] == last_month].copy()
-            
-            # Add product info
-            forecast_last = add_product_info_to_data(forecast_last, df_product)
-            po_last = add_product_info_to_data(po_last, df_product)
-            sales_last = add_product_info_to_data(sales_last, df_product)
-            
-            if 'Brand' in forecast_last.columns:
-                # Aggregate by brand
-                brand_data = []
-                brands = forecast_last['Brand'].unique()
-                
-                for brand in brands:
-                    rofo = forecast_last[forecast_last['Brand'] == brand]['Forecast_Qty'].sum()
-                    po = po_last[po_last['Brand'] == brand]['PO_Qty'].sum()
-                    sales = sales_last[sales_last['Brand'] == brand]['Sales_Qty'].sum()
-                    
-                    brand_data.append({
-                        'Brand': brand,
-                        'Rofo': rofo,
-                        'PO': po,
-                        'Sales': sales
-                    })
-                
-                if brand_data:
-                    brand_df = pd.DataFrame(brand_data)
-                    brand_df = brand_df.sort_values('Rofo', ascending=False).head(10)
-                    
-                    # Brand chart
-                    fig3 = go.Figure()
-                    
-                    fig3.add_trace(go.Bar(
-                        x=brand_df['Brand'],
-                        y=brand_df['Rofo'],
-                        name='Rofo',
-                        marker_color='#667eea'
-                    ))
-                    
-                    fig3.add_trace(go.Bar(
-                        x=brand_df['Brand'],
-                        y=brand_df['PO'],
-                        name='PO',
-                        marker_color='#FF9800'
-                    ))
-                    
-                    fig3.add_trace(go.Bar(
-                        x=brand_df['Brand'],
-                        y=brand_df['Sales'],
-                        name='Sales',
-                        marker_color='#4CAF50'
-                    ))
-                    
-                    fig3.update_layout(
-                        height=400,
-                        title=f'Top 10 Brands - {last_month_name}',
-                        xaxis_title='Brand',
-                        yaxis_title='Quantity',
-                        barmode='group'
-                    )
-                    
-                    st.plotly_chart(fig3, use_container_width=True)
+        # Calculate Deviation per SKU (Aggregated over all months available or filtered)
+        # Kita ambil data gabungan Sales & Forecast
         
-        # SECTION 3: HIGH DEVIATION ANALYSIS
+        # 1. Merge all time data
+        df_f_all = df_forecast.groupby('SKU_ID')['Forecast_Qty'].sum().reset_index()
+        df_s_all = df_sales.groupby('SKU_ID')['Sales_Qty'].sum().reset_index()
+        
+        df_pareto = pd.merge(df_f_all, df_s_all, on='SKU_ID', how='outer').fillna(0)
+        
+        # Add Product Info
+        df_pareto = add_product_info_to_data(df_pareto, df_product)
+        
+        # Calculate Absolute Error
+        df_pareto['Abs_Error'] = abs(df_pareto['Sales_Qty'] - df_pareto['Forecast_Qty'])
+        df_pareto['Total_Vol'] = df_pareto['Forecast_Qty'] + df_pareto['Sales_Qty']
+        
+        # Filter noise (SKU with very low volume)
+        df_pareto = df_pareto[df_pareto['Total_Vol'] > 10].copy()
+        
+        # Sort by Error
+        df_pareto = df_pareto.sort_values('Abs_Error', ascending=False)
+        
+        # Calculate Cumulative %
+        total_error = df_pareto['Abs_Error'].sum()
+        df_pareto['Cum_Error'] = df_pareto['Abs_Error'].cumsum()
+        df_pareto['Cum_Pct'] = (df_pareto['Cum_Error'] / total_error * 100)
+        
+        # Determine "Vital Few" (e.g. contributing to 80% error)
+        df_pareto['Category'] = df_pareto['Cum_Pct'].apply(lambda x: '🅰️ Vital Few (Top Priority)' if x <= 80 else '🅱️ Trivial Many')
+        
+        # Top 20 Contributors Chart
+        top_20 = df_pareto.head(20)
+        
+        fig_pareto = go.Figure()
+        
+        # Bar: Absolute Error
+        fig_pareto.add_trace(go.Bar(
+            x=top_20['Product_Name'],
+            y=top_20['Abs_Error'],
+            name='Absolute Forecast Error (Qty)',
+            marker_color='#F59E0B' # Amber
+        ))
+        
+        # Line: Cumulative %
+        fig_pareto.add_trace(go.Scatter(
+            x=top_20['Product_Name'],
+            y=top_20['Cum_Pct'],
+            name='Cumulative Error %',
+            yaxis='y2',
+            mode='lines+markers',
+            line=dict(color='#EF4444', width=2) # Red
+        ))
+        
+        fig_pareto.update_layout(
+            height=500,
+            title=f"Top 20 SKUs Contributing to Forecast Error (Total Error: {total_error:,.0f} units)",
+            xaxis_title="Product Name",
+            yaxis=dict(title="Absolute Error (Units)"),
+            yaxis2=dict(
+                title="Cumulative %", 
+                overlaying='y', side='right', 
+                range=[0, 105], showgrid=False
+            ),
+            legend=dict(orientation="h", y=1.1),
+            plot_bgcolor='white',
+            hovermode="x unified"
+        )
+        
+        # Add 80% line
+        fig_pareto.add_hline(y=80, line_dash="dash", line_color="gray", annotation_text="80% Threshold", yref="y2")
+        
+        st.plotly_chart(fig_pareto, use_container_width=True)
+        
+        # Detail Data Expander
+        with st.expander("📋 View Pareto Detail Data"):
+            disp_pareto = df_pareto[['SKU_ID', 'Product_Name', 'Brand', 'Forecast_Qty', 'Sales_Qty', 'Abs_Error', 'Cum_Pct', 'Category']].head(100)
+            disp_pareto['Cum_Pct'] = disp_pareto['Cum_Pct'].apply(lambda x: f"{x:.1f}%")
+            disp_pareto['Abs_Error'] = disp_pareto['Abs_Error'].apply(lambda x: f"{x:,.0f}")
+            
+            st.dataframe(disp_pareto, use_container_width=True)
+
+        # ==============================================================================
+        # 5. BRAND ACHIEVEMENT HEATMAP
+        # ==============================================================================
         st.divider()
-        st.subheader("⚠️ High Deviation Analysis")
+        st.subheader("🏷️ Brand Achievement Heatmap")
         
-        # TAMBAH NOTE INI
-        st.info("""
-        **📌 Note:** Analysis ini hanya mencakup **ACTIVE SKUs** dengan **Forecast > 0**. 
-        SKU Inactive/Discontinued tidak dihitung karena tidak ada forecast requirement.
-        """)
+        # Calculate Achievement per Brand
+        brand_ach = df_pareto.groupby('Brand').agg({
+            'Forecast_Qty': 'sum',
+            'Sales_Qty': 'sum'
+        }).reset_index()
         
-        # Metrics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(
-                "Forecast Deviation",
-                f"{sales_vs_forecast['avg_forecast_deviation']:.1f}%",
-                delta="Target: < 20%"
-            )
-        with col2:
-            st.metric(
-                "PO Deviation", 
-                f"{sales_vs_forecast['avg_po_deviation']:.1f}%",
-                delta="Target: < 20%"
-            )
-        with col3:
-            st.metric(
-                "High Deviation SKUs",
-                len(sales_vs_forecast['high_deviation_skus']),
-                delta=f"Active SKUs: {sales_vs_forecast['total_skus_compared']}"
-            )
+        brand_ach['Achievement'] = (brand_ach['Sales_Qty'] / brand_ach['Forecast_Qty'] * 100).fillna(0)
+        brand_ach = brand_ach.sort_values('Achievement', ascending=False)
         
-        high_dev_df = sales_vs_forecast['high_deviation_skus']
+        # Visual: Bar Chart with Color Coding based on Target
+        # Green > 95%, Yellow 80-95%, Red < 80%
+        colors = []
+        for val in brand_ach['Achievement']:
+            if val >= 95: colors.append('#10B981') # Green
+            elif val >= 80: colors.append('#F59E0B') # Yellow/Orange
+            else: colors.append('#EF4444') # Red
+            
+        fig_brand = go.Figure()
+        fig_brand.add_trace(go.Bar(
+            x=brand_ach['Brand'],
+            y=brand_ach['Achievement'],
+            marker_color=colors,
+            text=[f"{x:.1f}%" for x in brand_ach['Achievement']],
+            textposition='auto'
+        ))
         
-        if not high_dev_df.empty:
-            # Display table
-            display_df = high_dev_df.copy()
-            
-            # Select columns
-            cols_to_show = ['SKU_ID', 'Product_Name', 'Brand', 
-                          'Sales_Qty', 'Forecast_Qty', 'PO_Qty',
-                          'Sales_vs_Forecast_Ratio', 'Sales_vs_PO_Ratio']
-            
-            available_cols = [col for col in cols_to_show if col in display_df.columns]
-            
-            # Ensure Product_Name
-            if 'Product_Name' not in available_cols and 'Product_Name' in display_df.columns:
-                available_cols.insert(1, 'Product_Name')
-            
-            display_df = display_df[available_cols].head(20)
-            
-            # Format
-            if 'Sales_vs_Forecast_Ratio' in display_df.columns:
-                display_df['Sales_vs_Forecast_Ratio'] = display_df['Sales_vs_Forecast_Ratio'].apply(lambda x: f"{x:.1f}%")
-            
-            if 'Sales_vs_PO_Ratio' in display_df.columns:
-                display_df['Sales_vs_PO_Ratio'] = display_df['Sales_vs_PO_Ratio'].apply(lambda x: f"{x:.1f}%")
-            
-            st.dataframe(display_df, use_container_width=True, height=400)
-        else:
-            st.success(f"✅ No high deviation SKUs in {last_month_name}")
-    
+        fig_brand.add_hline(y=100, line_dash="solid", line_color="gray", annotation_text="Target 100%")
+        
+        fig_brand.update_layout(
+            height=400,
+            title="Sales Achievement by Brand (%)",
+            xaxis_title="Brand",
+            yaxis_title="Achievement %",
+            plot_bgcolor='white'
+        )
+        st.plotly_chart(fig_brand, use_container_width=True)
+
     else:
-        st.info("📊 Need sales, forecast, and PO data for analysis")
+        st.info("ℹ️ Requires both Sales and Forecast data to generate analysis.")
 
 # --- TAB 6: DATA EXPLORER ---
 with tab6:
