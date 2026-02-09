@@ -1627,7 +1627,8 @@ if 'show_stats' in st.session_state and st.session_state.show_stats:
 
 # --- MAIN DASHBOARD ---
 
-# PERUBAHAN: Chart Accuracy Trend - FIXED PREMIUM VERSION
+# GANTI SECTION: Chart Accuracy Trend dengan versi IMPROVED
+
 st.subheader("📈 Forecast Accuracy Performance Dashboard")
 
 if monthly_performance:
@@ -1642,131 +1643,387 @@ if monthly_performance:
             'Accurate': data['status_counts'].get('Accurate', 0),
             'Over': data['status_counts'].get('Over', 0),
             'Total SKUs': data['total_records'],
-            'MAPE': data['mape']
+            'MAPE': data['mape'],
+            'Status': 'Excellent' if data['accuracy'] >= 90 else 'Good' if data['accuracy'] >= 80 else 'Needs Improvement'
         })
     
     summary_df = pd.DataFrame(summary_data)
     
-    # Display chart with FIXED PREMIUM styling
+    # Display chart dengan IMPROVED VISUAL
     if not summary_df.empty:
         # Sort by month
         summary_df = summary_df.sort_values('Month')
         
-        # ===== OPTION 1: SIMPLE YET ELEGANT PREMIUM CHART =====
+        # ===== IMPROVED CHART: PROFESSIONAL BUSINESS VISUAL =====
         fig = go.Figure()
         
-        # Main accuracy line with gradient fill
+        # 1. Main accuracy line dengan gradient dan efek glow
         fig.add_trace(go.Scatter(
             x=summary_df['Month_Display'],
             y=summary_df['Accuracy (%)'],
-            mode='lines+markers',
-            line=dict(color='#667eea', width=4),
+            mode='lines+markers+text',
+            line=dict(
+                color='#667eea',
+                width=5,
+                shape='spline',
+                smoothing=1.3
+            ),
             marker=dict(
-                size=12,
+                size=16,
+                symbol='diamond',
                 color='white',
-                line=dict(width=2, color='#667eea')
+                line=dict(width=3, color='#667eea')
             ),
             name='Accuracy %',
-            hovertemplate='<b>%{x}</b><br>Accuracy: <b>%{y:.1f}%</b><extra></extra>'
+            hovertemplate='<b>%{x}</b><br>Accuracy: <b>%{y:.1f}%</b><br>Total SKUs: %{customdata[0]}<extra></extra>',
+            customdata=np.stack((summary_df['Total SKUs'],), axis=-1),
+            text=[f"{x:.1f}%" for x in summary_df['Accuracy (%)']],
+            textposition="top center",
+            textfont=dict(size=11, color='#333')
         ))
         
-        # Add fill color below line
+        # 2. Gradient fill under line dengan opacity gradient
         fig.add_trace(go.Scatter(
             x=summary_df['Month_Display'],
             y=summary_df['Accuracy (%)'],
             mode='none',
             fill='tozeroy',
-            fillcolor='rgba(102, 126, 234, 0.1)',
+            fillcolor='rgba(102, 126, 234, 0.15)',
             showlegend=False,
             hoverinfo='skip'
         ))
         
-        # Add target zones
+        # 3. Performance zone bands dengan warna yang lebih soft
+        # Excellent Zone (90-100%)
         fig.add_hrect(
             y0=90, y1=110,
-            fillcolor="rgba(76, 175, 80, 0.1)",
+            fillcolor="rgba(76, 175, 80, 0.08)",
             layer="below",
             line_width=0,
+            annotation_text="Excellent Zone",
+            annotation_position="inside top left",
+            annotation_font_size=10,
+            annotation_font_color="#2E7D32"
         )
         
+        # Good Zone (80-90%)
         fig.add_hrect(
             y0=80, y1=90,
-            fillcolor="rgba(255, 152, 0, 0.1)",
+            fillcolor="rgba(255, 193, 7, 0.08)",
             layer="below",
             line_width=0,
+            annotation_text="Good Zone",
+            annotation_position="inside top left",
+            annotation_font_size=10,
+            annotation_font_color="#FF8F00"
         )
         
+        # Needs Improvement Zone (0-80%)
         fig.add_hrect(
             y0=0, y1=80,
-            fillcolor="rgba(244, 67, 54, 0.1)",
+            fillcolor="rgba(244, 67, 54, 0.08)",
             layer="below",
             line_width=0,
+            annotation_text="Needs Improvement",
+            annotation_position="inside top left",
+            annotation_font_size=10,
+            annotation_font_color="#D32F2F"
         )
         
-        # Add target lines
+        # 4. Target lines dengan style lebih elegant
         fig.add_hline(
             y=80,
-            line_dash="dash",
+            line_dash="dot",
             line_color="#FF9800",
-            annotation_text="Target: 80%",
-            annotation_position="bottom right"
+            line_width=2,
+            annotation_text="<b>Target: 80%</b>",
+            annotation_position="bottom right",
+            annotation_font_size=11,
+            annotation_font_color="#FF9800",
+            annotation_bgcolor="rgba(255, 255, 255, 0.8)"
         )
         
         fig.add_hline(
             y=90,
-            line_dash="dash",
+            line_dash="dot",
             line_color="#4CAF50",
-            annotation_text="Excellent: 90%",
-            annotation_position="bottom right"
+            line_width=2,
+            annotation_text="<b>Excellent: 90%</b>",
+            annotation_position="bottom right",
+            annotation_font_size=11,
+            annotation_font_color="#4CAF50",
+            annotation_bgcolor="rgba(255, 255, 255, 0.8)"
         )
         
-        # Update layout - FIXED VERSION
+        # 5. Annotate best and worst months
+        best_month = summary_df.loc[summary_df['Accuracy (%)'].idxmax()]
+        worst_month = summary_df.loc[summary_df['Accuracy (%)'].idxmin()]
+        
+        # Best month annotation
+        fig.add_annotation(
+            x=best_month['Month_Display'],
+            y=best_month['Accuracy (%)'] + 2,
+            text=f"🏆 Best: {best_month['Accuracy (%)']:.1f}%",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor="#4CAF50",
+            font=dict(size=10, color="#2E7D32", weight="bold"),
+            bgcolor="rgba(255, 255, 255, 0.9)",
+            bordercolor="#4CAF50",
+            borderwidth=1,
+            borderpad=4
+        )
+        
+        # Worst month annotation (jika dibawah target)
+        if worst_month['Accuracy (%)'] < 80:
+            fig.add_annotation(
+                x=worst_month['Month_Display'],
+                y=worst_month['Accuracy (%)'] - 3,
+                text=f"⚠️ {worst_month['Accuracy (%)']:.1f}%",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=2,
+                arrowcolor="#F44336",
+                font=dict(size=10, color="#D32F2F", weight="bold"),
+                bgcolor="rgba(255, 255, 255, 0.9)",
+                bordercolor="#F44336",
+                borderwidth=1,
+                borderpad=4
+            )
+        
+        # 6. Update layout dengan style premium
         fig.update_layout(
-            height=500,
+            height=550,
             title=dict(
-                text='<b>📊 FORECAST ACCURACY PERFORMANCE TREND</b>',
+                text='<b>📊 FORECAST ACCURACY PERFORMANCE TREND</b><br><span style="font-size:14px; color:#666">Monthly Accuracy with Target Zones</span>',
                 x=0.5,
-                font=dict(size=18, color='#333')
+                font=dict(size=22, color='#1a237e', family="Arial, sans-serif"),
+                y=0.95
             ),
             xaxis=dict(
                 title='<b>PERIOD</b>',
+                titlefont=dict(size=13, color='#333'),
                 showgrid=True,
                 gridcolor='rgba(0,0,0,0.05)',
-                tickangle=0
+                gridwidth=1,
+                tickangle=0,
+                tickfont=dict(size=11, color='#555'),
+                showline=True,
+                linecolor='rgba(0,0,0,0.1)',
+                linewidth=1,
+                mirror=True
             ),
             yaxis=dict(
                 title='<b>ACCURACY (%)</b>',
+                titlefont=dict(size=13, color='#333'),
                 range=[0, 110],
                 ticksuffix="%",
                 gridcolor='rgba(0,0,0,0.05)',
-                tickformat='.0f'
+                gridwidth=1,
+                tickformat='.0f',
+                tickfont=dict(size=11, color='#555'),
+                showline=True,
+                linecolor='rgba(0,0,0,0.1)',
+                linewidth=1,
+                mirror=True
             ),
             plot_bgcolor='white',
             paper_bgcolor='white',
             hovermode='x unified',
             showlegend=False,
-            margin=dict(t=80, b=40, l=60, r=20)
+            margin=dict(t=120, b=80, l=80, r=40),
+            hoverlabel=dict(
+                bgcolor="white",
+                font_size=12,
+                font_family="Arial",
+                bordercolor="#667eea"
+            )
         )
         
-        # Add performance annotations
-        for i, row in summary_df.iterrows():
-            if row['Accuracy (%)'] >= 90:
-                badge_color = "#4CAF50"
-            elif row['Accuracy (%)'] >= 80:
-                badge_color = "#FF9800"
-            else:
-                badge_color = "#FF5252"
+        # 7. Add performance trend line (trendline)
+        if len(summary_df) >= 3:
+            z = np.polyfit(range(len(summary_df)), summary_df['Accuracy (%)'], 1)
+            p = np.poly1d(z)
+            trend_line = p(range(len(summary_df)))
             
-            # Add small dot annotation
-            fig.add_annotation(
-                x=row['Month_Display'],
-                y=row['Accuracy (%)'] + 1,
-                text="●",
-                showarrow=False,
-                font=dict(size=8, color=badge_color)
-            )
+            fig.add_trace(go.Scatter(
+                x=summary_df['Month_Display'],
+                y=trend_line,
+                mode='lines',
+                name='Trend Line',
+                line=dict(
+                    color='rgba(0, 0, 0, 0.3)',
+                    width=2,
+                    dash='dash'
+                ),
+                hovertemplate='Trend: %{y:.1f}%<extra></extra>',
+                showlegend=False
+            ))
         
         st.plotly_chart(fig, use_container_width=True)
+        
+        # ===== PERFORMANCE INSIGHTS PANEL =====
+        st.markdown("---")
+        
+        # Create insights panel
+        col_insight1, col_insight2, col_insight3 = st.columns(3)
+        
+        with col_insight1:
+            # Trend analysis
+            if len(summary_df) >= 2:
+                first_acc = summary_df['Accuracy (%)'].iloc[0]
+                last_acc = summary_df['Accuracy (%)'].iloc[-1]
+                trend_pct = ((last_acc - first_acc) / first_acc * 100) if first_acc > 0 else 0
+                
+                trend_icon = "📈" if trend_pct > 5 else "📉" if trend_pct < -5 else "➡️"
+                trend_color = "#4CAF50" if trend_pct > 5 else "#F44336" if trend_pct < -5 else "#FF9800"
+                trend_text = "Improving" if trend_pct > 5 else "Declining" if trend_pct < -5 else "Stable"
+                
+                st.markdown(f"""
+                <div style="background: white; border-radius: 12px; padding: 1.5rem; 
+                            box-shadow: 0 6px 20px rgba(0,0,0,0.1); border-left: 5px solid {trend_color};">
+                    <div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">PERFORMANCE TREND</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: {trend_color}; margin-bottom: 0.5rem;">
+                        {trend_icon} {trend_text}
+                    </div>
+                    <div style="font-size: 0.9rem; color: #888;">
+                        {trend_pct:+.1f}% vs first period<br>
+                        Current: {last_acc:.1f}%
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col_insight2:
+            # Consistency score
+            std_accuracy = summary_df['Accuracy (%)'].std()
+            consistency_score = max(0, 100 - (std_accuracy * 2))
+            
+            if consistency_score >= 85:
+                cons_color = "#4CAF50"
+                cons_text = "Very Stable"
+            elif consistency_score >= 70:
+                cons_color = "#FF9800"
+                cons_text = "Moderate"
+            else:
+                cons_color = "#F44336"
+                cons_text = "Volatile"
+            
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 1.5rem; 
+                        box-shadow: 0 6px 20px rgba(0,0,0,0.1); border-left: 5px solid {cons_color};">
+                <div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">CONSISTENCY</div>
+                <div style="font-size: 2rem; font-weight: 800; color: {cons_color}; margin-bottom: 0.5rem;">
+                    {consistency_score:.0f}/100
+                </div>
+                <div style="font-size: 0.9rem; color: #888;">
+                    {cons_text}<br>
+                    Std Dev: {std_accuracy:.2f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_insight3:
+            # Target achievement
+            months_above_target = len(summary_df[summary_df['Accuracy (%)'] >= 80])
+            total_months = len(summary_df)
+            target_ratio = (months_above_target / total_months * 100) if total_months > 0 else 0
+            
+            if target_ratio >= 80:
+                target_color = "#4CAF50"
+                target_text = "Excellent"
+            elif target_ratio >= 60:
+                target_color = "#FF9800"
+                target_text = "Good"
+            else:
+                target_color = "#F44336"
+                target_text = "Needs Focus"
+            
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 1.5rem; 
+                        box-shadow: 0 6px 20px rgba(0,0,0,0.1); border-left: 5px solid {target_color};">
+                <div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">TARGET ACHIEVEMENT</div>
+                <div style="font-size: 2rem; font-weight: 800; color: {target_color}; margin-bottom: 0.5rem;">
+                    {target_ratio:.0f}%
+                </div>
+                <div style="font-size: 0.9rem; color: #888;">
+                    {months_above_target}/{total_months} months<br>
+                    {target_text}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # ===== MINI TREND CHART WITH MONTHLY DETAILS =====
+        st.markdown("---")
+        st.markdown("#### 📅 Monthly Performance Details")
+        
+        # Create mini chart dengan detail per bulan
+        fig_mini = go.Figure()
+        
+        # Bar chart untuk accuracy
+        fig_mini.add_trace(go.Bar(
+            x=summary_df['Month_Display'],
+            y=summary_df['Accuracy (%)'],
+            name='Accuracy',
+            marker_color=summary_df['Accuracy (%)'].apply(
+                lambda x: '#4CAF50' if x >= 90 else '#FFC107' if x >= 80 else '#F44336'
+            ),
+            text=[f"{x:.1f}%" for x in summary_df['Accuracy (%)']],
+            textposition='outside',
+            textfont=dict(size=10, color='#333')
+        ))
+        
+        fig_mini.update_layout(
+            height=300,
+            title='Monthly Accuracy Breakdown',
+            xaxis_title='Month',
+            yaxis_title='Accuracy %',
+            yaxis_range=[0, 110],
+            showlegend=False,
+            margin=dict(t=50, b=20, l=60, r=20)
+        )
+        
+        st.plotly_chart(fig_mini, use_container_width=True)
+        
+        # ===== DATA TABLE WITH COLOR CODING =====
+        with st.expander("📋 View Detailed Monthly Data", expanded=False):
+            # Prepare display dataframe
+            display_df = summary_df.copy()
+            display_df['Accuracy (%)'] = display_df['Accuracy (%)'].apply(lambda x: f"{x:.1f}%")
+            display_df['MAPE'] = display_df['MAPE'].apply(lambda x: f"{x:.1f}%")
+            display_df['Month'] = display_df['Month'].dt.strftime('%b %Y')
+            
+            # Reorder columns
+            display_df = display_df[['Month', 'Accuracy (%)', 'MAPE', 'Under', 'Accurate', 'Over', 'Total SKUs', 'Status']]
+            
+            # Create styled dataframe
+            def color_status(val):
+                if val == 'Excellent':
+                    return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold'
+                elif val == 'Good':
+                    return 'background-color: #FFF3E0; color: #FF8F00; font-weight: bold'
+                else:
+                    return 'background-color: #FFEBEE; color: #C62828; font-weight: bold'
+            
+            styled_df = display_df.style.applymap(color_status, subset=['Status'])
+            
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                height=400
+            )
+            
+            # Download option
+            csv = summary_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Accuracy Data",
+                data=csv,
+                file_name=f"forecast_accuracy_trend_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
         
         # ===== OPTION 2: MINI DASHBOARD CARDS BELOW CHART =====
         col1, col2, col3, col4 = st.columns(4)
