@@ -1967,7 +1967,9 @@ if last_3_months_performance:
         
         months_display.append(month_name)
         
-    # TOTAL METRICS - BULAN TERAKHIR (dengan Qty dan persentase)
+    # ==============================================================================
+    # 1. TOTAL METRICS - BULAN TERAKHIR (Soft Gradient Version)
+    # ==============================================================================
     st.divider()
     st.subheader("📊 Total Metrics - Bulan Terakhir")
     
@@ -1976,254 +1978,207 @@ if last_3_months_performance:
         last_month = sorted(monthly_performance.keys())[-1]
         last_month_data = monthly_performance[last_month]['data']
         
-        # Count SKUs by status for last month
+        # Count SKUs & Quantities
         under_count = last_month_data[last_month_data['Accuracy_Status'] == 'Under']['SKU_ID'].nunique()
         accurate_count = last_month_data[last_month_data['Accuracy_Status'] == 'Accurate']['SKU_ID'].nunique()
         over_count = last_month_data[last_month_data['Accuracy_Status'] == 'Over']['SKU_ID'].nunique()
         total_count_last_month = last_month_data['SKU_ID'].nunique()
         
-        # Sum of forecast quantity by status for last month
         under_forecast_qty = last_month_data[last_month_data['Accuracy_Status'] == 'Under']['Forecast_Qty'].sum()
         accurate_forecast_qty = last_month_data[last_month_data['Accuracy_Status'] == 'Accurate']['Forecast_Qty'].sum()
         over_forecast_qty = last_month_data[last_month_data['Accuracy_Status'] == 'Over']['Forecast_Qty'].sum()
         total_forecast_qty = last_month_data['Forecast_Qty'].sum()
         
-        # Calculate percentages
+        # Percentages
         under_pct = (under_count / total_count_last_month * 100) if total_count_last_month > 0 else 0
         accurate_pct = (accurate_count / total_count_last_month * 100) if total_count_last_month > 0 else 0
         over_pct = (over_count / total_count_last_month * 100) if total_count_last_month > 0 else 0
         
-        under_forecast_pct = (under_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
-        accurate_forecast_pct = (accurate_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
-        over_forecast_pct = (over_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
+        under_qty_pct = (under_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
+        accurate_qty_pct = (accurate_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
+        over_qty_pct = (over_forecast_qty / total_forecast_qty * 100) if total_forecast_qty > 0 else 0
 
-        # Overall Accuracy
         last_month_accuracy = monthly_performance[last_month]['accuracy']
 
-        # --- STYLE CSS KHUSUS BAGIAN INI ---
+        # --- CSS SOFT PREMIUM ---
         st.markdown("""
         <style>
             .tm-card {
                 border-radius: 16px;
-                padding: 1.5rem;
+                padding: 1.2rem;
                 color: white;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
                 position: relative;
                 overflow: hidden;
-                transition: all 0.3s ease;
-                height: 100%;
-                border: 1px solid rgba(255,255,255,0.1);
+                transition: transform 0.3s ease;
+                border: 1px solid rgba(255,255,255,0.2);
             }
-            .tm-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
-            }
-            .tm-icon {
-                font-size: 1.5rem;
-                margin-bottom: 0.5rem;
-                opacity: 0.8;
-            }
-            .tm-title {
-                font-size: 0.75rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-                opacity: 0.9;
-                margin-bottom: 0.2rem;
-            }
-            .tm-main-val {
-                font-size: 2rem;
-                font-weight: 800;
-                margin-bottom: 0.2rem;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .tm-sub-val {
-                font-size: 0.9rem;
-                font-weight: 500;
-                opacity: 0.95;
-                margin-bottom: 1rem;
-                display: flex;
-                align-items: center;
-                gap: 5px;
-            }
-            .tm-footer {
-                background: rgba(0, 0, 0, 0.15);
-                padding: 6px 12px;
-                border-radius: 8px;
-                font-size: 0.75rem;
-                display: flex;
-                justify-content: space-between;
-                backdrop-filter: blur(5px);
-            }
+            .tm-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); }
+            
+            .tm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+            .tm-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
+            .tm-icon { font-size: 1.2rem; opacity: 0.8; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 8px; }
+            
+            .tm-main-val { font-size: 1.8rem; font-weight: 800; margin-bottom: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+            .tm-unit { font-size: 0.9rem; font-weight: 500; opacity: 0.9; margin-left: 2px; }
+            
+            .tm-sub-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.8rem; opacity: 0.95; }
+            .tm-badge { background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 4px; font-weight: 600; }
         </style>
         """, unsafe_allow_html=True)
 
-        # Helper function untuk render card
-        def render_tm_card(title, icon, count, qty, sku_pct, qty_pct, gradient):
+        def render_soft_card(title, icon, count, qty, qty_pct, bg_gradient):
             return f"""
-            <div class="tm-card" style="background: {gradient};">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <div class="tm-title">{title}</div>
-                        <div class="tm-main-val">{count} <span style="font-size:1rem; font-weight:600;">SKUs</span></div>
-                    </div>
-                    <div class="tm-icon">{icon}</div>
+            <div class="tm-card" style="background: {bg_gradient};">
+                <div class="tm-header">
+                    <span class="tm-title">{title}</span>
+                    <span class="tm-icon">{icon}</span>
                 </div>
-                <div class="tm-sub-val">📦 Qty: {qty:,.0f}</div>
-                <div class="tm-footer">
-                    <span>SKU: <strong>{sku_pct:.1f}%</strong></span>
-                    <span>|</span>
-                    <span>Qty: <strong>{qty_pct:.1f}%</strong></span>
+                <div>
+                    <span class="tm-main-val">{count}</span><span class="tm-unit">SKUs</span>
+                </div>
+                <div class="tm-sub-row">
+                    <span>Qty Forecast: {qty:,.0f}</span>
+                    <span class="tm-badge">{qty_pct:.1f}%</span>
                 </div>
             </div>
             """
 
-        # Layout untuk Total Metrics bulan terakhir
-        col_total1, col_total2, col_total3, col_total4 = st.columns(4)
+        c1, c2, c3, c4 = st.columns(4)
         
-        with col_total1:
-            # UNDER - Red Gradient
-            st.markdown(render_tm_card(
-                "Under Forecast", "📉", under_count, under_forecast_qty, under_pct, under_forecast_pct,
-                "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)"
-            ), unsafe_allow_html=True)
-        
-        with col_total2:
-            # ACCURATE - Green Gradient
-            st.markdown(render_tm_card(
-                "Accurate Forecast", "🎯", accurate_count, accurate_forecast_qty, accurate_pct, accurate_forecast_pct,
-                "linear-gradient(135deg, #10B981 0%, #047857 100%)"
-            ), unsafe_allow_html=True)
-        
-        with col_total3:
-            # OVER - Orange Gradient
-            st.markdown(render_tm_card(
-                "Over Forecast", "📈", over_count, over_forecast_qty, over_pct, over_forecast_pct,
-                "linear-gradient(135deg, #F59E0B 0%, #B45309 100%)"
-            ), unsafe_allow_html=True)
-        
-        with col_total4:
-            # OVERALL - Indigo/Purple Gradient
+        with c1:
+            # Under - Soft Rose/Coral
+            st.markdown(render_soft_card("Under Forecast", "📉", under_count, under_forecast_qty, under_qty_pct, 
+                "linear-gradient(135deg, #e57373 0%, #ef5350 100%)"), unsafe_allow_html=True)
+        with c2:
+            # Accurate - Soft Teal/Emerald
+            st.markdown(render_soft_card("Accurate Forecast", "🎯", accurate_count, accurate_forecast_qty, accurate_qty_pct, 
+                "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
+        with c3:
+            # Over - Soft Amber/Orange
+            st.markdown(render_soft_card("Over Forecast", "📈", over_count, over_forecast_qty, over_qty_pct, 
+                "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
+        with c4:
+            # Overall - Soft Indigo
             st.markdown(f"""
-            <div class="tm-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <div class="tm-title">OVERALL ACCURACY</div>
-                        <div class="tm-main-val">{last_month_accuracy:.1f}%</div>
-                    </div>
-                    <div class="tm-icon">🏆</div>
+            <div class="tm-card" style="background: linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%);">
+                <div class="tm-header">
+                    <span class="tm-title">OVERALL SCORE</span>
+                    <span class="tm-icon">🏆</span>
                 </div>
-                <div class="tm-sub-val" style="margin-bottom: 1.3rem;">📅 {last_month.strftime("%B %Y")}</div>
-                <div class="tm-footer" style="justify-content: center;">
-                    <strong>Total Active SKUs: {total_count_last_month}</strong>
+                <div>
+                    <span class="tm-main-val">{last_month_accuracy:.1f}%</span>
+                </div>
+                <div class="tm-sub-row">
+                    <span>{last_month.strftime('%B %Y')}</span>
+                    <span class="tm-badge">Total: {total_count_last_month} SKUs</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-        
-        # Summary stats text (kecil di bawah cards)
-        st.caption(f"💡 **Snapshot {last_month.strftime('%B %Y')}:** Dari total forecast **{total_forecast_qty:,.0f} units**, tingkat akurasi quantity secara global mencapai **{accurate_forecast_pct:.1f}%**.")
-    
-    # TOTAL ROFO DAN PO BULAN TERAKHIR
+
+    # ==============================================================================
+    # 2. COMPARISON CARDS - PROCESS FLOW STYLE (ROFO -> PO -> SALES)
+    # ==============================================================================
     if monthly_performance:
         last_month = sorted(monthly_performance.keys())[-1]
         last_month_data = monthly_performance[last_month]['data']
         
-        total_rofo_last_month = last_month_data['Forecast_Qty'].sum()
-        total_po_last_month = last_month_data['PO_Qty'].sum()
-        selisih_qty = total_po_last_month - total_rofo_last_month
-        selisih_persen = (selisih_qty / total_rofo_last_month * 100) if total_rofo_last_month > 0 else 0
-    
-        # ROW UNTUK TOTAL ROFO, PO, SALES - BULAN TERAKHIR
-    st.divider()
-    st.subheader("📈 Total Rofo vs PO vs Sales - Bulan Terakhir")
-    
-    # Hitung total sales untuk bulan terakhir
-    total_sales_last_month = 0
-    sales_vs_rofo_pct = 0
-    sales_vs_po_pct = 0
-    
-    if not df_sales.empty and monthly_performance:
-        last_month = sorted(monthly_performance.keys())[-1]
-        df_sales_last_month = df_sales[df_sales['Month'] == last_month].copy()
-        total_sales_last_month = df_sales_last_month['Sales_Qty'].sum()
+        # Calculate Totals
+        rofo_tot = last_month_data['Forecast_Qty'].sum()
+        po_tot = last_month_data['PO_Qty'].sum()
         
-        # Hitung persentase sales vs rofo
-        if total_rofo_last_month > 0:
-            sales_vs_rofo_pct = (total_sales_last_month / total_rofo_last_month * 100)
-        
-        # Hitung persentase sales vs po
-        if total_po_last_month > 0:
-            sales_vs_po_pct = (total_sales_last_month / total_po_last_month * 100)
-    
-    # Buat 6 columns untuk Rofo, PO, Sales dan persentasenya
-    rofo_col1, rofo_col2, rofo_col3, rofo_col4, rofo_col5, rofo_col6 = st.columns(6)
-    
-    with rofo_col1:
-        st.metric(
-            "Total Rofo Qty",
-            f"{total_rofo_last_month:,.0f}",
-            help="Total quantity dari forecast/Rofo bulan terakhir"
-        )
-    
-    with rofo_col2:
-        st.metric(
-            "Total PO Qty", 
-            f"{total_po_last_month:,.0f}",
-            help="Total quantity dari Purchase Order bulan terakhir"
-        )
-    
-    with rofo_col3:
-        st.metric(
-            "Total Sales Qty",
-            f"{total_sales_last_month:,.0f}",
-            help="Total quantity dari Sales bulan terakhir"
-        )
-    
-    with rofo_col4:
-        # Sales vs Rofo %
-        delta_sales_rofo = f"{sales_vs_rofo_pct-100:+.1f}%" if sales_vs_rofo_pct > 0 else "0%"
-        st.metric(
-            "Sales/Rofo %",
-            f"{sales_vs_rofo_pct:.1f}%",
-            delta=delta_sales_rofo,
-            delta_color="normal" if 80 <= sales_vs_rofo_pct <= 120 else "off",
-            help="Persentase Sales vs Rofo (100% = Sales = Rofo)"
-        )
-    
-    with rofo_col5:
-        # Sales vs PO %
-        delta_sales_po = f"{sales_vs_po_pct-100:+.1f}%" if sales_vs_po_pct > 0 else "0%"
-        st.metric(
-            "Sales/PO %",
-            f"{sales_vs_po_pct:.1f}%",
-            delta=delta_sales_po,
-            delta_color="normal" if 80 <= sales_vs_po_pct <= 120 else "off",
-            help="Persentase Sales vs PO (100% = Sales = PO)"
-        )
-    
-    with rofo_col6:
-        # PO vs Rofo % (selisih PO-Rofo yang sudah ada)
-        delta_po_rofo = f"{selisih_persen:+.1f}%"
-        st.metric(
-            "PO/Rofo %",
-            f"{(total_po_last_month/total_rofo_last_month*100 if total_rofo_last_month > 0 else 0):.1f}%",
-            delta=delta_po_rofo,
-            delta_color="normal" if abs(selisih_persen) < 20 else "off",
-            help="Persentase PO vs Rofo (100% = PO = Rofo)"
-        )
-    
-    # Summary bar di bawah
-    st.caption(f"""
-    **Bulan {last_month.strftime('%b %Y')}:** 
-    • **Rofo:** {total_rofo_last_month:,.0f} | 
-    • **PO:** {total_po_last_month:,.0f} | 
-    • **Sales:** {total_sales_last_month:,.0f} | 
-    • **Sales/Rofo:** {sales_vs_rofo_pct:.1f}% | 
-    • **Sales/PO:** {sales_vs_po_pct:.1f}% | 
-    • **PO/Rofo:** {(total_po_last_month/total_rofo_last_month*100 if total_rofo_last_month > 0 else 0):.1f}%
-    """)
-else:
-    st.warning("⚠️ Insufficient data for monthly performance analysis")
+        # Get Sales
+        sales_tot = 0
+        if not df_sales.empty:
+            sales_tot = df_sales[df_sales['Month'] == last_month]['Sales_Qty'].sum()
+
+        # Calculate Ratios
+        po_vs_rofo = (po_tot / rofo_tot * 100) if rofo_tot > 0 else 0
+        sales_vs_rofo = (sales_tot / rofo_tot * 100) if rofo_tot > 0 else 0
+        sales_vs_po = (sales_tot / po_tot * 100) if po_tot > 0 else 0
+
+        st.write("") # Spacer
+        st.subheader(f"🔄 Business Flow Performance: {last_month.strftime('%B %Y')}")
+
+        # CSS For Process Cards
+        st.markdown("""
+        <style>
+            .process-container {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 15px;
+                margin-top: 10px;
+            }
+            .p-card {
+                background: white;
+                border-radius: 12px;
+                padding: 1.5rem;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                border-top: 5px solid #ccc;
+                position: relative;
+            }
+            .p-label { font-size: 0.8rem; font-weight: 700; color: #888; letter-spacing: 1px; margin-bottom: 5px; }
+            .p-val { font-size: 2rem; font-weight: 800; color: #333; margin-bottom: 10px; }
+            .p-badge-container { display: flex; gap: 8px; flex-wrap: wrap; }
+            .p-badge { 
+                font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; 
+                display: flex; align-items: center; gap: 4px;
+            }
+            
+            /* Specific Colors */
+            .border-rofo { border-top-color: #5C6BC0; } /* Indigo */
+            .border-po { border-top-color: #FFA726; }   /* Orange */
+            .border-sales { border-top-color: #66BB6A; } /* Green */
+            
+            .text-rofo { color: #3949AB; }
+            .text-po { color: #F57C00; }
+            .text-sales { color: #2E7D32; }
+
+            .bg-rofo-light { background-color: #E8EAF6; color: #3949AB; }
+            .bg-po-light { background-color: #FFF3E0; color: #EF6C00; }
+            .bg-sales-light { background-color: #E8F5E9; color: #2E7D32; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # HTML Structure
+        html_process = f"""
+        <div class="process-container">
+            <div class="p-card border-rofo">
+                <div class="p-label">1. PLANNING (ROFO)</div>
+                <div class="p-val text-rofo">{rofo_tot:,.0f}</div>
+                <div class="p-badge-container">
+                    <span class="p-badge bg-rofo-light">🎯 Baseline Target</span>
+                </div>
+            </div>
+
+            <div class="p-card border-po">
+                <div class="p-label">2. EXECUTION (PO)</div>
+                <div class="p-val text-po">{po_tot:,.0f}</div>
+                <div class="p-badge-container">
+                    <span class="p-badge bg-po-light">
+                        {po_vs_rofo:.1f}% vs Rofo
+                    </span>
+                    <span class="p-badge" style="background:#f0f0f0; color:#666;">
+                        Gap: {po_tot - rofo_tot:+,.0f}
+                    </span>
+                </div>
+            </div>
+
+            <div class="p-card border-sales">
+                <div class="p-label">3. REALIZATION (SALES)</div>
+                <div class="p-val text-sales">{sales_tot:,.0f}</div>
+                <div class="p-badge-container">
+                    <span class="p-badge bg-sales-light">
+                        {sales_vs_rofo:.1f}% vs Rofo
+                    </span>
+                    <span class="p-badge bg-sales-light">
+                        {sales_vs_po:.1f}% vs PO
+                    </span>
+                </div>
+            </div>
+        </div>
+        """
+        st.markdown(html_process, unsafe_allow_html=True)
 
 st.divider()
 # SECTION 2: LAST MONTH EVALUATION (UNDER & OVER ONLY)
