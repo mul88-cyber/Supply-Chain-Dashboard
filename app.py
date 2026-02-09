@@ -2572,29 +2572,136 @@ with tab1:
             height=400
         )
         
-        # Add forecast bias analysis if available
+        # ==============================================================================
+        # 3. PREMIUM FORECAST BIAS ANALYSIS (Diverging Chart Version)
+        # ==============================================================================
         if not forecast_bias.empty:
             st.divider()
-            st.subheader("📉 Forecast Bias Analysis")
+            st.subheader("🎯 Forecast Bias & Health Analysis")
             
+            # 1. Hitung Metrics Utama
+            avg_bias_val = forecast_bias['Avg_Bias_Percentage'].mean()
+            
+            # Tentukan Tendency (Kecenderungan)
+            if avg_bias_val > 5:
+                tendency = "UNDER-FORECASTING (Demand > Plan)"
+                tendency_icon = "📉" # Plan terlalu rendah
+                tendency_color = "#3949ab" # Indigo
+                risk_msg = "Risk: Potential Lost Sales (Stockout)"
+            elif avg_bias_val < -5:
+                tendency = "OVER-FORECASTING (Demand < Plan)"
+                tendency_icon = "📈" # Plan ketinggian
+                tendency_color = "#ef5350" # Red
+                risk_msg = "Risk: Excess Stock & Obsolescence"
+            else:
+                tendency = "BALANCED (Good Accuracy)"
+                tendency_icon = "⚖️"
+                tendency_color = "#26a69a" # Teal
+                risk_msg = "Status: Healthy Forecast"
+    
+            # Hitung Jumlah Bulan Warning
+            critical_months = len(forecast_bias[abs(forecast_bias['Avg_Bias_Percentage']) > 20])
+            
+            # --- 2. BIAS HEALTH CARDS (CSS) ---
+            st.markdown(f"""
+            <style>
+                .bias-card {{
+                    background-color: white;
+                    border-radius: 12px;
+                    padding: 1.2rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    border-left: 5px solid {tendency_color};
+                    height: 100%;
+                }}
+                .bias-label {{ font-size: 0.8rem; color: #888; font-weight: 600; text-transform: uppercase; }}
+                .bias-val {{ font-size: 1.8rem; font-weight: 800; color: #333; margin: 5px 0; }}
+                .bias-sub {{ font-size: 0.9rem; color: {tendency_color}; font-weight: 600; }}
+                .bias-desc {{ font-size: 0.8rem; color: #666; margin-top: 5px; }}
+            </style>
+            """, unsafe_allow_html=True)
+    
+            bc1, bc2, bc3 = st.columns(3)
+    
+            with bc1:
+                st.markdown(f"""
+                <div class="bias-card">
+                    <div class="bias-label">AVERAGE BIAS (YTD)</div>
+                    <div class="bias-val">{avg_bias_val:+.1f}%</div>
+                    <div class="bias-sub">{tendency_icon} {tendency}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+            with bc2:
+                st.markdown(f"""
+                <div class="bias-card" style="border-left-color: #ffa726;">
+                    <div class="bias-label">IMPACT ANALYSIS</div>
+                    <div class="bias-val" style="font-size: 1.2rem; margin-top: 15px;">{risk_msg}</div>
+                    <div class="bias-desc">Based on average deviation direction</div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+            with bc3:
+                status_color = "#ef5350" if critical_months > 0 else "#26a69a"
+                st.markdown(f"""
+                <div class="bias-card" style="border-left-color: {status_color};">
+                    <div class="bias-label">VOLATILITY CHECK</div>
+                    <div class="bias-val">{critical_months} <span style="font-size:1rem;">Months</span></div>
+                    <div class="bias-desc">Months with >20% Deviation (Critical)</div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+            # --- 3. DIVERGING BAR CHART (Visualisasi Bias) ---
+            st.write("") # Spacer
+            
+            # Prepare colors based on severity
+            # Hijau: -10% s/d 10% (Aman)
+            # Kuning: -20% s/d -10% ATAU 10% s/d 20% (Warning)
+            # Merah: < -20% ATAU > 20% (Critical)
+            
+            colors = []
+            for val in forecast_bias['Avg_Bias_Percentage']:
+                if abs(val) <= 10:
+                    colors.append('#4db6ac') # Soft Teal (Aman)
+                elif abs(val) <= 20:
+                    colors.append('#ffb74d') # Soft Orange (Warning)
+                else:
+                    colors.append('#ef5350') # Soft Red (Critical)
+    
             fig_bias = go.Figure()
+    
             fig_bias.add_trace(go.Bar(
                 x=forecast_bias['Month'].dt.strftime('%b-%Y'),
                 y=forecast_bias['Avg_Bias_Percentage'],
-                name='Forecast Bias %',
-                marker_color=forecast_bias['Avg_Bias_Percentage'].apply(
-                    lambda x: '#4CAF50' if x >= -10 and x <= 10 else '#FF9800' if x >= -20 and x <= 20 else '#F44336'
-                )
+                text=[f"{x:+.1f}%" for x in forecast_bias['Avg_Bias_Percentage']],
+                textposition='auto',
+                marker_color=colors,
+                name='Bias %'
             ))
-            
+    
+            # Add Reference Lines (Zones)
+            fig_bias.add_hrect(y0=-10, y1=10, fillcolor="green", opacity=0.05, line_width=0, annotation_text="Safe Zone", annotation_position="top left")
+            fig_bias.add_hrect(y0=-20, y1=20, line_dash="dot", line_color="gray", fillcolor="yellow", opacity=0.05, line_width=1, annotation_text="Warning Limit")
+    
             fig_bias.update_layout(
-                height=300,
-                title='Monthly Forecast Bias (Positive = Over-forecast, Negative = Under-forecast)',
-                xaxis_title='Month',
-                yaxis_title='Bias %'
+                title="<b>📉 Monthly Forecast Bias Trend</b> (Positive = Under Forecast, Negative = Over Forecast)",
+                yaxis_title="Bias Percentage (%)",
+                xaxis_title="Period",
+                height=400,
+                hovermode="x unified",
+                yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'), # Garis nol dipertegas
+                plot_bgcolor='white',
+                margin=dict(t=50, b=20, l=20, r=20)
             )
-            
+    
             st.plotly_chart(fig_bias, use_container_width=True)
+            
+            # Footer Note
+            st.caption("""
+            ℹ️ **Cara Membaca:**
+            - **Bar ke Atas (+):** Realisasi (PO) > Forecast. Artinya **Under-Forecast** (Kurang plan, potensi lost sales).
+            - **Bar ke Bawah (-):** Realisasi (PO) < Forecast. Artinya **Over-Forecast** (Plan ketinggian, potensi overstock).
+            - **Zona Hijau:** Bias ±10% dianggap sehat.
+            """)
 
 # --- TAB 2: FORECAST PERFORMANCE BY BRAND & TIER ANALYSIS ---
 with tab2:
