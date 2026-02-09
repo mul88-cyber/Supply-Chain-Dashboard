@@ -5323,10 +5323,10 @@ with tab9:
                     key="dl_po"
                 )
 
-# --- TAB 10: FULFILLMENT COST ANALYSIS (UNIT ECONOMICS & PROJECTION) ---
+# --- TAB 10: FULFILLMENT COST ANALYSIS (CORRECTED LOGIC) ---
 with tab10:
     st.subheader("🚚 Fulfillment Cost Intelligence")
-    st.caption("Operational Efficiency: Cost per Order (CPO), Contribution, and 2026 Cost Projection")
+    st.caption("Operational Efficiency: Cost per Order (CPO), Contribution, and BS Cost Projection")
 
     # ==============================================================================
     # 1. DATA PREPARATION (HISTORICAL)
@@ -5336,12 +5336,11 @@ with tab10:
     if not df_bs.empty:
         # Sort kronologis
         if 'Month_Date' not in df_bs.columns:
-             # Fallback parsing
              df_bs['Month_Date'] = pd.to_datetime(df_bs['Month'], format='%b-%y', errors='coerce')
         
         df_bs = df_bs.sort_values('Month_Date')
 
-        # CALCULATE METRICS (Termasuk CPO)
+        # CALCULATE METRICS
         num_cols = ['Total Order(BS)', 'Total Cost', 'GMV (Fullfil By BS)', 'GMV Total (MP)']
         for c in num_cols:
             if c in df_bs.columns:
@@ -5357,7 +5356,7 @@ with tab10:
             lambda x: x['GMV (Fullfil By BS)'] / x['Total Order(BS)'] if x['Total Order(BS)'] > 0 else 0, axis=1
         )
 
-        # 3. Contribution %
+        # 3. Contribution % (Share BS vs Total MP)
         df_bs['Contrib_Pct'] = df_bs.apply(
             lambda x: (x['GMV (Fullfil By BS)'] / x['GMV Total (MP)'] * 100) if x['GMV Total (MP)'] > 0 else 0, axis=1
         )
@@ -5378,7 +5377,6 @@ with tab10:
             else:
                 return f"{val:,.0f}"
 
-        # Calculate Deltas
         d_cpo = last_row['CPO'] - prev_row['CPO']
         d_gmv = last_row['GMV (Fullfil By BS)'] - prev_row['GMV (Fullfil By BS)']
         d_ord = last_row['Total Order(BS)'] - prev_row['Total Order(BS)']
@@ -5434,7 +5432,7 @@ with tab10:
             <div class="eff-card" style="background: linear-gradient(135deg, #F97316 0%, #C2410C 100%);">
                 <div class="eff-title">Total Fulfillment Cost</div>
                 <div class="eff-val">{fmt_kpi(last_row['Total Cost'], True)}</div>
-                <div class="eff-sub">Ratio: {last_row['%Cost']:.1f}% of GMV</div>
+                <div class="eff-sub">Ratio: {last_row['%Cost']:.1f}% of GMV BS</div>
             </div>""", unsafe_allow_html=True)
 
         # ==============================================================================
@@ -5454,7 +5452,7 @@ with tab10:
 
         with col_trend:
             st.subheader("📉 % Cost Ratio Trend")
-            st.caption("Efficiency Trend: Operational Cost % against GMV")
+            st.caption("Efficiency Trend: Cost / GMV Fulfilled by BS")
             fig_ratio = go.Figure()
             fig_ratio.add_trace(go.Scatter(x=df_bs['Month'], y=df_bs['%Cost'], mode='lines+markers', fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.1)', line=dict(color='#10B981', width=3), name='% Cost'))
             avg_cost_pct = df_bs['%Cost'].mean()
@@ -5463,23 +5461,18 @@ with tab10:
             st.plotly_chart(fig_ratio, use_container_width=True)
 
         # ==============================================================================
-        # 4. FULFILLMENT COST PROJECTION 2026 (NEW!)
+        # 4. FULFILLMENT COST PROJECTION 2026 (CORRECTED LOGIC)
         # ==============================================================================
         st.divider()
         st.subheader("🔮 Fulfillment Cost Projection 2026")
-        st.caption("Simulasi Estimasi Biaya Logistik/Fulfillment berdasarkan Forecast Revenue 2026.")
+        st.caption("Simulasi Estimasi Biaya Logistik berdasarkan Forecast Revenue & BS Contribution Share.")
 
         # --- 4.1. Prepare 2026 Revenue Data ---
-        # Kita gabungkan logika dari Tab 8 untuk mendapatkan Revenue bulanan 2026
-        combined_rev_2026 = []
-        
-        # Helper untuk menarik data revenue forecast
-        def get_forecast_revenue(df_fcst, channel_name):
+        def get_forecast_revenue(df_fcst):
             if df_fcst.empty: return pd.DataFrame()
             cols = [c for c in df_fcst.columns if any(char.isdigit() for char in str(c))]
             if not cols: return pd.DataFrame()
             
-            # Merge Harga
             df_m = df_fcst.copy()
             if 'Floor_Price' not in df_m.columns:
                 df_m = add_product_info_to_data(df_m, df_product)
@@ -5489,20 +5482,18 @@ with tab10:
             monthly_rev = []
             for m in cols:
                 rev = (pd.to_numeric(df_m[m], errors='coerce').fillna(0) * df_m['Floor_Price']).sum()
-                monthly_rev.append({'Month_Raw': m, 'Revenue': rev, 'Channel': channel_name})
+                monthly_rev.append({'Month_Raw': m, 'Revenue': rev})
             return pd.DataFrame(monthly_rev)
 
-        df_rev_ecomm = get_forecast_revenue(df_ecomm_forecast, 'Ecommerce')
-        df_rev_res = get_forecast_revenue(df_reseller_forecast, 'Reseller')
+        df_rev_ecomm = get_forecast_revenue(df_ecomm_forecast)
+        df_rev_res = get_forecast_revenue(df_reseller_forecast)
         
         df_proj = pd.concat([df_rev_ecomm, df_rev_res], ignore_index=True)
         
         if not df_proj.empty:
-            # Aggregate Total Revenue per Bulan
-            # Parse dates for sorting
+            # Parse dates
             def parse_date_sort(d):
                 try: 
-                    # Clean format like 'Jan-26', 'Jan 26'
                     clean = str(d).replace('_', '-').replace(' ', '-')
                     return datetime.strptime(clean, '%b-%y')
                 except: return pd.Timestamp.max
@@ -5511,86 +5502,109 @@ with tab10:
             df_proj_agg['Month_Date'] = df_proj_agg['Month_Raw'].apply(parse_date_sort)
             df_proj_agg = df_proj_agg.sort_values('Month_Date')
             
-            # --- 4.2. Simulation Controls ---
+            # --- 4.2. Simulation Controls (NEW SLIDERS) ---
             c_sim1, c_sim2 = st.columns([1, 2])
             
             with c_sim1:
-                st.markdown("##### ⚙️ Simulation Settings")
-                current_avg_cost = df_bs['%Cost'].mean() if not df_bs.empty else 5.0
+                st.markdown("##### ⚙️ Simulation Drivers")
                 
+                # Default values from historical
+                curr_bs_share = df_bs['Contrib_Pct'].iloc[-1] if not df_bs.empty else 50.0
+                curr_cost_ratio = df_bs['%Cost'].iloc[-1] if not df_bs.empty else 5.0
+                
+                # 1. Slider Contribution (Share BS)
+                target_bs_share = st.slider(
+                    "BS Market Share (%)", 
+                    min_value=10.0, max_value=100.0, 
+                    value=float(round(curr_bs_share, 1)), 
+                    step=5.0,
+                    help="Asumsi berapa % dari total revenue yang akan di-fulfill oleh BS."
+                )
+                
+                # 2. Slider Cost Efficiency
                 target_cost_ratio = st.slider(
                     "Target Cost Ratio (%)", 
                     min_value=1.0, max_value=15.0, 
-                    value=float(round(current_avg_cost, 1)), 
+                    value=float(round(curr_cost_ratio, 1)), 
                     step=0.1,
-                    help="Asumsi persentase biaya fulfillment terhadap GMV/Revenue"
+                    help="Biaya sebagai % dari GMV yang di-fulfill BS."
                 )
                 
-                st.info(f"💡 **Current Avg Ratio:** {current_avg_cost:.2f}%\n\nProyeksi akan menggunakan **{target_cost_ratio}%** dari Revenue Forecast 2026.")
+                st.info(f"📝 **Logic:**\nEst GMV BS = Total Revenue x {target_bs_share}%\nEst Cost = GMV BS x {target_cost_ratio}%")
 
             with c_sim2:
-                # Calculate Projected Cost
-                df_proj_agg['Projected_Cost'] = df_proj_agg['Revenue'] * (target_cost_ratio / 100)
+                # Calculate Projected Cost (Correct Logic)
+                # Step 1: Hitung Estimasi GMV yang masuk ke BS
+                df_proj_agg['GMV_BS_Est'] = df_proj_agg['Revenue'] * (target_bs_share / 100)
                 
-                # Visualisasi Monthly
+                # Step 2: Hitung Cost dari GMV BS tersebut
+                df_proj_agg['Projected_Cost'] = df_proj_agg['GMV_BS_Est'] * (target_cost_ratio / 100)
+                
+                # Visualisasi
                 fig_proj = go.Figure()
+                
+                # Bar: GMV BS (Reference)
+                fig_proj.add_trace(go.Bar(
+                    x=df_proj_agg['Month_Raw'], 
+                    y=df_proj_agg['GMV_BS_Est'],
+                    name='Est. GMV BS',
+                    marker_color='#E0E7FF', # Very Light Indigo
+                    opacity=0.5
+                ))
+                
+                # Bar: Cost (Main Focus)
                 fig_proj.add_trace(go.Bar(
                     x=df_proj_agg['Month_Raw'], 
                     y=df_proj_agg['Projected_Cost'],
-                    name='Est. Cost',
+                    name='Est. Fulfillment Cost',
                     marker_color='#F59E0B', # Amber
                     text=[f"Rp {x/1e6:,.0f}jt" for x in df_proj_agg['Projected_Cost']],
                     textposition='auto'
                 ))
+                
                 fig_proj.update_layout(
-                    height=300, 
-                    title="📊 Monthly Cost Projection 2026",
-                    yaxis_title="Estimated Cost (Rp)",
+                    height=350, 
+                    title="📊 2026 Cost Projection (Based on BS Share)",
+                    yaxis_title="Rupiah",
                     xaxis_title="Month",
                     plot_bgcolor='white',
-                    margin=dict(t=40, b=20, l=20, r=20)
+                    barmode='overlay',
+                    legend=dict(orientation="h", y=1.1)
                 )
                 st.plotly_chart(fig_proj, use_container_width=True)
 
             # --- 4.3. Quarterly Breakdown Table ---
-            st.markdown("##### 📅 Quarterly Breakdown Projection")
+            st.markdown("##### 📅 Quarterly Budget Plan")
             
-            # Assign Quarter
-            def get_quarter(dt):
-                return f"Q{(dt.month-1)//3 + 1} {dt.year}"
-            
+            def get_quarter(dt): return f"Q{(dt.month-1)//3 + 1} {dt.year}"
             df_proj_agg['Quarter'] = df_proj_agg['Month_Date'].apply(get_quarter)
             
             df_quarterly = df_proj_agg.groupby('Quarter').agg({
                 'Revenue': 'sum',
+                'GMV_BS_Est': 'sum',
                 'Projected_Cost': 'sum'
-            }).reset_index()
+            }).reset_index().sort_values('Quarter')
             
-            # Sort Quarter (simple string sort works for same year 'Q1 2026', etc)
-            df_quarterly = df_quarterly.sort_values('Quarter')
-            
-            # Calculate Monthly Avg per Quarter (approx /3)
             df_quarterly['Avg_Monthly_Cost'] = df_quarterly['Projected_Cost'] / 3
             
-            # Formatting for Display
+            # Display
             df_q_disp = df_quarterly.copy()
-            df_q_disp['Revenue (Est)'] = df_q_disp['Revenue'].apply(lambda x: f"Rp {x/1e9:,.1f} M")
-            df_q_disp['Total Cost (Est)'] = df_q_disp['Projected_Cost'].apply(lambda x: f"Rp {x/1e6:,.0f} Jt")
+            df_q_disp['Total Forecast (All)'] = df_q_disp['Revenue'].apply(lambda x: f"Rp {x/1e9:,.1f} M")
+            df_q_disp['Est. GMV (BS Only)'] = df_q_disp['GMV_BS_Est'].apply(lambda x: f"Rp {x/1e9:,.1f} M")
+            df_q_disp['Est. Cost Budget'] = df_q_disp['Projected_Cost'].apply(lambda x: f"Rp {x/1e6:,.0f} Jt")
             df_q_disp['Avg Monthly Cost'] = df_q_disp['Avg_Monthly_Cost'].apply(lambda x: f"Rp {x/1e6:,.0f} Jt")
-            df_q_disp['% Ratio'] = f"{target_cost_ratio}%"
             
-            # Display Table
             st.dataframe(
-                df_q_disp[['Quarter', 'Revenue (Est)', 'Total Cost (Est)', 'Avg Monthly Cost', '% Ratio']], 
+                df_q_disp[['Quarter', 'Total Forecast (All)', 'Est. GMV (BS Only)', 'Est. Cost Budget', 'Avg Monthly Cost']], 
                 use_container_width=True,
                 hide_index=True
             )
             
             total_proj_cost = df_proj_agg['Projected_Cost'].sum()
-            st.caption(f"💰 **Total Projected Cost 2026:** Rp {total_proj_cost:,.0f} (Based on {target_cost_ratio}% ratio assumption)")
+            st.caption(f"💰 **Total Budget 2026:** Rp {total_proj_cost:,.0f} (Assuming BS handles {target_bs_share}% of volume)")
 
         else:
-            st.warning("⚠️ Data Forecast Revenue 2026 tidak tersedia (Cek Tab 8/7). Tidak bisa membuat proyeksi biaya.")
+            st.warning("⚠️ Data Forecast Revenue 2026 tidak tersedia. Cek Tab 7/8.")
 
     else:
         st.warning("⚠️ Data 'BS_Fullfilment_Cost' belum tersedia.")
