@@ -4269,270 +4269,222 @@ with tab7:
     else:
         st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
 
-# --- TAB 8: PROFITABILITY ANALYSIS ---
+# --- TAB 8: PROFITABILITY & MARGIN ANALYSIS (FINANCIAL COMMAND CENTER) ---
 with tab8:
-    st.subheader("💰 Combined Profitability & Financial Projection (2026)")
-    st.markdown("**Comprehensive Financial Outlook: Ecommerce + Reseller Channels**")
+    st.subheader("💰 Profitability & Margin Intelligence")
+    st.caption("Financial Projection 2026: Revenue, Cost of Goods Sold (COGS), and Gross Margin Analysis")
 
-    # ================ 1. DATA PROCESSING ENGINE ================
-    # Kita butuh menggabungkan data Ecomm dan Reseller menjadi satu format standar
-    # Format target: SKU_ID | Month | Channel | Qty | Floor_Price | Net_Order_Price
-    
+    # ==============================================================================
+    # 1. DATA MERGING & PREPARATION (ECOMM + RESELLER)
+    # ==============================================================================
     combined_data = []
-    process_success = False
     
-    with st.spinner('🔄 Merging Financial Data...'):
-        try:
-            # --- A. Process Ecommerce Data ---
-            if not df_ecomm_forecast.empty:
-                # Cari kolom bulan 2026
-                ecomm_cols_26 = [c for c in df_ecomm_forecast.columns if '26' in str(c) and any(m in str(c).lower() for m in ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'])]
-                
-                if ecomm_cols_26:
-                    # Melt menjadi long format
-                    df_e_long = df_ecomm_forecast.melt(
-                        id_vars=['SKU_ID'], 
-                        value_vars=ecomm_cols_26, 
-                        var_name='Month_Label', 
-                        value_name='Qty'
-                    )
-                    df_e_long['Channel'] = 'Ecommerce'
-                    combined_data.append(df_e_long)
+    # A. Process Ecommerce
+    if not df_ecomm_forecast.empty:
+        # Detect numeric columns (months)
+        fcst_cols = [c for c in df_ecomm_forecast.columns if any(char.isdigit() for char in str(c))]
+        if fcst_cols:
+            df_e = df_ecomm_forecast.melt(id_vars=['SKU_ID'], value_vars=fcst_cols, var_name='Month_Label', value_name='Qty')
+            df_e['Channel'] = 'Ecommerce'
+            combined_data.append(df_e)
 
-            # --- B. Process Reseller Data ---
-            if not df_reseller_forecast.empty:
-                # Cari kolom bulan 2026
-                res_cols_26 = [c for c in df_reseller_forecast.columns if '26' in str(c) and any(m in str(c).lower() for m in ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'])]
-                
-                if res_cols_26:
-                    df_r_long = df_reseller_forecast.melt(
-                        id_vars=['SKU_ID'], 
-                        value_vars=res_cols_26, 
-                        var_name='Month_Label', 
-                        value_name='Qty'
-                    )
-                    df_r_long['Channel'] = 'Reseller'
-                    combined_data.append(df_r_long)
-            
-            # --- C. Merge & Enrich ---
-            if combined_data:
-                df_fin_combined = pd.concat(combined_data, ignore_index=True)
-                
-                # Bersihkan data Qty
-                df_fin_combined['Qty'] = pd.to_numeric(df_fin_combined['Qty'], errors='coerce').fillna(0)
-                df_fin_combined = df_fin_combined[df_fin_combined['Qty'] > 0] # Ambil yang ada isinya saja
-                
-                # Standardize Month
-                def parse_fin_month(m):
-                    try:
-                        m = str(m).strip()
-                        if '-' in m:
-                            parts = m.split('-')
-                            return datetime.strptime(f"{parts[0][:3]}-20{parts[1][-2:]}", "%b-%Y")
-                    except: return None
-                
-                df_fin_combined['Month_Date'] = df_fin_combined['Month_Label'].apply(parse_fin_month)
-                df_fin_combined = df_fin_combined.sort_values('Month_Date')
-                
-                # Add Product Info (Brand, Tier, Prices)
-                # Pastikan kolom harga ada di df_product
-                cols_to_merge = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']
-                if 'Floor_Price' in df_product.columns: cols_to_merge.append('Floor_Price')
-                if 'Net_Order_Price' in df_product.columns: cols_to_merge.append('Net_Order_Price') # Cost/HPP
-                
-                df_fin_combined = pd.merge(df_fin_combined, df_product[cols_to_merge], on='SKU_ID', how='left')
-                
-                # Fill missing prices with 0
-                if 'Floor_Price' in df_fin_combined.columns:
-                    df_fin_combined['Floor_Price'] = pd.to_numeric(df_fin_combined['Floor_Price'], errors='coerce').fillna(0)
-                else: df_fin_combined['Floor_Price'] = 0
-                    
-                if 'Net_Order_Price' in df_fin_combined.columns:
-                    df_fin_combined['Net_Order_Price'] = pd.to_numeric(df_fin_combined['Net_Order_Price'], errors='coerce').fillna(0)
-                else: df_fin_combined['Net_Order_Price'] = 0
-                
-                # Calculate Financials
-                df_fin_combined['Revenue'] = df_fin_combined['Qty'] * df_fin_combined['Floor_Price']
-                df_fin_combined['COGS'] = df_fin_combined['Qty'] * df_fin_combined['Net_Order_Price']
-                df_fin_combined['Gross_Margin'] = df_fin_combined['Revenue'] - df_fin_combined['COGS']
-                
-                process_success = True
-            else:
-                st.warning("⚠️ No 2026 forecast data found in Ecomm or Reseller sheets.")
-                
-        except Exception as e:
-            st.error(f"❌ Error processing financial data: {str(e)}")
+    # B. Process Reseller
+    if not df_reseller_forecast.empty:
+        fcst_cols_res = [c for c in df_reseller_forecast.columns if any(char.isdigit() for char in str(c))]
+        if fcst_cols_res:
+            df_r = df_reseller_forecast.melt(id_vars=['SKU_ID'], value_vars=fcst_cols_res, var_name='Month_Label', value_name='Qty')
+            df_r['Channel'] = 'Reseller'
+            combined_data.append(df_r)
 
-    # ================ 2. DASHBOARD VISUALIZATION ================
-    if process_success and not df_fin_combined.empty:
-        
-        # --- A. EXECUTIVE SUMMARY (BIG NUMBERS) ---
-        st.divider()
-        
-        total_rev = df_fin_combined['Revenue'].sum()
-        total_margin = df_fin_combined['Gross_Margin'].sum()
-        total_qty = df_fin_combined['Qty'].sum()
-        avg_margin_pct = (total_margin / total_rev * 100) if total_rev > 0 else 0
-        
-        # Channel Mix
-        rev_by_channel = df_fin_combined.groupby('Channel')['Revenue'].sum()
-        ecomm_rev = rev_by_channel.get('Ecommerce', 0)
-        res_rev = rev_by_channel.get('Reseller', 0)
-        ecomm_share = (ecomm_rev / total_rev * 100) if total_rev > 0 else 0
-        
-        col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-        
-        with col_kpi1:
-            st.metric("Total Revenue 2026", f"Rp {total_rev:,.0f}", help="Gross Revenue Projection")
-            
-        with col_kpi2:
-            st.metric("Total Gross Margin", f"Rp {total_margin:,.0f}", help="Revenue - COGS (Net Order Price)")
-            
-        with col_kpi3:
-            st.metric("Blended Margin %", f"{avg_margin_pct:.1f}%", 
-                     delta="Health Indicator", delta_color="normal" if avg_margin_pct > 30 else "off")
-            
-        with col_kpi4:
-            st.metric("Channel Mix (Ecomm)", f"{ecomm_share:.1f}%", 
-                     delta=f"Reseller: {100-ecomm_share:.1f}%", delta_color="off")
+    if combined_data:
+        # Combine
+        df_fin = pd.concat(combined_data, ignore_index=True)
+        df_fin['Qty'] = pd.to_numeric(df_fin['Qty'], errors='coerce').fillna(0)
+        df_fin = df_fin[df_fin['Qty'] > 0] # Filter non-zero
 
-        # --- B. CHANNEL PERFORMANCE COMPARISON ---
-        st.divider()
-        st.subheader("🏢 Channel Profitability Comparison")
-        
-        c1, c2 = st.columns([2, 1])
-        
-        with c1:
-            # Monthly Revenue Stacked Bar
-            monthly_ch_rev = df_fin_combined.groupby(['Month_Label', 'Month_Date', 'Channel'])['Revenue'].sum().reset_index()
-            monthly_ch_rev = monthly_ch_rev.sort_values('Month_Date')
+        # Merge with Product Master for Prices
+        # Need: Floor_Price (Revenue) and Net_Order_Price (COGS/HPP)
+        if not df_product.empty:
+            cols_price = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Floor_Price', 'Net_Order_Price']
+            existing_cols = [c for c in cols_price if c in df_product.columns]
+            df_fin = pd.merge(df_fin, df_product[existing_cols], on='SKU_ID', how='left')
             
-            fig_stack = px.bar(monthly_ch_rev, x='Month_Label', y='Revenue', color='Channel',
-                             title="Monthly Revenue Contribution by Channel",
-                             color_discrete_map={'Ecommerce': '#667eea', 'Reseller': '#FF9800'},
-                             text_auto='.2s')
-            fig_stack.update_layout(height=400, yaxis_title="Revenue (Rp)")
-            st.plotly_chart(fig_stack, use_container_width=True)
+            # Fill NaNs
+            if 'Floor_Price' in df_fin.columns: df_fin['Floor_Price'] = pd.to_numeric(df_fin['Floor_Price'], errors='coerce').fillna(0)
+            if 'Net_Order_Price' in df_fin.columns: df_fin['Net_Order_Price'] = pd.to_numeric(df_fin['Net_Order_Price'], errors='coerce').fillna(0)
             
-        with c2:
-            # Profitability Summary Table per Channel
-            ch_summary = df_fin_combined.groupby('Channel').agg({
-                'Revenue': 'sum',
-                'Gross_Margin': 'sum',
-                'Qty': 'sum'
+            # CALCULATE FINANCIALS
+            df_fin['Revenue'] = df_fin['Qty'] * df_fin['Floor_Price']
+            df_fin['COGS'] = df_fin['Qty'] * df_fin['Net_Order_Price']
+            df_fin['Gross_Margin'] = df_fin['Revenue'] - df_fin['COGS']
+            
+            # ==============================================================================
+            # 2. FINANCIAL HEALTH CARDS (PASTEL STYLE)
+            # ==============================================================================
+            total_rev = df_fin['Revenue'].sum()
+            total_cogs = df_fin['COGS'].sum()
+            total_margin = df_fin['Gross_Margin'].sum()
+            margin_pct = (total_margin / total_rev * 100) if total_rev > 0 else 0
+            
+            # CSS
+            st.markdown("""
+            <style>
+                .fin-card {
+                    border-radius: 12px; padding: 1.2rem; color: white;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s;
+                }
+                .fin-card:hover { transform: translateY(-3px); }
+                .fin-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
+                .fin-val { font-size: 1.5rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+                .fin-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
+            </style>
+            """, unsafe_allow_html=True)
+
+            c1, c2, c3, c4 = st.columns(4)
+            
+            # Helper Format
+            def fmt_money(x): 
+                if x >= 1e9: return f"Rp {x/1e9:,.1f} M"
+                elif x >= 1e6: return f"Rp {x/1e6:,.1f} Jt"
+                return f"Rp {x:,.0f}"
+
+            with c1:
+                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);"><div class="fin-title">Total Revenue</div><div class="fin-val">{fmt_money(total_rev)}</div><div class="fin-sub">Gross Sales</div></div>""", unsafe_allow_html=True)
+            with c2:
+                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);"><div class="fin-title">Total COGS (HPP)</div><div class="fin-val">{fmt_money(total_cogs)}</div><div class="fin-sub">Cost of Goods</div></div>""", unsafe_allow_html=True)
+            with c3:
+                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);"><div class="fin-title">Gross Margin (Cuan)</div><div class="fin-val">{fmt_money(total_margin)}</div><div class="fin-sub">Net Profit (Gross)</div></div>""", unsafe_allow_html=True)
+            with c4:
+                color_m = "#10B981" if margin_pct > 30 else "#EF4444"
+                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);"><div class="fin-title">Blended Margin %</div><div class="fin-val">{margin_pct:.1f}%</div><div class="fin-sub">Profitability Ratio</div></div>""", unsafe_allow_html=True)
+
+            # ==============================================================================
+            # 3. WATERFALL & CHANNEL MIX
+            # ==============================================================================
+            st.divider()
+            c_water, c_mix = st.columns([2, 1])
+            
+            with c_water:
+                st.subheader("🌊 Financial Waterfall")
+                # Waterfall Chart
+                fig_water = go.Figure(go.Waterfall(
+                    name = "20", orientation = "v",
+                    measure = ["relative", "relative", "total"],
+                    x = ["Total Revenue", "COGS (Cost)", "Gross Margin"],
+                    textposition = "outside",
+                    text = [fmt_money(total_rev), fmt_money(-total_cogs), fmt_money(total_margin)],
+                    y = [total_rev, -total_cogs, total_margin],
+                    connector = {"line":{"color":"rgb(63, 63, 63)"}},
+                    increasing = {"marker":{"color":"#6366F1"}}, # Revenue
+                    decreasing = {"marker":{"color":"#F59E0B"}}, # Cost
+                    totals = {"marker":{"color":"#10B981"}}      # Margin
+                ))
+                fig_water.update_layout(height=400, title="Profitability Flow: Revenue to Margin", showlegend=False)
+                st.plotly_chart(fig_water, use_container_width=True)
+                
+            with c_mix:
+                st.subheader("🏢 Margin by Channel")
+                channel_data = df_fin.groupby('Channel')['Gross_Margin'].sum().reset_index()
+                fig_don = px.pie(channel_data, values='Gross_Margin', names='Channel', hole=0.4, 
+                                 color_discrete_sequence=['#10B981', '#3B82F6'], title="Profit Contribution")
+                fig_don.update_layout(height=400, showlegend=True, legend=dict(orientation="h", y=-0.1))
+                st.plotly_chart(fig_don, use_container_width=True)
+
+            # ==============================================================================
+            # 4. PROFITABILITY MATRIX (SCATTER PLOT)
+            # ==============================================================================
+            st.divider()
+            st.subheader("🎯 Profitability Matrix (SKU Level)")
+            st.caption("Analisis posisi SKU berdasarkan **Revenue (Volume)** vs **Margin % (Quality)**.")
+            
+            # Group by SKU
+            sku_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand']).agg({
+                'Revenue': 'sum', 'Gross_Margin': 'sum'
             }).reset_index()
-            ch_summary['Margin %'] = (ch_summary['Gross_Margin'] / ch_summary['Revenue'] * 100)
+            sku_fin['Margin_Pct'] = (sku_fin['Gross_Margin'] / sku_fin['Revenue'] * 100).fillna(0)
             
-            # Donut Chart Revenue
-            fig_donut = px.pie(ch_summary, values='Revenue', names='Channel', hole=0.4,
-                             title="Revenue Share", color='Channel',
-                             color_discrete_map={'Ecommerce': '#667eea', 'Reseller': '#FF9800'})
-            fig_donut.update_layout(height=400)
-            st.plotly_chart(fig_donut, use_container_width=True)
-
-        # Show mini table for Channel
-        ch_disp = ch_summary.copy()
-        ch_disp['Revenue'] = ch_disp['Revenue'].apply(lambda x: f"Rp {x:,.0f}")
-        ch_disp['Gross_Margin'] = ch_disp['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}")
-        ch_disp['Margin %'] = ch_disp['Margin %'].apply(lambda x: f"{x:.1f}%")
-        ch_disp['Qty'] = ch_disp['Qty'].apply(lambda x: f"{x:,.0f}")
-        st.dataframe(ch_disp, use_container_width=True)
-
-        # --- C. BRAND PROFITABILITY MATRIX ---
-        st.divider()
-        st.subheader("🏷️ Brand Profitability Matrix")
-        st.caption("Analisis posisi Brand berdasarkan kontribusi Revenue dan tingkat Profitabilitas (Margin %)")
-        
-        if 'Brand' in df_fin_combined.columns:
-            brand_fin = df_fin_combined.groupby('Brand').agg({
-                'Revenue': 'sum',
-                'Gross_Margin': 'sum',
-                'Qty': 'sum'
-            }).reset_index()
+            # Scatter Plot
+            fig_scat = px.scatter(
+                sku_fin, x='Revenue', y='Margin_Pct', size='Gross_Margin', color='Brand',
+                hover_name='Product_Name', 
+                labels={'Revenue': 'Revenue (Rp)', 'Margin_Pct': 'Margin %'},
+                size_max=50, title="Matrix: Revenue vs Margin % (Size = Total Margin Rp)"
+            )
             
-            brand_fin['Margin %'] = (brand_fin['Gross_Margin'] / brand_fin['Revenue'] * 100).fillna(0)
+            # Add Average Lines
+            avg_rev = sku_fin['Revenue'].mean()
+            avg_mar = sku_fin['Margin_Pct'].mean()
             
-            # Quadrant Scatter Plot
-            fig_scat = px.scatter(brand_fin, x='Revenue', y='Margin %', 
-                                size='Gross_Margin', color='Brand',
-                                hover_name='Brand', text='Brand',
-                                title="Brand Matrix: Revenue vs Margin % (Size = Gross Margin Value)",
-                                labels={'Revenue': 'Total Revenue 2026 (Rp)', 'Margin %': 'Gross Margin %'},
-                                height=500)
+            fig_scat.add_hline(y=avg_mar, line_dash="dash", line_color="gray", annotation_text="Avg Margin")
+            fig_scat.add_vline(x=avg_rev, line_dash="dash", line_color="gray", annotation_text="Avg Revenue")
             
-            # Add Quadrant Lines (Median)
-            med_rev = brand_fin['Revenue'].median()
-            med_mar = brand_fin['Margin %'].median()
+            # Quadrant Backgrounds
+            max_x = sku_fin['Revenue'].max() * 1.1
+            max_y = sku_fin['Margin_Pct'].max() * 1.1
             
-            fig_scat.add_hline(y=med_mar, line_dash="dash", line_color="gray", annotation_text="Avg Margin")
-            fig_scat.add_vline(x=med_rev, line_dash="dash", line_color="gray", annotation_text="Avg Revenue")
-            fig_scat.update_traces(textposition='top center')
+            # High Rev / High Margin (Stars)
+            fig_scat.add_shape(type="rect", x0=avg_rev, y0=avg_mar, x1=max_x, y1=max_y, fillcolor="rgba(16, 185, 129, 0.1)", layer="below", line_width=0)
+            # High Rev / Low Margin (Cash Cows)
+            fig_scat.add_shape(type="rect", x0=avg_rev, y0=0, x1=max_x, y1=avg_mar, fillcolor="rgba(245, 158, 11, 0.1)", layer="below", line_width=0)
             
+            fig_scat.update_layout(height=500, plot_bgcolor='white', xaxis_type="log") # Log scale for revenue often helps
             st.plotly_chart(fig_scat, use_container_width=True)
             
-            # --- TIER PROFITABILITY STACKED BAR ---
-            if 'SKU_Tier' in df_fin_combined.columns:
-                st.markdown("#### 📦 Profitability by Tier")
-                tier_fin = df_fin_combined.groupby(['SKU_Tier', 'Channel'])['Gross_Margin'].sum().reset_index()
+            st.info("""
+            **Cara Baca Matrix:**
+            - 🟩 **Kanan Atas (Stars):** Revenue Tinggi + Margin Tinggi. **Pertahankan Stok!**
+            - 🟨 **Kanan Bawah (Cash Cows):** Revenue Tinggi + Margin Rendah. **Volume Maker**, hati-hati cost.
+            - 🟦 **Kiri Atas (Niche):** Revenue Rendah + Margin Tinggi. **Produk Premium**.
+            - ⬜ **Kiri Bawah (Dogs):** Revenue Rendah + Margin Rendah. **Evaluasi/Discontinue**.
+            """)
+
+            # ==============================================================================
+            # 5. PARETO CUAN (80/20 RULE)
+            # ==============================================================================
+            st.divider()
+            st.subheader("📉 Pareto Cuan: Top Profit Contributors")
+            
+            # Sort by Margin desc
+            sku_pareto = sku_fin.sort_values('Gross_Margin', ascending=False)
+            sku_pareto['Cum_Margin'] = sku_pareto['Gross_Margin'].cumsum()
+            sku_pareto['Cum_Pct'] = sku_pareto['Cum_Margin'] / total_margin * 100
+            
+            # Visual Pareto
+            top_30 = sku_pareto.head(30)
+            
+            fig_par = go.Figure()
+            fig_par.add_trace(go.Bar(x=top_30['Product_Name'].str[:20], y=top_30['Gross_Margin'], name='Gross Margin', marker_color='#10B981'))
+            fig_par.add_trace(go.Scatter(x=top_30['Product_Name'].str[:20], y=top_30['Cum_Pct'], name='Cumulative %', yaxis='y2', mode='lines+markers', line=dict(color='#F59E0B')))
+            
+            fig_par.update_layout(
+                height=450, title="Top 30 SKUs by Gross Margin",
+                yaxis=dict(title="Gross Margin (Rp)"),
+                yaxis2=dict(title="Cumulative %", overlaying='y', side='right', range=[0, 110], showgrid=False),
+                xaxis=dict(tickangle=-45), hovermode="x unified"
+            )
+            fig_par.add_hline(y=80, line_dash="dash", line_color="gray", annotation_text="80% Threshold", yref="y2")
+            st.plotly_chart(fig_par, use_container_width=True)
+
+            # Detail Table
+            with st.expander("📋 View Financial Detail Table"):
+                disp_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand']).agg({
+                    'Qty': 'sum', 'Revenue': 'sum', 'Gross_Margin': 'sum'
+                }).reset_index().sort_values('Gross_Margin', ascending=False)
                 
-                fig_tier = px.bar(tier_fin, x='SKU_Tier', y='Gross_Margin', color='Channel',
-                                title="Gross Margin Contribution by Tier & Channel",
-                                color_discrete_map={'Ecommerce': '#667eea', 'Reseller': '#FF9800'},
-                                barmode='group')
-                fig_tier.update_layout(yaxis_title="Gross Margin (Rp)")
-                st.plotly_chart(fig_tier, use_container_width=True)
+                disp_fin['Margin %'] = (disp_fin['Gross_Margin'] / disp_fin['Revenue'] * 100).fillna(0)
+                
+                # Formatting
+                disp_fin['Revenue'] = disp_fin['Revenue'].apply(lambda x: f"Rp {x:,.0f}")
+                disp_fin['Gross_Margin'] = disp_fin['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}")
+                disp_fin['Margin %'] = disp_fin['Margin %'].apply(lambda x: f"{x:.1f}%")
+                
+                st.dataframe(disp_fin, use_container_width=True)
 
-        # --- D. TOP PERFORMING SKUS ---
-        st.divider()
-        st.subheader("🏆 SKU Leaderboard 2026")
-        
-        rank_col1, rank_col2 = st.columns(2)
-        
-        # Aggregasi per SKU
-        sku_fin = df_fin_combined.groupby(['SKU_ID', 'Product_Name', 'Brand']).agg({
-            'Revenue': 'sum', 'Gross_Margin': 'sum', 'Qty': 'sum'
-        }).reset_index()
-        sku_fin['Margin %'] = (sku_fin['Gross_Margin'] / sku_fin['Revenue'] * 100)
-        
-        with rank_col1:
-            st.markdown("**Top 10 SKUs by Revenue (Omzet)**")
-            top_rev = sku_fin.sort_values('Revenue', ascending=False).head(10).copy()
-            
-            # Format
-            top_rev['Revenue'] = top_rev['Revenue'].apply(lambda x: f"Rp {x:,.0f}")
-            top_rev['Gross_Margin'] = top_rev['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}")
-            top_rev['Margin %'] = top_rev['Margin %'].apply(lambda x: f"{x:.1f}%")
-            
-            st.dataframe(top_rev[['SKU_ID', 'Product_Name', 'Revenue', 'Margin %']], use_container_width=True)
-            
-        with rank_col2:
-            st.markdown("**Top 10 SKUs by Gross Margin (Cuan)**")
-            top_cuan = sku_fin.sort_values('Gross_Margin', ascending=False).head(10).copy()
-            
-            # Format
-            top_cuan['Revenue'] = top_cuan['Revenue'].apply(lambda x: f"Rp {x:,.0f}")
-            top_cuan['Gross_Margin'] = top_cuan['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}")
-            top_cuan['Margin %'] = top_cuan['Margin %'].apply(lambda x: f"{x:.1f}%")
-            
-            st.dataframe(top_cuan[['SKU_ID', 'Product_Name', 'Gross_Margin', 'Margin %']], use_container_width=True)
-
-        # --- E. DOWNLOAD DATA ---
-        st.divider()
-        st.subheader("📥 Download Combined Financial Data")
-        
-        dl_df = df_fin_combined.copy()
-        # Clean up for export
-        dl_csv = dl_df.to_csv(index=False)
-        st.download_button(
-            label="Download Combined Forecast 2026 (CSV)",
-            data=dl_csv,
-            file_name=f"Combined_Financial_Forecast_2026_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-        
+        else:
+            st.warning("⚠️ Data Harga ('Floor_Price', 'Net_Order_Price') tidak ditemukan di Product Master. Tidak bisa menghitung profitabilitas.")
+            st.info("Pastikan kolom 'Floor_Price' (Harga Jual) dan 'Net_Order_Price' (HPP) ada di file Product Master.")
     else:
-        st.info("ℹ️ Please ensure both Ecommerce and Reseller forecast sheets have data for 2026 to generate this analysis.")
-
+        st.info("ℹ️ Tidak ada data forecast Ecommerce atau Reseller untuk dianalisis.")
 
 # --- TAB 9: RESELLER PERFORMANCE DASHBOARD ---
 with tab9:
