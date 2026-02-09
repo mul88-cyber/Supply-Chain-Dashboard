@@ -1971,7 +1971,7 @@ if last_3_months_performance:
     # 1. TOTAL METRICS - BULAN TERAKHIR (Soft Pastel Gradient Version)
     # ==============================================================================
     st.divider()
-    st.subheader("📊 Total Metrics - Bulan Terakhir")
+    st.subheader("📊 Total Metrics - Rofo Bulan Terakhir")
     
     # Calculate metrics for LAST MONTH ONLY
     if monthly_performance:
