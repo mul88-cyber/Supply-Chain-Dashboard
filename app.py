@@ -1857,7 +1857,7 @@ if monthly_performance:
         fig.update_layout(
             height=480,
             title=dict(
-                text='<b>📊 Accuracy Trend vs Volume</b> (Merah <70%, Kuning 70-80%, Hijau >80%)',
+                text='<b>📊 Accuracy Trend vs SKU Volume</b>',
                 font=dict(size=16, color='#374151'),
                 x=0, y=0.98
             ),
