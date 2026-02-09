@@ -4269,7 +4269,7 @@ with tab7:
     else:
         st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
 
-# --- TAB 8: PROFITABILITY & MARGIN ANALYSIS (FINANCIAL COMMAND CENTER) ---
+# --- TAB 8: PROFITABILITY & MARGIN ANALYSIS (WITH TIER ANALYSIS) ---
 with tab8:
     st.subheader("💰 Profitability & Margin Intelligence")
     st.caption("Financial Projection 2026: Revenue, Cost of Goods Sold (COGS), and Gross Margin Analysis")
@@ -4391,14 +4391,90 @@ with tab8:
                 st.plotly_chart(fig_don, use_container_width=True)
 
             # ==============================================================================
-            # 4. PROFITABILITY MATRIX (SCATTER PLOT)
+            # 4. PROFITABILITY BY SKU TIER (NEW SECTION)
+            # ==============================================================================
+            if 'SKU_Tier' in df_fin.columns:
+                st.divider()
+                st.subheader("💎 Profitability by SKU Tier")
+                st.caption("Analisis kontribusi profit berdasarkan segmen (Tier). Tier dengan volume besar belum tentu margin % nya besar.")
+
+                # Calculate Tier Metrics
+                tier_fin = df_fin.groupby('SKU_Tier').agg({
+                    'Revenue': 'sum',
+                    'Gross_Margin': 'sum',
+                    'Qty': 'sum'
+                }).reset_index()
+                
+                tier_fin['Margin_Pct'] = (tier_fin['Gross_Margin'] / tier_fin['Revenue'] * 100).fillna(0)
+                tier_fin = tier_fin.sort_values('Gross_Margin', ascending=False)
+
+                t1, t2 = st.columns(2)
+
+                with t1:
+                    # Bar Chart: Total Gross Margin (Rupiah)
+                    fig_tier_val = go.Figure()
+                    fig_tier_val.add_trace(go.Bar(
+                        y=tier_fin['SKU_Tier'],
+                        x=tier_fin['Gross_Margin'],
+                        orientation='h',
+                        text=[fmt_money(x) for x in tier_fin['Gross_Margin']],
+                        textposition='auto',
+                        marker_color='#6366F1', # Soft Indigo
+                        name='Gross Margin (Rp)'
+                    ))
+                    fig_tier_val.update_layout(
+                        height=400, 
+                        title="💰 Total Gross Margin Contribution by Tier",
+                        xaxis_title="Gross Margin (Rp)",
+                        yaxis_title="Tier",
+                        plot_bgcolor='white',
+                        yaxis=dict(autorange="reversed") # Tier tertinggi di atas
+                    )
+                    st.plotly_chart(fig_tier_val, use_container_width=True)
+
+                with t2:
+                    # Bar Chart: Margin % (Efisiensi)
+                    # Color logic: Green high margin, Red low margin
+                    colors = []
+                    for val in tier_fin['Margin_Pct']:
+                        if val >= 40: colors.append('#10B981') # Green
+                        elif val >= 20: colors.append('#F59E0B') # Orange
+                        else: colors.append('#EF4444') # Red
+
+                    fig_tier_pct = go.Figure()
+                    fig_tier_pct.add_trace(go.Bar(
+                        y=tier_fin['SKU_Tier'],
+                        x=tier_fin['Margin_Pct'],
+                        orientation='h',
+                        text=[f"{x:.1f}%" for x in tier_fin['Margin_Pct']],
+                        textposition='auto',
+                        marker_color=colors,
+                        name='Margin %'
+                    ))
+                    
+                    # Add avg line
+                    avg_margin_tier = tier_fin['Margin_Pct'].mean()
+                    fig_tier_pct.add_vline(x=avg_margin_tier, line_dash="dash", line_color="gray", annotation_text="Avg")
+
+                    fig_tier_pct.update_layout(
+                        height=400, 
+                        title="📊 Efficiency: Margin % by Tier",
+                        xaxis_title="Margin %",
+                        yaxis_title="Tier",
+                        plot_bgcolor='white',
+                        yaxis=dict(autorange="reversed")
+                    )
+                    st.plotly_chart(fig_tier_pct, use_container_width=True)
+
+            # ==============================================================================
+            # 5. PROFITABILITY MATRIX (SCATTER PLOT)
             # ==============================================================================
             st.divider()
             st.subheader("🎯 Profitability Matrix (SKU Level)")
             st.caption("Analisis posisi SKU berdasarkan **Revenue (Volume)** vs **Margin % (Quality)**.")
             
             # Group by SKU
-            sku_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand']).agg({
+            sku_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']).agg({
                 'Revenue': 'sum', 'Gross_Margin': 'sum'
             }).reset_index()
             sku_fin['Margin_Pct'] = (sku_fin['Gross_Margin'] / sku_fin['Revenue'] * 100).fillna(0)
@@ -4407,6 +4483,7 @@ with tab8:
             fig_scat = px.scatter(
                 sku_fin, x='Revenue', y='Margin_Pct', size='Gross_Margin', color='Brand',
                 hover_name='Product_Name', 
+                hover_data=['SKU_Tier', 'Gross_Margin'],
                 labels={'Revenue': 'Revenue (Rp)', 'Margin_Pct': 'Margin %'},
                 size_max=50, title="Matrix: Revenue vs Margin % (Size = Total Margin Rp)"
             )
@@ -4427,7 +4504,7 @@ with tab8:
             # High Rev / Low Margin (Cash Cows)
             fig_scat.add_shape(type="rect", x0=avg_rev, y0=0, x1=max_x, y1=avg_mar, fillcolor="rgba(245, 158, 11, 0.1)", layer="below", line_width=0)
             
-            fig_scat.update_layout(height=500, plot_bgcolor='white', xaxis_type="log") # Log scale for revenue often helps
+            fig_scat.update_layout(height=500, plot_bgcolor='white', xaxis_type="log") 
             st.plotly_chart(fig_scat, use_container_width=True)
             
             st.info("""
@@ -4439,7 +4516,7 @@ with tab8:
             """)
 
             # ==============================================================================
-            # 5. PARETO CUAN (80/20 RULE)
+            # 6. PARETO CUAN (80/20 RULE)
             # ==============================================================================
             st.divider()
             st.subheader("📉 Pareto Cuan: Top Profit Contributors")
@@ -4460,14 +4537,15 @@ with tab8:
                 height=450, title="Top 30 SKUs by Gross Margin",
                 yaxis=dict(title="Gross Margin (Rp)"),
                 yaxis2=dict(title="Cumulative %", overlaying='y', side='right', range=[0, 110], showgrid=False),
-                xaxis=dict(tickangle=-45), hovermode="x unified"
+                xaxis=dict(tickangle=-45), hovermode="x unified",
+                plot_bgcolor='white'
             )
             fig_par.add_hline(y=80, line_dash="dash", line_color="gray", annotation_text="80% Threshold", yref="y2")
             st.plotly_chart(fig_par, use_container_width=True)
 
             # Detail Table
             with st.expander("📋 View Financial Detail Table"):
-                disp_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand']).agg({
+                disp_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']).agg({
                     'Qty': 'sum', 'Revenue': 'sum', 'Gross_Margin': 'sum'
                 }).reset_index().sort_values('Gross_Margin', ascending=False)
                 
