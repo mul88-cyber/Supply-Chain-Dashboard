@@ -1,51 +1,75 @@
-🚀 Inventory Intelligence Dashboard v6.0
-Professional Dashboard for Demand Planning, Inventory Control & Financial Analytics.
+# 🚀 Inventory Intelligence Dashboard v6.0
 
-Built with Streamlit & Plotly to visualize real-time Supply Chain data.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-ff4b4b)
+![Status](https://img.shields.io/badge/Status-Production-success)
 
-✨ Key Features
-📈 Forecast Accuracy: Heatmaps, Bias Detection, and Performance Triad (Plan vs Exec vs Result).
+**Professional Dashboard for Demand Planning, Inventory Control & Financial Analytics.**
+Designed to visualize real-time Supply Chain data from Google Sheets with advanced analytics.
 
-📦 Inventory Health: Stock Coverage Analysis, Aging Profile, and Warehouse Utilization.
+---
 
-💰 Profitability: Financial Waterfall, Unit Economics, and Pareto Analysis (80/20 Rule).
+## ✨ Key Features
 
-🔮 Future Planning: 2026 Forecast Projections, Scenario Planner (What-If), and Anomaly Detection.
+### 📊 Demand Planning
+* **Accuracy Heatmaps:** Track forecast accuracy month-over-month.
+* **Bias Detection:** Identify systematic under/over-forecasting trends.
+* **Performance Triad:** Analyze Gap between Plan (Rofo), Execution (PO), and Result (Sales).
 
-🚚 Operational: Fulfillment Cost Efficiency (CPO) & Reseller Performance Tracking.
+### 📦 Inventory Optimization
+* **Stock Health:** Monitor Months of Coverage and Warehouse Utilization.
+* **Aging Analysis:** Detect Expired and Critical stock (<30 days).
+* **SKU Evaluation:** 360-degree view of individual product performance.
 
-🛠️ Tech Stack
-Python 3.10+
+### 💰 Financial Intelligence
+* **Profitability:** Waterfall Chart (Revenue ➡️ COGS ➡️ Margin).
+* **Unit Economics:** Analyze Basket Size (BSA) vs Cost per Order (CPO).
+* **Cost Projection:** 2026 Budgeting simulation based on market share.
 
-Streamlit (UI Framework)
+---
 
-Plotly (Interactive Charts)
+## 🛠️ Tech Stack
 
-Google Sheets API (Real-time Data Source)
+* **Core:** Python
+* **UI Framework:** Streamlit
+* **Charts:** Plotly Express & Graph Objects
+* **Database:** Google Sheets API (Real-time connection)
 
-⚙️ Quick Start
-1. Installation
+---
 
-git clone https://github.com/username/inventory-intelligence-pro.git
+## ⚙️ Quick Setup
+
+### 1. Clone Repository
+```bash
+git clone [https://github.com/username/inventory-intelligence-pro.git](https://github.com/username/inventory-intelligence-pro.git)
 cd inventory-intelligence-pro
+
+
+2. Install Requirements
+
 pip install -r requirements.txt
-2. Configure Secrets
-Create a file .streamlit/secrets.toml and add your Google Cloud credentials:
-📂 Data Requirements (Google Sheets)
-Ensure your connected Google Sheet has the following tabs:
 
-Product_Master
+3. Configure Secrets
+Create a file named .streamlit/secrets.toml and add your Google Cloud credentials
 
-Sales & Sales_Reseller
+4. Run Application
 
-Rofo & Past_Rofo_Reseller
+streamlit run app.py
 
-PO & Past_PO_Reseller
+📂 Data Requirements
+The dashboard requires a Google Sheet with the following tabs:
 
-Stock_Onhand
+Sheet Name,Description
+Product_Master,"SKU details, Prices, Brands, Tiers"
+Sales,Historical sales data
+Rofo,Rolling Forecast data
+PO,Purchase Order history
+Stock_Onhand,Current stock & Expiry dates
+Forecast_2026_Ecomm,Next year projections (Ecommerce)
+Forecast_2026_Reseller,Next year projections (Reseller)
+BS_Fullfilment_Cost,Operational cost data for Unit Economics
 
-Forecast_2026_Ecomm & Forecast_2026_Reseller
+Author: Mulyanto 
 
-BS_Fullfilment_Cost
+Last Update: Feb-2026
 
-Author: Mulyanto
