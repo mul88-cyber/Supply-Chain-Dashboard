@@ -1968,7 +1968,7 @@ if last_3_months_performance:
         months_display.append(month_name)
         
     # ==============================================================================
-    # 1. TOTAL METRICS - BULAN TERAKHIR (Soft Gradient Version)
+    # 1. TOTAL METRICS - BULAN TERAKHIR (Soft Pastel Gradient Version)
     # ==============================================================================
     st.divider()
     st.subheader("📊 Total Metrics - Bulan Terakhir")
@@ -2000,84 +2000,123 @@ if last_3_months_performance:
 
         last_month_accuracy = monthly_performance[last_month]['accuracy']
 
-        # --- CSS SOFT PREMIUM ---
+        # --- CSS STYLE (Fixed Indentation & Soft Colors) ---
         st.markdown("""
-        <style>
-            .tm-card {
-                border-radius: 16px;
-                padding: 1.2rem;
-                color: white;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-                position: relative;
-                overflow: hidden;
-                transition: transform 0.3s ease;
-                border: 1px solid rgba(255,255,255,0.2);
-            }
-            .tm-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); }
-            
-            .tm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-            .tm-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
-            .tm-icon { font-size: 1.2rem; opacity: 0.8; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 8px; }
-            
-            .tm-main-val { font-size: 1.8rem; font-weight: 800; margin-bottom: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-            .tm-unit { font-size: 0.9rem; font-weight: 500; opacity: 0.9; margin-left: 2px; }
-            
-            .tm-sub-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.8rem; opacity: 0.95; }
-            .tm-badge { background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 4px; font-weight: 600; }
-        </style>
-        """, unsafe_allow_html=True)
+<style>
+    /* Card Styles */
+    .tm-card {
+        border-radius: 16px;
+        padding: 1.2rem;
+        color: white;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s ease;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    .tm-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); }
+    
+    .tm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .tm-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.95; }
+    .tm-icon { font-size: 1.2rem; opacity: 0.9; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 8px; }
+    
+    .tm-main-val { font-size: 1.8rem; font-weight: 800; margin-bottom: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .tm-unit { font-size: 0.9rem; font-weight: 500; opacity: 0.9; margin-left: 2px; }
+    
+    .tm-sub-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.8rem; opacity: 0.95; }
+    .tm-badge { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
 
+    /* Process Flow Styles */
+    .process-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+        margin-top: 10px;
+    }
+    .p-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border-top: 5px solid #ccc;
+        position: relative;
+    }
+    .p-label { font-size: 0.8rem; font-weight: 700; color: #888; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase; }
+    .p-val { font-size: 2rem; font-weight: 800; color: #333; margin-bottom: 10px; }
+    .p-badge-container { display: flex; gap: 8px; flex-wrap: wrap; }
+    .p-badge { 
+        font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; 
+        display: flex; align-items: center; gap: 4px;
+    }
+    
+    /* Process Flow Colors */
+    .border-rofo { border-top-color: #5C6BC0; } /* Soft Indigo */
+    .border-po { border-top-color: #FFA726; }   /* Soft Orange */
+    .border-sales { border-top-color: #66BB6A; } /* Soft Green */
+    
+    .text-rofo { color: #3949AB; }
+    .text-po { color: #F57C00; }
+    .text-sales { color: #2E7D32; }
+
+    .bg-rofo-light { background-color: #E8EAF6; color: #3949AB; }
+    .bg-po-light { background-color: #FFF3E0; color: #EF6C00; }
+    .bg-sales-light { background-color: #E8F5E9; color: #2E7D32; }
+</style>
+""", unsafe_allow_html=True)
+
+        # Helper Function untuk render card (TANPA INDENTASI DI HTML)
         def render_soft_card(title, icon, count, qty, qty_pct, bg_gradient):
-            return f"""
-            <div class="tm-card" style="background: {bg_gradient};">
-                <div class="tm-header">
-                    <span class="tm-title">{title}</span>
-                    <span class="tm-icon">{icon}</span>
-                </div>
-                <div>
-                    <span class="tm-main-val">{count}</span><span class="tm-unit">SKUs</span>
-                </div>
-                <div class="tm-sub-row">
-                    <span>Qty Forecast: {qty:,.0f}</span>
-                    <span class="tm-badge">{qty_pct:.1f}%</span>
-                </div>
-            </div>
-            """
+            # HTML disusun tanpa indentasi agar aman dari bug Markdown
+            html = f"""
+<div class="tm-card" style="background: {bg_gradient};">
+<div class="tm-header">
+<span class="tm-title">{title}</span>
+<span class="tm-icon">{icon}</span>
+</div>
+<div>
+<span class="tm-main-val">{count}</span><span class="tm-unit">SKUs</span>
+</div>
+<div class="tm-sub-row">
+<span>Qty: {qty:,.0f}</span>
+<span class="tm-badge">{qty_pct:.1f}%</span>
+</div>
+</div>"""
+            return html
 
+        # Render Total Metrics
         c1, c2, c3, c4 = st.columns(4)
         
         with c1:
-            # Under - Soft Rose/Coral
+            # Under - Soft Red
             st.markdown(render_soft_card("Under Forecast", "📉", under_count, under_forecast_qty, under_qty_pct, 
-                "linear-gradient(135deg, #e57373 0%, #ef5350 100%)"), unsafe_allow_html=True)
+                "linear-gradient(135deg, #ef5350 0%, #e53935 100%)"), unsafe_allow_html=True)
         with c2:
-            # Accurate - Soft Teal/Emerald
+            # Accurate - Soft Green
             st.markdown(render_soft_card("Accurate Forecast", "🎯", accurate_count, accurate_forecast_qty, accurate_qty_pct, 
-                "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
+                "linear-gradient(135deg, #26a69a 0%, #00897b 100%)"), unsafe_allow_html=True)
         with c3:
-            # Over - Soft Amber/Orange
+            # Over - Soft Orange
             st.markdown(render_soft_card("Over Forecast", "📈", over_count, over_forecast_qty, over_qty_pct, 
-                "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
+                "linear-gradient(135deg, #ffa726 0%, #fb8c00 100%)"), unsafe_allow_html=True)
         with c4:
             # Overall - Soft Indigo
             st.markdown(f"""
-            <div class="tm-card" style="background: linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%);">
-                <div class="tm-header">
-                    <span class="tm-title">OVERALL SCORE</span>
-                    <span class="tm-icon">🏆</span>
-                </div>
-                <div>
-                    <span class="tm-main-val">{last_month_accuracy:.1f}%</span>
-                </div>
-                <div class="tm-sub-row">
-                    <span>{last_month.strftime('%B %Y')}</span>
-                    <span class="tm-badge">Total: {total_count_last_month} SKUs</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+<div class="tm-card" style="background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);">
+<div class="tm-header">
+<span class="tm-title">OVERALL SCORE</span>
+<span class="tm-icon">🏆</span>
+</div>
+<div>
+<span class="tm-main-val">{last_month_accuracy:.1f}%</span>
+</div>
+<div class="tm-sub-row">
+<span>{last_month.strftime('%B %Y')}</span>
+<span class="tm-badge">Total: {total_count_last_month}</span>
+</div>
+</div>""", unsafe_allow_html=True)
 
     # ==============================================================================
-    # 2. COMPARISON CARDS - PROCESS FLOW STYLE (ROFO -> PO -> SALES)
+    # 2. COMPARISON CARDS - PROCESS FLOW STYLE (FIXED RENDERING)
     # ==============================================================================
     if monthly_performance:
         last_month = sorted(monthly_performance.keys())[-1]
@@ -2100,84 +2139,34 @@ if last_3_months_performance:
         st.write("") # Spacer
         st.subheader(f"🔄 Business Flow Performance: {last_month.strftime('%B %Y')}")
 
-        # CSS For Process Cards
-        st.markdown("""
-        <style>
-            .process-container {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                gap: 15px;
-                margin-top: 10px;
-            }
-            .p-card {
-                background: white;
-                border-radius: 12px;
-                padding: 1.5rem;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-                border-top: 5px solid #ccc;
-                position: relative;
-            }
-            .p-label { font-size: 0.8rem; font-weight: 700; color: #888; letter-spacing: 1px; margin-bottom: 5px; }
-            .p-val { font-size: 2rem; font-weight: 800; color: #333; margin-bottom: 10px; }
-            .p-badge-container { display: flex; gap: 8px; flex-wrap: wrap; }
-            .p-badge { 
-                font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; 
-                display: flex; align-items: center; gap: 4px;
-            }
-            
-            /* Specific Colors */
-            .border-rofo { border-top-color: #5C6BC0; } /* Indigo */
-            .border-po { border-top-color: #FFA726; }   /* Orange */
-            .border-sales { border-top-color: #66BB6A; } /* Green */
-            
-            .text-rofo { color: #3949AB; }
-            .text-po { color: #F57C00; }
-            .text-sales { color: #2E7D32; }
-
-            .bg-rofo-light { background-color: #E8EAF6; color: #3949AB; }
-            .bg-po-light { background-color: #FFF3E0; color: #EF6C00; }
-            .bg-sales-light { background-color: #E8F5E9; color: #2E7D32; }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # HTML Structure
+        # HTML Structure - TANPA INDENTASI SAMA SEKALI
         html_process = f"""
-        <div class="process-container">
-            <div class="p-card border-rofo">
-                <div class="p-label">1. PLANNING (ROFO)</div>
-                <div class="p-val text-rofo">{rofo_tot:,.0f}</div>
-                <div class="p-badge-container">
-                    <span class="p-badge bg-rofo-light">🎯 Baseline Target</span>
-                </div>
-            </div>
-
-            <div class="p-card border-po">
-                <div class="p-label">2. EXECUTION (PO)</div>
-                <div class="p-val text-po">{po_tot:,.0f}</div>
-                <div class="p-badge-container">
-                    <span class="p-badge bg-po-light">
-                        {po_vs_rofo:.1f}% vs Rofo
-                    </span>
-                    <span class="p-badge" style="background:#f0f0f0; color:#666;">
-                        Gap: {po_tot - rofo_tot:+,.0f}
-                    </span>
-                </div>
-            </div>
-
-            <div class="p-card border-sales">
-                <div class="p-label">3. REALIZATION (SALES)</div>
-                <div class="p-val text-sales">{sales_tot:,.0f}</div>
-                <div class="p-badge-container">
-                    <span class="p-badge bg-sales-light">
-                        {sales_vs_rofo:.1f}% vs Rofo
-                    </span>
-                    <span class="p-badge bg-sales-light">
-                        {sales_vs_po:.1f}% vs PO
-                    </span>
-                </div>
-            </div>
-        </div>
-        """
+<div class="process-container">
+<div class="p-card border-rofo">
+<div class="p-label">1. PLANNING (ROFO)</div>
+<div class="p-val text-rofo">{rofo_tot:,.0f}</div>
+<div class="p-badge-container">
+<span class="p-badge bg-rofo-light">🎯 Baseline Target</span>
+</div>
+</div>
+<div class="p-card border-po">
+<div class="p-label">2. EXECUTION (PO)</div>
+<div class="p-val text-po">{po_tot:,.0f}</div>
+<div class="p-badge-container">
+<span class="p-badge bg-po-light">{po_vs_rofo:.1f}% vs Rofo</span>
+<span class="p-badge" style="background:#f5f5f5; color:#666;">Gap: {po_tot - rofo_tot:+,.0f}</span>
+</div>
+</div>
+<div class="p-card border-sales">
+<div class="p-label">3. REALIZATION (SALES)</div>
+<div class="p-val text-sales">{sales_tot:,.0f}</div>
+<div class="p-badge-container">
+<span class="p-badge bg-sales-light">{sales_vs_rofo:.1f}% vs Rofo</span>
+<span class="p-badge bg-sales-light">{sales_vs_po:.1f}% vs PO</span>
+</div>
+</div>
+</div>
+"""
         st.markdown(html_process, unsafe_allow_html=True)
 
 st.divider()
