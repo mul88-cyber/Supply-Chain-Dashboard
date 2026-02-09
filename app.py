@@ -4303,41 +4303,25 @@ with tab4:
     else:
         st.info("👋 Please ensure Sales and Monthly Performance data are loaded to view SKU insights.")
 
-# --- TAB 5: SALES & FORECAST ANALYSIS (PREMIUM GAP & PARETO) ---
+# --- TAB 5: SALES & FORECAST ANALYSIS (EASY TO UNDERSTAND VERSION) ---
 with tab5:
-    st.subheader("📈 Sales & Forecast Performance Analytics")
-    st.caption("Gap Analysis: Comparing Planning (Forecast), Execution (PO), and Realization (Sales)")
+    st.subheader("📈 Realization & Gap Analysis")
+    st.caption("Membandingkan Perencanaan (Rofo), Eksekusi (PO), dan Hasil Akhir (Sales)")
 
     if not df_sales.empty and not df_forecast.empty:
         # ==============================================================================
-        # 1. DATA PREPARATION & AGGREGATION
+        # 1. DATA PREPARATION
         # ==============================================================================
         
-        # Merge Monthly Data Global
-        # Get all unique months
+        # Get unique months
         all_months = sorted(list(set(df_sales['Month'].unique()) | set(df_forecast['Month'].unique()) | set(df_po['Month'].unique())))
         
         monthly_data = []
-        cumulative_rofo = 0
-        cumulative_sales = 0
-        
         for month in all_months:
-            # Sales
+            # Sales, Forecast, PO
             s_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-            # Forecast
             f_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
-            # PO
             p_qty = df_po[df_po['Month'] == month]['PO_Qty'].sum()
-            
-            cumulative_rofo += f_qty
-            cumulative_sales += s_qty
-            
-            # Gap
-            gap = s_qty - f_qty
-            gap_pct = (gap / f_qty * 100) if f_qty > 0 else 0
-            
-            achievement = (s_qty / f_qty * 100) if f_qty > 0 else 0
-            compliance = (p_qty / f_qty * 100) if f_qty > 0 else 0
             
             monthly_data.append({
                 'Month': month,
@@ -4345,303 +4329,186 @@ with tab5:
                 'Rofo': f_qty,
                 'Sales': s_qty,
                 'PO': p_qty,
-                'Gap': gap,
-                'Gap_Pct': gap_pct,
-                'Achievement': achievement,
-                'Compliance': compliance,
-                'Cum_Rofo': cumulative_rofo,
-                'Cum_Sales': cumulative_sales
+                # Hitung selisih untuk visualisasi
+                'Gap_Sales_Rofo': s_qty - f_qty
             })
             
         df_trend = pd.DataFrame(monthly_data)
         
-        # ==============================================================================
-        # 2. REALIZATION KPI CARDS (Soft Pastel)
-        # ==============================================================================
-        
-        # Calculate YTD / Total Metrics
+        # Totals for KPI
         total_rofo = df_trend['Rofo'].sum()
         total_sales = df_trend['Sales'].sum()
         total_po = df_trend['PO'].sum()
         
-        ytd_achievement = (total_sales / total_rofo * 100) if total_rofo > 0 else 0
-        ytd_compliance = (total_po / total_rofo * 100) if total_rofo > 0 else 0
-        sales_vs_po = (total_sales / total_po * 100) if total_po > 0 else 0
-        
-        # CSS Style (Reused)
+        # ==============================================================================
+        # 2. KPI CARDS (PASTEL GRADIENT)
+        # ==============================================================================
         st.markdown("""
         <style>
-            .gap-card {
-                border-radius: 12px;
-                padding: 1.2rem;
-                color: white;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-                transition: transform 0.3s ease;
-                margin-bottom: 10px;
+            .kpi-box {
+                border-radius: 12px; padding: 1.2rem; color: white;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative;
+                transition: transform 0.3s;
             }
-            .gap-card:hover { transform: translateY(-3px); }
-            .gap-label { font-size: 0.8rem; font-weight: 600; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.5px; }
-            .gap-val { font-size: 1.6rem; font-weight: 800; margin: 5px 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-            .gap-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.9; display: flex; justify-content: space-between; }
+            .kpi-box:hover { transform: translateY(-3px); }
+            .kpi-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
+            .kpi-num { font-size: 1.8rem; font-weight: 800; margin-bottom: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+            .kpi-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
         </style>
         """, unsafe_allow_html=True)
 
-        def render_gap_card(title, value, sub_left, sub_right, gradient):
+        def render_kpi(title, val, sub, gradient):
             return f"""
-            <div class="gap-card" style="background: {gradient};">
-                <div class="gap-label">{title}</div>
-                <div class="gap-val">{value}</div>
-                <div class="gap-sub">
-                    <span>{sub_left}</span>
-                    <span>{sub_right}</span>
-                </div>
+            <div class="kpi-box" style="background: {gradient};">
+                <div class="kpi-title">{title}</div>
+                <div class="kpi-num">{val}</div>
+                <div class="kpi-sub">{sub}</div>
             </div>
             """
 
         c1, c2, c3, c4 = st.columns(4)
         
         with c1:
-            st.markdown(render_gap_card(
-                "Total Forecast (Plan)", f"{total_rofo:,.0f}", "Baseline Target", f"{len(df_trend)} Months",
-                "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)" # Indigo
-            ), unsafe_allow_html=True)
-            
+            # Rofo (Plan) - Indigo
+            st.markdown(render_kpi("1. PLAN (ROFO)", f"{total_rofo:,.0f}", "Total Forecast", 
+                "linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%)"), unsafe_allow_html=True)
         with c2:
-            ach_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)" if ytd_achievement >= 90 else "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"
-            st.markdown(render_gap_card(
-                "Sales Achievement", f"{ytd_achievement:.1f}%", f"Act: {total_sales:,.0f}", "vs Forecast",
-                ach_color
-            ), unsafe_allow_html=True)
-            
+            # PO (Execution) - Orange
+            po_vs_rofo = (total_po / total_rofo * 100) if total_rofo > 0 else 0
+            st.markdown(render_kpi("2. EXECUTION (PO)", f"{total_po:,.0f}", f"{po_vs_rofo:.1f}% of Plan", 
+                "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
         with c3:
-            st.markdown(render_gap_card(
-                "PO Compliance", f"{ytd_compliance:.1f}%", f"Exe: {total_po:,.0f}", "vs Forecast",
-                "linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)" # Sky Blue
-            ), unsafe_allow_html=True)
-            
+            # Sales (Result) - Green
+            sales_vs_rofo = (total_sales / total_rofo * 100) if total_rofo > 0 else 0
+            st.markdown(render_kpi("3. RESULT (SALES)", f"{total_sales:,.0f}", f"{sales_vs_rofo:.1f}% Achievement", 
+                "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
         with c4:
-            st.markdown(render_gap_card(
-                "Sales vs PO", f"{sales_vs_po:.1f}%", "Conversion Rate", "Sold / Ordered",
-                "linear-gradient(135deg, #EC4899 0%, #DB2777 100%)" # Pink
-            ), unsafe_allow_html=True)
+            # Gap - Red/Grey
+            gap = total_sales - total_rofo
+            gap_col = "linear-gradient(135deg, #ef5350 0%, #e53935 100%)" if gap < 0 else "linear-gradient(135deg, #66bb6a 0%, #43a047 100%)"
+            st.markdown(render_kpi("GAP (SALES vs PLAN)", f"{gap:+,.0f}", "Units Variance", gap_col), unsafe_allow_html=True)
 
         # ==============================================================================
-        # 3. TREND & CUMULATIVE GAP ANALYSIS
-        # ==============================================================================
-        st.write("")
-        st.subheader("📈 Monthly Trend & Cumulative Performance")
-        
-        col_chart, col_metric = st.columns([3, 1])
-        
-        with col_chart:
-            # Combo Chart: Bar (Monthly) + Line (Cumulative)
-            fig_trend = go.Figure()
-            
-            # Bar: Sales
-            fig_trend.add_trace(go.Bar(
-                x=df_trend['Month_Txt'], y=df_trend['Sales'],
-                name='Sales (Actual)',
-                marker_color='#34D399', # Soft Emerald
-                opacity=0.8
-            ))
-            
-            # Bar: Forecast
-            fig_trend.add_trace(go.Bar(
-                x=df_trend['Month_Txt'], y=df_trend['Rofo'],
-                name='Forecast (Plan)',
-                marker_color='#818CF8', # Soft Indigo
-                opacity=0.6
-            ))
-            
-            # Line: Cumulative Achievement Rate (Secondary Axis)
-            fig_trend.add_trace(go.Scatter(
-                x=df_trend['Month_Txt'], y=df_trend['Cum_Sales'],
-                name='Cumulative Sales',
-                mode='lines',
-                line=dict(color='#059669', width=3),
-                yaxis='y2'
-            ))
-             # Line: Cumulative Forecast (Secondary Axis)
-            fig_trend.add_trace(go.Scatter(
-                x=df_trend['Month_Txt'], y=df_trend['Cum_Rofo'],
-                name='Cumulative Plan',
-                mode='lines',
-                line=dict(color='#4338CA', width=3, dash='dot'),
-                yaxis='y2'
-            ))
-
-            fig_trend.update_layout(
-                height=450,
-                title="Monthly Performance vs Cumulative Trajectory",
-                xaxis_title="Month",
-                yaxis=dict(title="Monthly Quantity", showgrid=False),
-                yaxis2=dict(
-                    title="Cumulative Quantity", 
-                    overlaying='y', side='right', 
-                    showgrid=True, gridcolor='rgba(0,0,0,0.05)'
-                ),
-                barmode='group',
-                legend=dict(orientation="h", y=1.1),
-                hovermode="x unified",
-                plot_bgcolor='white'
-            )
-            st.plotly_chart(fig_trend, use_container_width=True)
-
-        with col_metric:
-            # Monthly Achievement Table (Mini Heatmap)
-            st.write("###### 🗓️ Monthly Achievement %")
-            
-            # Simple dataframe for display
-            disp_trend = df_trend[['Month_Txt', 'Achievement']].copy()
-            disp_trend['Status'] = disp_trend['Achievement'].apply(
-                lambda x: "✅ Hit" if x >= 95 else "⚠️ Miss" if x >= 80 else "🛑 Poor"
-            )
-            disp_trend['Achievement'] = disp_trend['Achievement'].apply(lambda x: f"{x:.1f}%")
-            
-            st.dataframe(
-                disp_trend,
-                column_config={
-                    "Month_Txt": "Month",
-                    "Achievement": "Achv %"
-                },
-                use_container_width=True,
-                height=400,
-                hide_index=True
-            )
-
-        # ==============================================================================
-        # 4. PARETO DEVIATION ANALYSIS (80/20 RULE)
+        # 3. MAIN COMPARISON CHART (GROUPED BAR) - "MUDAH DIPAHAMI"
         # ==============================================================================
         st.divider()
-        st.subheader("📉 Pareto Analysis: Forecast Error Contributors")
-        st.caption("Fokus perbaikan pada **Top 20% SKU** yang menyumbang **80% total error** (Selisih Absolut antara Sales vs Forecast).")
-        
-        # Calculate Deviation per SKU (Aggregated over all months available or filtered)
-        # Kita ambil data gabungan Sales & Forecast
-        
-        # 1. Merge all time data
-        df_f_all = df_forecast.groupby('SKU_ID')['Forecast_Qty'].sum().reset_index()
-        df_s_all = df_sales.groupby('SKU_ID')['Sales_Qty'].sum().reset_index()
-        
-        df_pareto = pd.merge(df_f_all, df_s_all, on='SKU_ID', how='outer').fillna(0)
-        
-        # Add Product Info
-        df_pareto = add_product_info_to_data(df_pareto, df_product)
-        
-        # Calculate Absolute Error
-        df_pareto['Abs_Error'] = abs(df_pareto['Sales_Qty'] - df_pareto['Forecast_Qty'])
-        df_pareto['Total_Vol'] = df_pareto['Forecast_Qty'] + df_pareto['Sales_Qty']
-        
-        # Filter noise (SKU with very low volume)
-        df_pareto = df_pareto[df_pareto['Total_Vol'] > 10].copy()
-        
-        # Sort by Error
-        df_pareto = df_pareto.sort_values('Abs_Error', ascending=False)
-        
-        # Calculate Cumulative %
-        total_error = df_pareto['Abs_Error'].sum()
-        df_pareto['Cum_Error'] = df_pareto['Abs_Error'].cumsum()
-        df_pareto['Cum_Pct'] = (df_pareto['Cum_Error'] / total_error * 100)
-        
-        # Determine "Vital Few" (e.g. contributing to 80% error)
-        df_pareto['Category'] = df_pareto['Cum_Pct'].apply(lambda x: '🅰️ Vital Few (Top Priority)' if x <= 80 else '🅱️ Trivial Many')
-        
-        # Top 20 Contributors Chart
-        top_20 = df_pareto.head(20)
-        
-        fig_pareto = go.Figure()
-        
-        # Bar: Absolute Error
-        fig_pareto.add_trace(go.Bar(
-            x=top_20['Product_Name'],
-            y=top_20['Abs_Error'],
-            name='Absolute Forecast Error (Qty)',
-            marker_color='#F59E0B' # Amber
-        ))
-        
-        # Line: Cumulative %
-        fig_pareto.add_trace(go.Scatter(
-            x=top_20['Product_Name'],
-            y=top_20['Cum_Pct'],
-            name='Cumulative Error %',
-            yaxis='y2',
+        st.subheader("📊 Performance Triad: Plan vs Exec vs Result")
+        st.caption("Grafik ini membandingkan langsung posisi Rencana (Rofo), Pembelian (PO), dan Penjualan (Sales) setiap bulan.")
+
+        fig_main = go.Figure()
+
+        # Rofo (Plan) - Garis Putus-putus (sebagai baseline/acuan)
+        fig_main.add_trace(go.Scatter(
+            x=df_trend['Month_Txt'], y=df_trend['Rofo'],
+            name='Plan (Rofo)',
             mode='lines+markers',
-            line=dict(color='#EF4444', width=2) # Red
+            line=dict(color='#3949AB', width=3, dash='dash'), # Indigo putus-putus
+            marker=dict(size=8, color='#3949AB')
         ))
-        
-        fig_pareto.update_layout(
-            height=500,
-            title=f"Top 20 SKUs Contributing to Forecast Error (Total Error: {total_error:,.0f} units)",
-            xaxis_title="Product Name",
-            yaxis=dict(title="Absolute Error (Units)"),
-            yaxis2=dict(
-                title="Cumulative %", 
-                overlaying='y', side='right', 
-                range=[0, 105], showgrid=False
-            ),
-            legend=dict(orientation="h", y=1.1),
-            plot_bgcolor='white',
-            hovermode="x unified"
-        )
-        
-        # Add 80% line
-        fig_pareto.add_hline(y=80, line_dash="dash", line_color="gray", annotation_text="80% Threshold", yref="y2")
-        
-        st.plotly_chart(fig_pareto, use_container_width=True)
-        
-        # Detail Data Expander
-        with st.expander("📋 View Pareto Detail Data"):
-            disp_pareto = df_pareto[['SKU_ID', 'Product_Name', 'Brand', 'Forecast_Qty', 'Sales_Qty', 'Abs_Error', 'Cum_Pct', 'Category']].head(100)
-            disp_pareto['Cum_Pct'] = disp_pareto['Cum_Pct'].apply(lambda x: f"{x:.1f}%")
-            disp_pareto['Abs_Error'] = disp_pareto['Abs_Error'].apply(lambda x: f"{x:,.0f}")
-            
-            st.dataframe(disp_pareto, use_container_width=True)
 
-        # ==============================================================================
-        # 5. BRAND ACHIEVEMENT HEATMAP
-        # ==============================================================================
-        st.divider()
-        st.subheader("🏷️ Brand Achievement Heatmap")
-        
-        # Calculate Achievement per Brand
-        brand_ach = df_pareto.groupby('Brand').agg({
-            'Forecast_Qty': 'sum',
-            'Sales_Qty': 'sum'
-        }).reset_index()
-        
-        brand_ach['Achievement'] = (brand_ach['Sales_Qty'] / brand_ach['Forecast_Qty'] * 100).fillna(0)
-        brand_ach = brand_ach.sort_values('Achievement', ascending=False)
-        
-        # Visual: Bar Chart with Color Coding based on Target
-        # Green > 95%, Yellow 80-95%, Red < 80%
-        colors = []
-        for val in brand_ach['Achievement']:
-            if val >= 95: colors.append('#10B981') # Green
-            elif val >= 80: colors.append('#F59E0B') # Yellow/Orange
-            else: colors.append('#EF4444') # Red
-            
-        fig_brand = go.Figure()
-        fig_brand.add_trace(go.Bar(
-            x=brand_ach['Brand'],
-            y=brand_ach['Achievement'],
-            marker_color=colors,
-            text=[f"{x:.1f}%" for x in brand_ach['Achievement']],
+        # PO (Execution) - Bar Kuning
+        fig_main.add_trace(go.Bar(
+            x=df_trend['Month_Txt'], y=df_trend['PO'],
+            name='Execution (PO)',
+            marker_color='#FFB74D', # Soft Orange
+            text=[f"{x:,.0f}" for x in df_trend['PO']],
             textposition='auto'
         ))
-        
-        fig_brand.add_hline(y=100, line_dash="solid", line_color="gray", annotation_text="Target 100%")
-        
-        fig_brand.update_layout(
-            height=400,
-            title="Sales Achievement by Brand (%)",
-            xaxis_title="Brand",
-            yaxis_title="Achievement %",
-            plot_bgcolor='white'
+
+        # Sales (Result) - Bar Hijau
+        fig_main.add_trace(go.Bar(
+            x=df_trend['Month_Txt'], y=df_trend['Sales'],
+            name='Result (Sales)',
+            marker_color='#4DB6AC', # Soft Teal
+            text=[f"{x:,.0f}" for x in df_trend['Sales']],
+            textposition='auto'
+        ))
+
+        fig_main.update_layout(
+            height=450,
+            xaxis_title="Month",
+            yaxis_title="Quantity (Units)",
+            barmode='group', # Grouped bar agar berdampingan
+            hovermode="x unified",
+            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
+            plot_bgcolor='white',
+            margin=dict(t=50, b=20, l=20, r=20)
         )
-        st.plotly_chart(fig_brand, use_container_width=True)
+        
+        st.plotly_chart(fig_main, use_container_width=True)
+
+        # ==============================================================================
+        # 4. TOP GAP ANALYSIS (PENGGANTI PARETO)
+        # ==============================================================================
+        st.divider()
+        st.subheader("🚨 Top Gap Analysis (SKU Level)")
+        st.caption("Daftar barang dengan selisih terbesar antara Forecast vs Realisasi Sales.")
+
+        # Data processing untuk Gap per SKU
+        # Gabungkan sales & forecast all time (atau bisa difilter last month jika mau)
+        df_f_sku = df_forecast.groupby(['SKU_ID', 'Product_Name'])['Forecast_Qty'].sum().reset_index()
+        df_s_sku = df_sales.groupby(['SKU_ID', 'Product_Name'])['Sales_Qty'].sum().reset_index()
+        
+        df_gap = pd.merge(df_f_sku, df_s_sku, on=['SKU_ID', 'Product_Name'], how='outer').fillna(0)
+        df_gap['Gap'] = df_gap['Sales_Qty'] - df_gap['Forecast_Qty']
+        
+        # Pisahkan menjadi dua kelompok
+        # 1. Demand Spikes (Sales > Forecast) -> Under-forecasted
+        top_spikes = df_gap[df_gap['Gap'] > 0].sort_values('Gap', ascending=False).head(10)
+        
+        # 2. Low Performance (Sales < Forecast) -> Over-forecasted
+        top_drops = df_gap[df_gap['Gap'] < 0].sort_values('Gap', ascending=True).head(10)
+
+        c_gap1, c_gap2 = st.columns(2)
+
+        with c_gap1:
+            st.markdown("##### 🚀 Top Unexpected Demand (Sales > Rofo)")
+            st.caption("Barang ini **LAKU KERAS** melebihi prediksi. Cek stok, awas barang kosong!")
+            
+            fig_spike = go.Figure()
+            fig_spike.add_trace(go.Bar(
+                y=top_spikes['Product_Name'].str[:20], # Truncate nama biar rapi
+                x=top_spikes['Gap'],
+                orientation='h',
+                marker_color='#66BB6A', # Green
+                text=[f"+{x:,.0f}" for x in top_spikes['Gap']],
+                textposition='auto',
+                name='Extra Sales'
+            ))
+            fig_spike.update_layout(
+                height=400,
+                xaxis_title="Extra Units Sold vs Plan",
+                yaxis=dict(autorange="reversed"), # Urutan dari atas ke bawah
+                plot_bgcolor='white',
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            st.plotly_chart(fig_spike, use_container_width=True)
+
+        with c_gap2:
+            st.markdown("##### 🐌 Top Slow Moving vs Plan (Sales < Rofo)")
+            st.caption("Barang ini **KURANG LAKU** dibanding prediksi. Cek overstock, perlu promo?")
+            
+            fig_drop = go.Figure()
+            fig_drop.add_trace(go.Bar(
+                y=top_drops['Product_Name'].str[:20],
+                x=top_drops['Gap'], # Nilai negatif
+                orientation='h',
+                marker_color='#EF5350', # Red
+                text=[f"{x:,.0f}" for x in top_drops['Gap']],
+                textposition='auto', # inside/outside auto
+                name='Missed Sales'
+            ))
+            fig_drop.update_layout(
+                height=400,
+                xaxis_title="Missed Units vs Plan",
+                yaxis=dict(autorange="reversed", side="right"), # Label di kanan biar tidak tabrakan
+                plot_bgcolor='white',
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            st.plotly_chart(fig_drop, use_container_width=True)
 
     else:
-        st.info("ℹ️ Requires both Sales and Forecast data to generate analysis.")
+        st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
 
 # --- TAB 6: DATA EXPLORER ---
 with tab6:
