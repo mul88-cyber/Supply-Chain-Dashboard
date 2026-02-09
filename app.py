@@ -3974,1735 +3974,317 @@ with tab6:
     else:
         st.warning("No data available for selected dataset")
 
-# --- TAB 7: ADVANCED FORECAST INTELLIGENCE ---
+# --- TAB 7: ECOMMERCE FORECAST INTELLIGENCE (SCENARIO PLANNING) ---
 with tab7:
-    st.subheader("🔮 ADVANCED FORECAST INTELLIGENCE SYSTEM")
-    st.markdown("#### **Predictive Analytics with ML Insights & Scenario Planning**")
-    
-    # ============================================
-    # FUNGSI-FUNGSI BANTU HARUS DITARUH DI SINI DULU
-    # ============================================
-    
-    # 1. FUNGSI parse_month_str
-    def parse_month_str(month_str):
-        """Parse bulan dari string format - untuk sorting"""
-        try:
-            month_str = str(month_str).upper().strip()
-            
-            # Handle berbagai format
-            formats_to_try = [
-                '%b-%y',     # Jan-26
-                '%b_%y',     # Jan_26
-                '%b %y',     # Jan 26
-                '%b-%Y',     # Jan-2026
-                '%B-%y',     # January-26
-                '%B %Y',     # January 2026
-            ]
-            
-            for fmt in formats_to_try:
-                try:
-                    return datetime.strptime(month_str, fmt)
-                except:
-                    continue
-            
-            # Fallback: cari bulan dalam string
-            month_map = {
-                'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
-                'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
-            }
-            
-            for month_name, month_num in month_map.items():
-                if month_name in month_str:
-                    # Cari tahun
-                    year_part = month_str.replace(month_name, '').replace('-', '').replace('_', '').replace(' ', '').strip()
-                    if year_part and year_part.isdigit():
-                        year = int('20' + year_part) if len(year_part) == 2 else int(year_part)
-                    else:
-                        year = 2026  # Default untuk forecast 2026
-                    
-                    return datetime(year, month_num, 1)
-            
-            return datetime.now()  # Fallback
-            
-        except Exception as e:
-            st.warning(f"Error parsing month string '{month_str}': {str(e)}")
-            return datetime.now()
-    
-    # 2. FUNGSI calculate_forecast_confidence
-    @st.cache_data
-    def calculate_forecast_confidence(df_forecast, df_sales=None, df_historical_forecast=None):
-        """Calculate forecast confidence score based on multiple factors"""
+    st.subheader("🔮 Ecommerce Forecast Intelligence")
+    st.caption("Future Planning: Seasonality Analysis, Scenario Testing & Anomaly Detection")
+
+    # ==============================================================================
+    # 1. DATA PREPARATION (ROBUST MONTH PARSING)
+    # ==============================================================================
+    if not df_ecomm_forecast.empty:
+        # Coba deteksi kolom bulan forecast (biasanya format MMM-YY atau MMM YY)
+        # Kita ambil kolom yang bukan identitas produk
+        id_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Status', 'Floor_Price', 'Net_Order_Price']
+        forecast_cols = [c for c in df_ecomm_forecast.columns if c not in id_cols]
         
-        confidence_score = 70  # Base score
-        factors = {}
+        # Validasi sederhana: Kolom harus mengandung angka
+        valid_fcst_cols = []
+        for c in forecast_cols:
+            # Cek apakah kolom bisa dikonversi jadi angka
+            try:
+                if df_ecomm_forecast[c].dtype == object:
+                    # Cek sample data
+                    sample = df_ecomm_forecast[c].iloc[0]
+                    if isinstance(sample, str) and any(i.isdigit() for i in sample):
+                        valid_fcst_cols.append(c)
+                elif np.issubdtype(df_ecomm_forecast[c].dtype, np.number):
+                    valid_fcst_cols.append(c)
+            except:
+                pass
         
-        try:
-            # Factor 1: Data Completeness
-            total_cells = len(df_forecast) * len(ecomm_forecast_month_cols) if ecomm_forecast_month_cols else 1
-            non_zero_cells = (df_forecast[ecomm_forecast_month_cols] > 0).sum().sum() if ecomm_forecast_month_cols else 0
-            completeness_score = (non_zero_cells / total_cells * 100) if total_cells > 0 else 0
-            factors['Data Completeness'] = min(100, completeness_score * 1.2)  # Boost score
+        # Helper: Sort bulan secara kronologis (bukan abjad)
+        def parse_month_sort(col_name):
+            try:
+                # Coba berbagai format: Jan-26, Jan 2026, 01-2026
+                return pd.to_datetime(col_name, errors='coerce')
+            except:
+                return pd.Timestamp.max
+
+        # Sort kolom bulan
+        if valid_fcst_cols:
+            # Buat mapping tanggal
+            col_date_map = []
+            for c in valid_fcst_cols:
+                # Bersihkan nama kolom agar mudah diparse
+                clean_c = str(c).strip()
+                # Coba parse manual jika format susah
+                for fmt in ['%b-%y', '%b %y', '%b-%Y', '%B %Y', '%Y-%m']:
+                    try:
+                        dt = datetime.strptime(clean_c, fmt)
+                        col_date_map.append({'col': c, 'date': dt})
+                        break
+                    except:
+                        continue
             
-            # Factor 2: Historical Accuracy (if data available)
-            if df_sales is not None and df_historical_forecast is not None and not df_sales.empty and not df_historical_forecast.empty:
-                # Calculate accuracy for last 6 months
-                common_months = sorted(set(df_sales['Month'].unique()) & set(df_historical_forecast['Month'].unique()))
-                if len(common_months) >= 3:
-                    accuracies = []
-                    for month in common_months[-6:]:
-                        sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-                        forecast_qty = df_historical_forecast[df_historical_forecast['Month'] == month]['Forecast_Qty'].sum()
-                        if forecast_qty > 0:
-                            accuracy = 100 - abs((sales_qty / forecast_qty * 100) - 100)
-                            accuracies.append(accuracy)
-                    
-                    if accuracies:
-                        avg_accuracy = sum(accuracies) / len(accuracies)
-                        factors['Historical Accuracy'] = avg_accuracy
+            # Sort list
+            col_date_map.sort(key=lambda x: x['date'])
+            sorted_fcst_cols = [x['col'] for x in col_date_map]
             
-            # Factor 3: Forecast Consistency
-            if len(ecomm_forecast_month_cols) >= 3:
-                monthly_totals = df_forecast[ecomm_forecast_month_cols].sum()
-                cv = monthly_totals.std() / monthly_totals.mean() if monthly_totals.mean() > 0 else 0
-                consistency_score = max(0, 100 - (cv * 100))  # Lower CV = higher score
-                factors['Forecast Consistency'] = consistency_score
+            # Update dataframe fokus
+            df_fcst_active = df_ecomm_forecast.copy()
             
-            # Factor 4: SKU Coverage
-            total_skus = len(df_forecast)
-            active_skus = len(df_forecast[df_forecast[ecomm_forecast_month_cols].sum(axis=1) > 0])
-            coverage_score = (active_skus / total_skus * 100) if total_skus > 0 else 0
-            factors['SKU Coverage'] = coverage_score
+            # Convert values to numeric
+            for c in sorted_fcst_cols:
+                df_fcst_active[c] = pd.to_numeric(df_fcst_active[c], errors='coerce').fillna(0)
+
+            # ==============================================================================
+            # 2. FORECAST HEALTH KPI (PASTEL)
+            # ==============================================================================
+            total_fcst_qty = df_fcst_active[sorted_fcst_cols].sum().sum()
+            avg_monthly = total_fcst_qty / len(sorted_fcst_cols) if sorted_fcst_cols else 0
             
-            # Calculate weighted average
-            weights = {
-                'Data Completeness': 0.25,
-                'Historical Accuracy': 0.35,
-                'Forecast Consistency': 0.25,
-                'SKU Coverage': 0.15
-            }
-            
-            weighted_score = 0
-            weight_total = 0
-            
-            for factor, score in factors.items():
-                if factor in weights:
-                    weighted_score += score * weights[factor]
-                    weight_total += weights[factor]
-            
-            if weight_total > 0:
-                confidence_score = weighted_score / weight_total
-        
-        except Exception as e:
-            st.error(f"Confidence calculation error: {str(e)}")
-        
-        return {
-            'confidence_score': round(confidence_score, 1),
-            'factors': factors
-        }
-    
-    # 3. FUNGSI detect_forecast_anomalies
-    @st.cache_data
-    def detect_forecast_anomalies(df_forecast, threshold_std=2.0):
-        """Detect anomalies in forecast data"""
-        
-        anomalies = []
-        
-        if not ecomm_forecast_month_cols:
-            return anomalies
-        
-        try:
-            # Calculate monthly totals
-            monthly_totals = df_forecast[ecomm_forecast_month_cols].sum()
-            
-            # Calculate moving average and standard deviation
-            if len(monthly_totals) >= 3:
-                moving_avg = monthly_totals.rolling(window=3, min_periods=1).mean()
-                moving_std = monthly_totals.rolling(window=3, min_periods=1).std()
-                
-                for i, (month, value) in enumerate(monthly_totals.items()):
-                    if i >= 2:  # Need at least 2 previous months for comparison
-                        avg = moving_avg.iloc[i]
-                        std = moving_std.iloc[i]
-                        
-                        if std > 0 and abs(value - avg) > (threshold_std * std):
-                            anomaly_score = abs(value - avg) / std
-                            anomalies.append({
-                                'Month': month,
-                                'Forecast_Value': value,
-                                'Moving_Avg': avg,
-                                'Std_Dev': std,
-                                'Anomaly_Score': anomaly_score,
-                                'Deviation_Pct': ((value - avg) / avg * 100) if avg > 0 else 0
-                            })
-        
-        except Exception as e:
-            st.error(f"Anomaly detection error: {str(e)}")
-        
-        return anomalies
-    
-    # 4. FUNGSI calculate_seasonality_pattern
-    @st.cache_data
-    def calculate_seasonality_pattern(df_forecast):
-        """Calculate seasonality pattern from forecast"""
-        
-        seasonality = {}
-        
-        if not ecomm_forecast_month_cols:
-            return seasonality
-        
-        try:
-            # Group by month name (ignoring year)
-            month_patterns = {}
-            for month_col in ecomm_forecast_month_cols:
-                month_name = str(month_col).split('-')[0].upper()[:3]
-                if month_name not in month_patterns:
-                    month_patterns[month_name] = []
-                month_patterns[month_name].append(df_forecast[month_col].sum())
-            
-            # Calculate average for each month
-            for month, values in month_patterns.items():
-                if values:
-                    month_patterns[month] = sum(values) / len(values)
-            
-            # Calculate seasonal indices
-            overall_avg = sum(month_patterns.values()) / len(month_patterns) if month_patterns else 1
-            
-            for month, avg_value in month_patterns.items():
-                if overall_avg > 0:
-                    seasonal_index = avg_value / overall_avg
-                    seasonality[month] = {
-                        'value': avg_value,
-                        'index': seasonal_index,
-                        'type': 'Peak' if seasonal_index >= 1.2 else 'Normal' if seasonal_index >= 0.8 else 'Low'
-                    }
-        
-        except Exception as e:
-            st.error(f"Seasonality calculation error: {str(e)}")
-        
-        return seasonality
-    
-    # 5. FUNGSI perform_what_if_analysis
-    @st.cache_data
-    def perform_what_if_analysis(base_forecast, scenarios):
-        """Perform what-if scenario analysis"""
-        
-        results = {}
-        
-        try:
-            for scenario_name, params in scenarios.items():
-                modified_forecast = base_forecast.copy()
-                
-                # Apply scenario adjustments
-                if 'growth_rate' in params:
-                    growth = params['growth_rate'] / 100
-                    for month in ecomm_forecast_month_cols:
-                        modified_forecast[month] = modified_forecast[month] * (1 + growth)
-                
-                if 'specific_months_adjustment' in params:
-                    for month, adjustment in params['specific_months_adjustment'].items():
-                        if month in modified_forecast.columns:
-                            modified_forecast[month] = modified_forecast[month] * (1 + adjustment/100)
-                
-                # Calculate scenario totals
-                scenario_total = modified_forecast[ecomm_forecast_month_cols].sum().sum()
-                base_total = base_forecast[ecomm_forecast_month_cols].sum().sum()
-                
-                results[scenario_name] = {
-                    'total_forecast': scenario_total,
-                    'change_pct': ((scenario_total - base_total) / base_total * 100) if base_total > 0 else 0,
-                    'monthly_breakdown': modified_forecast[ecomm_forecast_month_cols].sum().to_dict()
+            # Value Calculation (jika ada harga)
+            total_fcst_val = 0
+            has_price = False
+            if 'Floor_Price' in df_fcst_active.columns:
+                # Pastikan harga numeric
+                df_fcst_active['Floor_Price'] = pd.to_numeric(df_fcst_active['Floor_Price'], errors='coerce').fillna(0)
+                # Hitung per baris lalu sum
+                row_sums = df_fcst_active[sorted_fcst_cols].sum(axis=1)
+                total_fcst_val = (row_sums * df_fcst_active['Floor_Price']).sum()
+                has_price = True
+
+            # CSS
+            st.markdown("""
+            <style>
+                .fcst-card {
+                    border-radius: 12px; padding: 1.2rem; color: white;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s;
                 }
-        
-        except Exception as e:
-            st.error(f"What-if analysis error: {str(e)}")
-        
-        return results
-    
-    # 6. FUNGSI identify_forecast_risks
-    @st.cache_data
-    def identify_forecast_risks(df_forecast, df_product):
-        """Identify potential risks in forecast"""
-        
-        risks = []
-        
-        try:
-            # Risk 1: New products with high forecast but no history
-            if 'Product_Name' in df_forecast.columns:
-                # For simplicity, assume new products are those without brand recognition
-                new_products = df_forecast[
-                    (df_forecast['Brand'].str.contains('New|New Product', case=False, na=False)) |
-                    (df_forecast['Product_Name'].str.contains('New|Launch', case=False, na=False))
-                ]
-                
-                if not new_products.empty:
-                    high_new_forecast = new_products[new_products[ecomm_forecast_month_cols].sum(axis=1) > 1000]
-                    if not high_new_forecast.empty:
-                        risks.append({
-                            'type': 'New Product Risk',
-                            'description': f"{len(high_new_forecast)} new products with forecast > 1,000 units",
-                            'severity': 'High',
-                            'impact': "Potential overstock if demand doesn't materialize"
-                        })
-            
-            # Risk 2: High concentration in few SKUs
-            sku_contributions = df_forecast[ecomm_forecast_month_cols].sum(axis=1).sort_values(ascending=False)
-            top_10_share = sku_contributions.head(10).sum() / sku_contributions.sum() * 100 if sku_contributions.sum() > 0 else 0
-            
-            if top_10_share > 50:
-                risks.append({
-                    'type': 'Concentration Risk',
-                    'description': f"Top 10 SKUs contribute {top_10_share:.1f}% of total forecast",
-                    'severity': 'Medium',
-                    'impact': 'High dependency on few products'
-                })
-            
-            # Risk 3: Seasonal peaks without inventory planning
-            seasonality = calculate_seasonality_pattern(df_forecast)
-            peak_months = [month for month, data in seasonality.items() if data['type'] == 'Peak']
-            
-            if len(peak_months) >= 2:
-                risks.append({
-                    'type': 'Seasonal Risk',
-                    'description': f"Multiple peak months detected: {', '.join(peak_months)}",
-                    'severity': 'Medium',
-                    'impact': 'Require advanced inventory planning'
-                })
-        
-        except Exception as e:
-            st.error(f"Risk identification error: {str(e)}")
-        
-        return risks
-    
-    # ============================================
-    # SECTION 0: DATA VALIDATION & PREPARATION
-    # ============================================
-    st.markdown("---")
-    
-    # Check if we have forecast data
-    if df_ecomm_forecast.empty:
-        st.error("❌ No ecommerce forecast data available!")
-        st.info("Please ensure 'Forecast_2026_Ecomm' sheet exists with proper data structure")
-        st.stop()
-    
-    # Check for required columns
-    required_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']
-    missing_cols = [col for col in required_cols if col not in df_ecomm_forecast.columns]
-    
-    if missing_cols:
-        st.warning(f"⚠️ Missing columns: {missing_cols}")
-        st.info("Adding placeholder data for analysis...")
-        
-        # Add missing columns with placeholder data
-        if 'Product_Name' not in df_ecomm_forecast.columns:
-            df_ecomm_forecast['Product_Name'] = 'Product ' + df_ecomm_forecast['SKU_ID'].astype(str)
-        if 'Brand' not in df_ecomm_forecast.columns:
-            df_ecomm_forecast['Brand'] = 'Unknown'
-        if 'SKU_Tier' not in df_ecomm_forecast.columns:
-            df_ecomm_forecast['SKU_Tier'] = 'Standard'
-    
-    # ============================================
-    # SECTION 1: FORECAST INTELLIGENCE DASHBOARD
-    # ============================================
-    st.markdown("### 🎯 FORECAST INTELLIGENCE DASHBOARD")
-    
-    # Calculate key metrics
-    total_forecast_2026 = 0
-    forecast_value_2026 = 0
-    avg_accuracy_historical = 0
-    forecast_variance = {}
-    
-    if ecomm_forecast_month_cols:
-        # Total forecast quantity for 2026
-        total_forecast_2026 = df_ecomm_forecast[ecomm_forecast_month_cols].sum().sum()
-        
-        # Forecast value if price available
-        if not df_product.empty and 'Floor_Price' in df_product.columns:
-            df_with_price = add_product_info_to_data(df_ecomm_forecast, df_product)
-            for month in ecomm_forecast_month_cols:
-                month_value = (df_with_price[month] * df_with_price['Floor_Price'].fillna(0)).sum()
-                forecast_value_2026 += month_value
-        
-        # Calculate historical accuracy if we have sales data
-        if not df_sales.empty and not df_forecast.empty:
-            # Get common months
-            sales_months = df_sales['Month'].unique()
-            forecast_months = df_forecast['Month'].unique()
-            common_months = sorted(set(sales_months) & set(forecast_months))
-            
-            if common_months:
-                accuracies = []
-                for month in common_months[-6:]:  # Last 6 months
-                    sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-                    forecast_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
-                    
-                    if forecast_qty > 0:
-                        accuracy = 100 - abs((sales_qty / forecast_qty * 100) - 100)
-                        accuracies.append(accuracy)
-                
-                if accuracies:
-                    avg_accuracy_historical = sum(accuracies) / len(accuracies)
-        
-        # Calculate month-over-month variance
-        if len(ecomm_forecast_month_cols) >= 2:
-            sorted_months = sorted(ecomm_forecast_month_cols, key=parse_month_str)  # <-- SEKARANG SUDAH ADA FUNGSI NYA
-            for i in range(1, min(6, len(sorted_months))):
-                current_month = sorted_months[i]
-                prev_month = sorted_months[i-1]
-                current_qty = df_ecomm_forecast[current_month].sum()
-                prev_qty = df_ecomm_forecast[prev_month].sum()
-                
-                if prev_qty > 0:
-                    variance_pct = ((current_qty - prev_qty) / prev_qty * 100)
-                    forecast_variance[current_month] = variance_pct
-    
-    # Display KPI Cards
-    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-    
-    with col_kpi1:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    border-radius: 12px; padding: 1.2rem; color: white; 
-                    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);">
-            <div style="font-size: 0.9rem; opacity: 0.9;">TOTAL FORECAST 2026</div>
-            <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">{total_forecast_2026:,.0f}</div>
-            <div style="font-size: 0.9rem;">Units</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_kpi2:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); 
-                    border-radius: 12px; padding: 1.2rem; color: white; 
-                    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);">
-            <div style="font-size: 0.9rem; opacity: 0.9;">FORECAST VALUE</div>
-            <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">Rp {forecast_value_2026:,.0f}</div>
-            <div style="font-size: 0.9rem;">Revenue Projection</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_kpi3:
-        accuracy_color = "#4CAF50" if avg_accuracy_historical >= 80 else "#FF9800" if avg_accuracy_historical >= 70 else "#F44336"
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, {accuracy_color} 0%, {accuracy_color.replace('F44', 'D32')} 100%); 
-                    border-radius: 12px; padding: 1.2rem; color: white; 
-                    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);">
-            <div style="font-size: 0.9rem; opacity: 0.9;">HISTORICAL ACCURACY</div>
-            <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">{avg_accuracy_historical:.1f}%</div>
-            <div style="font-size: 0.9rem;">Last 6 Months</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_kpi4:
-        avg_monthly = total_forecast_2026 / len(ecomm_forecast_month_cols) if ecomm_forecast_month_cols else 0
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); 
-                    border-radius: 12px; padding: 1.2rem; color: white; 
-                    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.3);">
-            <div style="font-size: 0.9rem; opacity: 0.9;">AVG MONTHLY VOLUME</div>
-            <div style="font-size: 1.8rem; font-weight: 800; margin: 0.5rem 0;">{avg_monthly:,.0f}</div>
-            <div style="font-size: 0.9rem;">Units/Month</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # ============================================
-    # NEW SECTION: FORECAST CONFIDENCE ANALYSIS
-    # ============================================
-    st.markdown("---")
-    st.markdown("### 📊 FORECAST CONFIDENCE ANALYSIS")
-    
-    # Forecasting confidence based on historical accuracy and data quality
-    forecast_confidence = calculate_forecast_confidence(df_ecomm_forecast, df_sales, df_forecast)
-    
-    col_conf1, col_conf2 = st.columns([2, 1])
-    
-    with col_conf1:
-        # Confidence Gauge
-        fig_confidence = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=forecast_confidence.get('confidence_score', 0),
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Forecast Confidence Score", 'font': {'size': 18}},
-            number={'suffix': "%"},
-            gauge={
-                'axis': {'range': [0, 100]},
-                'bar': {'color': "#4CAF50"},
-                'steps': [
-                    {'range': [0, 50], 'color': "#FF5252"},
-                    {'range': [50, 75], 'color': "#FF9800"},
-                    {'range': [75, 100], 'color': "#4CAF50"}
-                ],
-                'threshold': {
-                    'line': {'color': "black", 'width': 3},
-                    'thickness': 0.8,
-                    'value': 70
-                }
-            }
-        ))
-        fig_confidence.update_layout(height=250, margin=dict(t=50, b=10))
-        st.plotly_chart(fig_confidence, use_container_width=True)
-    
-    with col_conf2:
-        # Confidence Factors
-        st.markdown("#### 📈 Confidence Factors")
-        
-        factors = forecast_confidence.get('factors', {})
-        
-        for factor, score in factors.items():
-            color = "#4CAF50" if score >= 70 else "#FF9800" if score >= 50 else "#FF5252"
-            st.markdown(f"""
-            <div style="margin: 0.5rem 0; padding: 0.5rem; background: #F5F5F5; border-radius: 5px;">
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="font-size: 0.85rem;">{factor}</span>
-                    <span style="font-weight: bold; color: {color};">{score:.1f}%</span> 
-                </div>
-            </div>
+                .fcst-card:hover { transform: translateY(-3px); }
+                .fcst-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
+                .fcst-val { font-size: 1.8rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+                .fcst-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
+            </style>
             """, unsafe_allow_html=True)
-    
-    # ============================================
-    # NEW FUNCTIONS FOR ADVANCED FORECASTING
-    # ============================================
-    
-    @st.cache_data
-    def calculate_forecast_confidence(df_forecast, df_sales=None, df_historical_forecast=None):
-        """Calculate forecast confidence score based on multiple factors"""
-        
-        confidence_score = 70  # Base score
-        factors = {}
-        
-        try:
-            # Factor 1: Data Completeness
-            total_cells = len(df_forecast) * len(ecomm_forecast_month_cols) if ecomm_forecast_month_cols else 1
-            non_zero_cells = (df_forecast[ecomm_forecast_month_cols] > 0).sum().sum() if ecomm_forecast_month_cols else 0
-            completeness_score = (non_zero_cells / total_cells * 100) if total_cells > 0 else 0
-            factors['Data Completeness'] = min(100, completeness_score * 1.2)  # Boost score
+
+            c1, c2, c3 = st.columns(3)
             
-            # Factor 2: Historical Accuracy (if data available)
-            if df_sales is not None and df_historical_forecast is not None and not df_sales.empty and not df_historical_forecast.empty:
-                # Calculate accuracy for last 6 months
-                common_months = sorted(set(df_sales['Month'].unique()) & set(df_historical_forecast['Month'].unique()))
-                if len(common_months) >= 3:
-                    accuracies = []
-                    for month in common_months[-6:]:
-                        sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-                        forecast_qty = df_historical_forecast[df_historical_forecast['Month'] == month]['Forecast_Qty'].sum()
-                        if forecast_qty > 0:
-                            accuracy = 100 - abs((sales_qty / forecast_qty * 100) - 100)
-                            accuracies.append(accuracy)
-                    
-                    if accuracies:
-                        avg_accuracy = sum(accuracies) / len(accuracies)
-                        factors['Historical Accuracy'] = avg_accuracy
-            
-            # Factor 3: Forecast Consistency
-            if len(ecomm_forecast_month_cols) >= 3:
-                monthly_totals = df_forecast[ecomm_forecast_month_cols].sum()
-                cv = monthly_totals.std() / monthly_totals.mean() if monthly_totals.mean() > 0 else 0
-                consistency_score = max(0, 100 - (cv * 100))  # Lower CV = higher score
-                factors['Forecast Consistency'] = consistency_score
-            
-            # Factor 4: SKU Coverage
-            total_skus = len(df_forecast)
-            active_skus = len(df_forecast[df_forecast[ecomm_forecast_month_cols].sum(axis=1) > 0])
-            coverage_score = (active_skus / total_skus * 100) if total_skus > 0 else 0
-            factors['SKU Coverage'] = coverage_score
-            
-            # Calculate weighted average
-            weights = {
-                'Data Completeness': 0.25,
-                'Historical Accuracy': 0.35,
-                'Forecast Consistency': 0.25,
-                'SKU Coverage': 0.15
-            }
-            
-            weighted_score = 0
-            weight_total = 0
-            
-            for factor, score in factors.items():
-                if factor in weights:
-                    weighted_score += score * weights[factor]
-                    weight_total += weights[factor]
-            
-            if weight_total > 0:
-                confidence_score = weighted_score / weight_total
-        
-        except Exception as e:
-            st.error(f"Confidence calculation error: {str(e)}")
-        
-        return {
-            'confidence_score': round(confidence_score, 1),
-            'factors': factors
-        }
-    
-    @st.cache_data
-    def detect_forecast_anomalies(df_forecast, threshold_std=2.0):
-        """Detect anomalies in forecast data"""
-        
-        anomalies = []
-        
-        if not ecomm_forecast_month_cols:
-            return anomalies
-        
-        try:
-            # Calculate monthly totals
-            monthly_totals = df_forecast[ecomm_forecast_month_cols].sum()
-            
-            # Calculate moving average and standard deviation
-            if len(monthly_totals) >= 3:
-                moving_avg = monthly_totals.rolling(window=3, min_periods=1).mean()
-                moving_std = monthly_totals.rolling(window=3, min_periods=1).std()
-                
-                for i, (month, value) in enumerate(monthly_totals.items()):
-                    if i >= 2:  # Need at least 2 previous months for comparison
-                        avg = moving_avg.iloc[i]
-                        std = moving_std.iloc[i]
-                        
-                        if std > 0 and abs(value - avg) > (threshold_std * std):
-                            anomaly_score = abs(value - avg) / std
-                            anomalies.append({
-                                'Month': month,
-                                'Forecast_Value': value,
-                                'Moving_Avg': avg,
-                                'Std_Dev': std,
-                                'Anomaly_Score': anomaly_score,
-                                'Deviation_Pct': ((value - avg) / avg * 100) if avg > 0 else 0
-                            })
-        
-        except Exception as e:
-            st.error(f"Anomaly detection error: {str(e)}")
-        
-        return anomalies
-    
-    @st.cache_data
-    def calculate_seasonality_pattern(df_forecast):
-        """Calculate seasonality pattern from forecast"""
-        
-        seasonality = {}
-        
-        if not ecomm_forecast_month_cols:
-            return seasonality
-        
-        try:
-            # Group by month name (ignoring year)
-            month_patterns = {}
-            for month_col in ecomm_forecast_month_cols:
-                month_name = str(month_col).split('-')[0].upper()[:3]
-                if month_name not in month_patterns:
-                    month_patterns[month_name] = []
-                month_patterns[month_name].append(df_forecast[month_col].sum())
-            
-            # Calculate average for each month
-            for month, values in month_patterns.items():
-                if values:
-                    month_patterns[month] = sum(values) / len(values)
-            
-            # Calculate seasonal indices
-            overall_avg = sum(month_patterns.values()) / len(month_patterns) if month_patterns else 1
-            
-            for month, avg_value in month_patterns.items():
-                if overall_avg > 0:
-                    seasonal_index = avg_value / overall_avg
-                    seasonality[month] = {
-                        'value': avg_value,
-                        'index': seasonal_index,
-                        'type': 'Peak' if seasonal_index >= 1.2 else 'Normal' if seasonal_index >= 0.8 else 'Low'
-                    }
-        
-        except Exception as e:
-            st.error(f"Seasonality calculation error: {str(e)}")
-        
-        return seasonality
-    
-    @st.cache_data
-    def perform_what_if_analysis(base_forecast, scenarios):
-        """Perform what-if scenario analysis"""
-        
-        results = {}
-        
-        try:
-            for scenario_name, params in scenarios.items():
-                modified_forecast = base_forecast.copy()
-                
-                # Apply scenario adjustments
-                if 'growth_rate' in params:
-                    growth = params['growth_rate'] / 100
-                    for month in ecomm_forecast_month_cols:
-                        modified_forecast[month] = modified_forecast[month] * (1 + growth)
-                
-                if 'specific_months_adjustment' in params:
-                    for month, adjustment in params['specific_months_adjustment'].items():
-                        if month in modified_forecast.columns:
-                            modified_forecast[month] = modified_forecast[month] * (1 + adjustment/100)
-                
-                # Calculate scenario totals
-                scenario_total = modified_forecast[ecomm_forecast_month_cols].sum().sum()
-                base_total = base_forecast[ecomm_forecast_month_cols].sum().sum()
-                
-                results[scenario_name] = {
-                    'total_forecast': scenario_total,
-                    'change_pct': ((scenario_total - base_total) / base_total * 100) if base_total > 0 else 0,
-                    'monthly_breakdown': modified_forecast[ecomm_forecast_month_cols].sum().to_dict()
-                }
-        
-        except Exception as e:
-            st.error(f"What-if analysis error: {str(e)}")
-        
-        return results
-    
-    @st.cache_data
-    def identify_forecast_risks(df_forecast, df_product):
-        """Identify potential risks in forecast"""
-        
-        risks = []
-        
-        try:
-            # Risk 1: New products with high forecast but no history
-            if 'Product_Name' in df_forecast.columns:
-                # For simplicity, assume new products are those without brand recognition
-                new_products = df_forecast[
-                    (df_forecast['Brand'].str.contains('New|New Product', case=False, na=False)) |
-                    (df_forecast['Product_Name'].str.contains('New|Launch', case=False, na=False))
-                ]
-                
-                if not new_products.empty:
-                    high_new_forecast = new_products[new_products[ecomm_forecast_month_cols].sum(axis=1) > 1000]
-                    if not high_new_products.empty:
-                        risks.append({
-                            'type': 'New Product Risk',
-                            'description': f"{len(high_new_forecast)} new products with forecast > 1,000 units",
-                            'severity': 'High',
-                            'impact': "Potential overstock if demand doesn't materialize"
-                        })
-            
-            # Risk 2: High concentration in few SKUs
-            sku_contributions = df_forecast[ecomm_forecast_month_cols].sum(axis=1).sort_values(ascending=False)
-            top_10_share = sku_contributions.head(10).sum() / sku_contributions.sum() * 100 if sku_contributions.sum() > 0 else 0
-            
-            if top_10_share > 50:
-                risks.append({
-                    'type': 'Concentration Risk',
-                    'description': f"Top 10 SKUs contribute {top_10_share:.1f}% of total forecast",
-                    'severity': 'Medium',
-                    'impact': 'High dependency on few products'
-                })
-            
-            # Risk 3: Seasonal peaks without inventory planning
-            seasonality = calculate_seasonality_pattern(df_forecast)
-            peak_months = [month for month, data in seasonality.items() if data['type'] == 'Peak']
-            
-            if len(peak_months) >= 2:
-                risks.append({
-                    'type': 'Seasonal Risk',
-                    'description': f"Multiple peak months detected: {', '.join(peak_months)}",
-                    'severity': 'Medium',
-                    'impact': 'Require advanced inventory planning'
-                })
-        
-        except Exception as e:
-            st.error(f"Risk identification error: {str(e)}")
-        
-        return risks
-    
-    # ============================================
-    # SECTION 2: ANOMALY DETECTION & RISK ANALYSIS
-    # ============================================
-    st.markdown("---")
-    
-    # Tabs for different analyses
-    analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs([
-        "🔍 Anomaly Detection",
-        "⚠️ Risk Analysis",
-        "📈 Seasonality Analysis"
-    ])
-    
-    with analysis_tab1:
-        st.markdown("### 🔍 Forecast Anomaly Detection")
-        
-        # Anomaly detection settings
-        col_anom1, col_anom2 = st.columns(2)
-        
-        with col_anom1:
-            anomaly_threshold = st.slider("Anomaly Threshold (σ)", 1.0, 3.0, 2.0, 0.1,
-                                         help="Standard deviations from moving average")
-        
-        with col_anom2:
-            min_forecast_threshold = st.number_input("Minimum Forecast to Check", 100, 10000, 1000,
-                                                    help="Only check months with forecast above this")
-        
-        # Detect anomalies
-        with st.spinner("Detecting anomalies..."):
-            anomalies = detect_forecast_anomalies(df_ecomm_forecast, threshold_std=anomaly_threshold)
-            
-            # Filter by minimum threshold
-            anomalies = [a for a in anomalies if a['Forecast_Value'] >= min_forecast_threshold]
-        
-        if anomalies:
-            st.warning(f"⚠️ Found {len(anomalies)} potential anomalies")
-            
-            # Create anomalies dataframe
-            df_anomalies = pd.DataFrame(anomalies)
-            df_anomalies = df_anomalies.sort_values('Anomaly_Score', ascending=False)
-            
-            # Display anomalies
-            for idx, anomaly in df_anomalies.head(5).iterrows():
-                with st.expander(f"**{anomaly['Month']}** - Anomaly Score: {anomaly['Anomaly_Score']:.2f}σ", expanded=False):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric("Forecast", f"{anomaly['Forecast_Value']:,.0f}")
-                    
-                    with col2:
-                        st.metric("Moving Avg", f"{anomaly['Moving_Avg']:,.0f}")
-                    
-                    with col3:
-                        st.metric("Deviation", f"{anomaly['Deviation_Pct']:+.1f}%")
-                    
-                    # Recommendations
-                    if anomaly['Deviation_Pct'] > 20:
-                        st.error("**High Risk:** Significant upward deviation. Verify demand assumptions.")
-                    elif anomaly['Deviation_Pct'] < -20:
-                        st.error("**High Risk:** Significant downward deviation. Check for missing promotions/events.")
-                    else:
-                        st.info("**Medium Risk:** Monitor closely in next forecast cycle.")
-            
-            # Anomaly visualization
-            fig_anomalies = go.Figure()
-            
-            # Add forecast line
-            monthly_totals = df_ecomm_forecast[ecomm_forecast_month_cols].sum()
-            sorted_months = sorted(ecomm_forecast_month_cols, key=parse_month_str)
-            sorted_values = [monthly_totals[m] for m in sorted_months]
-            
-            fig_anomalies.add_trace(go.Scatter(
-                x=sorted_months,
-                y=sorted_values,
-                mode='lines+markers',
-                name='Forecast',
-                line=dict(color='#667eea', width=3)
-            ))
-            
-            # Add moving average
-            if len(sorted_values) >= 3:
-                moving_avg = pd.Series(sorted_values).rolling(window=3, min_periods=1).mean()
-                fig_anomalies.add_trace(go.Scatter(
-                    x=sorted_months,
-                    y=moving_avg,
-                    mode='lines',
-                    name='3-Month Moving Avg',
-                    line=dict(color='#FF9800', width=2, dash='dash')
-                ))
-            
-            # Highlight anomalies
-            anomaly_months = [a['Month'] for a in anomalies]
-            anomaly_values = [monthly_totals[m] for m in anomaly_months if m in monthly_totals]
-            
-            if anomaly_months and anomaly_values:
-                fig_anomalies.add_trace(go.Scatter(
-                    x=anomaly_months,
-                    y=anomaly_values,
-                    mode='markers',
-                    name='Anomalies',
-                    marker=dict(
-                        size=12,
-                        color='#FF5252',
-                        symbol='x'
-                    )
-                ))
-            
-            fig_anomalies.update_layout(
-                height=400,
-                title='Forecast Anomaly Detection',
-                xaxis_title='Month',
-                yaxis_title='Forecast Quantity',
-                hovermode='x unified'
-            )
-            
-            st.plotly_chart(fig_anomalies, use_container_width=True)
-        else:
-            st.success("✅ No anomalies detected - Forecast appears consistent")
-    
-    with analysis_tab2:
-        st.markdown("### ⚠️ Forecast Risk Analysis")
-        
-        # Identify risks
-        with st.spinner("Analyzing forecast risks..."):
-            risks = identify_forecast_risks(df_ecomm_forecast, df_product)
-        
-        if risks:
-            # Risk summary
-            high_risks = [r for r in risks if r['severity'] == 'High']
-            medium_risks = [r for r in risks if r['severity'] == 'Medium']
-            
-            col_risk1, col_risk2, col_risk3 = st.columns(3)
-            
-            with col_risk1:
-                st.metric("Total Risks", len(risks))
-            
-            with col_risk2:
-                st.metric("High Severity", len(high_risks), delta_color="off")
-            
-            with col_risk3:
-                st.metric("Medium Severity", len(medium_risks))
-            
-            # Display risks
-            for risk in risks:
-                risk_color = "#F44336" if risk['severity'] == 'High' else "#FF9800"
-                
+            with c1:
                 st.markdown(f"""
-                <div style="border-left: 5px solid {risk_color}; padding: 1rem; margin: 1rem 0; 
-                            background: {'#FFEBEE' if risk['severity'] == 'High' else '#FFF3E0'}; 
-                            border-radius: 5px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="color: {risk_color};">{risk['type']}</strong>
-                            <div style="font-size: 0.9rem; margin-top: 0.3rem;">{risk['description']}</div>
-                        </div>
-                        <div style="background: {risk_color}; color: white; padding: 0.3rem 0.8rem; 
-                                    border-radius: 20px; font-size: 0.8rem; font-weight: bold;">
-                            {risk['severity']}
-                        </div>
-                    </div>
-                    <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">
-                        <strong>Impact:</strong> {risk['impact']}
-                    </div>
+                <div class="fcst-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
+                    <div class="fcst-title">Total Forecast Volume</div>
+                    <div class="fcst-val">{total_fcst_qty:,.0f}</div>
+                    <div class="fcst-sub">Units across {len(sorted_fcst_cols)} months</div>
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Risk mitigation recommendations
-            st.markdown("#### 🛡️ Risk Mitigation Strategies")
+            with c2:
+                val_text = f"Rp {total_fcst_val/1e9:,.1f} M" if has_price else "N/A"
+                sub_text = "Gross Revenue Projection" if has_price else "No Price Data Found"
+                st.markdown(f"""
+                <div class="fcst-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+                    <div class="fcst-title">Total Forecast Value</div>
+                    <div class="fcst-val">{val_text}</div>
+                    <div class="fcst-sub">{sub_text}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with c3:
+                peak_month_idx = df_fcst_active[sorted_fcst_cols].sum().argmax()
+                peak_month = sorted_fcst_cols[peak_month_idx]
+                peak_val = df_fcst_active[sorted_fcst_cols].sum().max()
+                
+                st.markdown(f"""
+                <div class="fcst-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                    <div class="fcst-title">Peak Season Month</div>
+                    <div class="fcst-val">{peak_month}</div>
+                    <div class="fcst-sub">Vol: {peak_val:,.0f} units</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # ==============================================================================
+            # 3. SEASONALITY & TREND CHART
+            # ==============================================================================
+            st.divider()
+            st.subheader("📈 Monthly Forecast Trend (Seasonality)")
             
-            mitigation_col1, mitigation_col2 = st.columns(2)
+            # Aggregate per month
+            monthly_agg = df_fcst_active[sorted_fcst_cols].sum().reset_index()
+            monthly_agg.columns = ['Month', 'Qty']
             
-            with mitigation_col1:
-                st.markdown("""
-                **For New Product Risks:**
-                1. **Phased Launch** - Start with conservative quantities
-                2. **Pre-orders** - Validate demand before full production
-                3. **Market Testing** - Test in limited regions first
-                4. **Flexible Contracts** - Negotiate return options with suppliers
-                """)
+            # Calculate Average Line
+            avg_line = monthly_agg['Qty'].mean()
             
-            with mitigation_col2:
-                st.markdown("""
-                **For Concentration Risks:**
-                1. **Diversify Portfolio** - Expand product range
-                2. **Cross-Selling** - Promote complementary products
-                3. **Inventory Buffer** - Higher safety stock for key SKUs
-                4. **Alternative Suppliers** - Reduce single-source dependency
-                """)
-        else:
-            st.success("✅ No significant risks identified in forecast")
-    
-    with analysis_tab3:
-        st.markdown("### 📈 Seasonality Pattern Analysis")
-        
-        # Calculate seasonality
-        with st.spinner("Analyzing seasonality patterns..."):
-            seasonality = calculate_seasonality_pattern(df_ecomm_forecast)
-        
-        if seasonality:
-            # Create seasonality chart
-            months_order = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-            months_display = [m for m in months_order if m in seasonality]
+            fig_trend = go.Figure()
             
-            values = [seasonality[m]['value'] for m in months_display]
-            indices = [seasonality[m]['index'] for m in months_display]
-            types = [seasonality[m]['type'] for m in months_display]
-            
-            fig_season = go.Figure()
-            
-            # Bar chart for values
-            fig_season.add_trace(go.Bar(
-                x=months_display,
-                y=values,
-                name='Avg Forecast',
-                marker_color=['#4CAF50' if t == 'Peak' else '#FF9800' if t == 'Normal' else '#9E9E9E' for t in types],
-                text=[f"{v:,.0f}" for v in values],
+            # Bar Chart
+            fig_trend.add_trace(go.Bar(
+                x=monthly_agg['Month'], y=monthly_agg['Qty'],
+                name='Monthly Forecast',
+                marker_color='#818CF8', # Soft Indigo
+                text=[f"{x:,.0f}" for x in monthly_agg['Qty']],
                 textposition='auto'
             ))
             
-            # Line for seasonal indices
-            fig_season.add_trace(go.Scatter(
-                x=months_display,
-                y=indices,
-                name='Seasonal Index',
-                yaxis='y2',
-                line=dict(color='#2196F3', width=3),
-                mode='lines+markers'
+            # Average Line
+            fig_trend.add_trace(go.Scatter(
+                x=monthly_agg['Month'], y=[avg_line]*len(monthly_agg),
+                name='Average',
+                mode='lines',
+                line=dict(color='#F59E0B', width=2, dash='dash')
             ))
             
-            fig_season.update_layout(
+            fig_trend.update_layout(
                 height=400,
-                title='Seasonality Pattern Analysis',
-                xaxis_title='Month',
-                yaxis=dict(title='Average Forecast Quantity'),
-                yaxis2=dict(
-                    title='Seasonal Index',
-                    overlaying='y',
-                    side='right',
-                    range=[0, max(indices) * 1.2]
-                ),
-                showlegend=True
+                xaxis_title="Month", yaxis_title="Quantity",
+                plot_bgcolor='white',
+                hovermode="x unified",
+                margin=dict(t=20, b=20, l=20, r=20)
             )
             
-            st.plotly_chart(fig_season, use_container_width=True)
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+            # ==============================================================================
+            # 4. SCENARIO PLANNER (WHAT-IF ANALYSIS)
+            # ==============================================================================
+            st.divider()
+            st.subheader("🎮 What-If Scenario Planner")
+            st.caption("Simulasikan perubahan demand untuk melihat dampak pada total volume.")
             
-            # Seasonality insights
-            peak_months = [m for m, data in seasonality.items() if data['type'] == 'Peak']
-            low_months = [m for m, data in seasonality.items() if data['type'] == 'Low']
+            col_input, col_viz = st.columns([1, 2])
             
-            if peak_months:
-                st.info(f"""
-                **📈 Peak Season Identified:** {', '.join(peak_months)}
+            with col_input:
+                st.markdown("##### Scenario Settings")
                 
-                **Recommendations:**
-                1. **Increase inventory** 2-3 months before peak season
-                2. **Secure supplier capacity** in advance
-                3. **Plan promotions** to maximize sales
-                4. **Adjust staffing** for higher order volume
-                """)
-            
-            if low_months:
-                st.warning(f"""
-                **📉 Low Season Identified:** {', '.join(low_months)}
-                
-                **Recommendations:**
-                1. **Reduce inventory** levels
-                2. **Plan clearance sales** to free up capital
-                3. **Focus on new product development**
-                4. **Schedule maintenance/upgrades**
-                """)
-        else:
-            st.info("ℹ️ Insufficient data for seasonality analysis")
-    
-    # ============================================
-    # SECTION 3: WHAT-IF SCENARIO ANALYSIS
-    # ============================================
-    st.markdown("---")
-    st.markdown("### 🎮 WHAT-IF SCENARIO ANALYSIS")
-    
-    # Scenario configuration
-    scenario_col1, scenario_col2, scenario_col3 = st.columns(3)
-    
-    with scenario_col1:
-        optimistic_growth = st.slider("Optimistic Growth (%)", 0, 50, 20,
-                                     help="Best-case scenario growth rate")
-    
-    with scenario_col2:
-        conservative_growth = st.slider("Conservative Growth (%)", -20, 20, 5,
-                                       help="Worst-case scenario growth rate")
-    
-    with scenario_col3:
-        # Seasonal adjustment scenarios
-        peak_season_boost = st.slider("Peak Season Boost (%)", 0, 100, 30,
-                                     help="Additional growth during peak months")
-    
-    # Define scenarios
-    scenarios = {
-        'Baseline': {},
-        'Optimistic': {
-            'growth_rate': optimistic_growth,
-            'specific_months_adjustment': {}
-        },
-        'Conservative': {
-            'growth_rate': conservative_growth,
-            'specific_months_adjustment': {}
-        },
-        'Seasonal Boost': {
-            'growth_rate': 0,
-            'specific_months_adjustment': {}
-        }
-    }
-    
-    # Add seasonal adjustments if seasonality detected
-    if seasonality:
-        peak_months = [m for m, data in seasonality.items() if data['type'] == 'Peak']
-        for month in peak_months:
-            # Find corresponding columns in forecast
-            for col in ecomm_forecast_month_cols:
-                if month in str(col).upper():
-                    scenarios['Seasonal Boost']['specific_months_adjustment'][col] = peak_season_boost
-    
-    # Run what-if analysis
-    with st.spinner("Running scenario analysis..."):
-        scenario_results = perform_what_if_analysis(df_ecomm_forecast, scenarios)
-    
-    if scenario_results:
-        # Scenario comparison
-        scenario_data = []
-        for scenario, results in scenario_results.items():
-            scenario_data.append({
-                'Scenario': scenario,
-                'Total Forecast': results['total_forecast'],
-                'Change %': results['change_pct'],
-                'Avg Monthly': results['total_forecast'] / len(ecomm_forecast_month_cols) if ecomm_forecast_month_cols else 0
-            })
-        
-        df_scenarios = pd.DataFrame(scenario_data)
-        
-        # Visualization
-        fig_scenarios = go.Figure()
-        
-        # Bar chart for total forecast
-        fig_scenarios.add_trace(go.Bar(
-            x=df_scenarios['Scenario'],
-            y=df_scenarios['Total Forecast'],
-            name='Total Forecast',
-            marker_color=['#9E9E9E', '#4CAF50', '#FF9800', '#2196F3'],
-            text=[f"{x:,.0f}" for x in df_scenarios['Total Forecast']],
-            textposition='auto'
-        ))
-        
-        fig_scenarios.update_layout(
-            height=400,
-            title='What-If Scenario Comparison',
-            xaxis_title='Scenario',
-            yaxis_title='Total Forecast Quantity',
-            showlegend=False
-        )
-        
-        st.plotly_chart(fig_scenarios, use_container_width=True)
-        
-        # Scenario details
-        st.markdown("#### 📊 Scenario Details")
-        
-        details_tab1, details_tab2 = st.tabs(["Summary Table", "Monthly Breakdown"])
-        
-        with details_tab1:
-            # Format display
-            df_display = df_scenarios.copy()
-            df_display['Total Forecast'] = df_display['Total Forecast'].apply(lambda x: f"{x:,.0f}")
-            df_display['Change %'] = df_display['Change %'].apply(lambda x: f"{x:+.1f}%")
-            df_display['Avg Monthly'] = df_display['Avg Monthly'].apply(lambda x: f"{x:,.0f}")
-            
-            st.dataframe(df_display, use_container_width=True)
-        
-        with details_tab2:
-            # Monthly breakdown for selected scenario
-            selected_scenario = st.selectbox("Select Scenario for Details", list(scenario_results.keys()))
-            
-            if selected_scenario in scenario_results:
-                monthly_data = scenario_results[selected_scenario]['monthly_breakdown']
-                
-                # Convert to dataframe
-                df_monthly = pd.DataFrame(list(monthly_data.items()), columns=['Month', 'Forecast'])
-                df_monthly = df_monthly.sort_values('Month', key=lambda x: x.map(parse_month_str))
-                
-                # Chart
-                fig_monthly = go.Figure()
-                
-                fig_monthly.add_trace(go.Bar(
-                    x=df_monthly['Month'],
-                    y=df_monthly['Forecast'],
-                    name='Monthly Forecast',
-                    marker_color='#667eea'
-                ))
-                
-                fig_monthly.update_layout(
-                    height=300,
-                    title=f'Monthly Breakdown - {selected_scenario} Scenario',
-                    xaxis_title='Month',
-                    yaxis_title='Forecast Quantity'
+                # Baseline is always 0%
+                growth_pct = st.slider(
+                    "Adjust Growth Rate (%)", 
+                    min_value=-50, max_value=50, value=0, step=5,
+                    help="Geser untuk menaikkan/menurunkan forecast secara global"
                 )
                 
-                st.plotly_chart(fig_monthly, use_container_width=True)
-                
-                # Export scenario data
-                if st.button(f"📥 Export {selected_scenario} Scenario", key=f"export_{selected_scenario}"):
-                    # Create detailed export
-                    export_data = df_ecomm_forecast.copy()
-                    
-                    if selected_scenario != 'Baseline':
-                        # Apply scenario adjustments
-                        scenario_params = scenarios[selected_scenario]
-                        
-                        if 'growth_rate' in scenario_params:
-                            growth = scenario_params['growth_rate'] / 100
-                            for month in ecomm_forecast_month_cols:
-                                export_data[month] = export_data[month] * (1 + growth)
-                        
-                        if 'specific_months_adjustment' in scenario_params:
-                            for month, adjustment in scenario_params['specific_months_adjustment'].items():
-                                if month in export_data.columns:
-                                    export_data[month] = export_data[month] * (1 + adjustment/100)
-                    
-                    csv_data = export_data.to_csv(index=False)
-                    
-                    st.download_button(
-                        label="Download Scenario Data (CSV)",
-                        data=csv_data,
-                        file_name=f"forecast_scenario_{selected_scenario}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv",
-                        key=f"dl_{selected_scenario}"
-                    )
-    
-    # ============================================
-    # SECTION 4: FORECAST OPTIMIZATION RECOMMENDATIONS
-    # ============================================
-    st.markdown("---")
-    st.markdown("### 🎯 FORECAST OPTIMIZATION RECOMMENDATIONS")
-    
-    # Generate recommendations based on analysis
-    recommendations = []
-    
-    # Recommendation 1: Based on confidence score
-    if forecast_confidence.get('confidence_score', 0) < 70:
-        recommendations.append({
-            'priority': 'High',
-            'title': 'Improve Forecast Confidence',
-            'description': f"Current confidence score is {forecast_confidence['confidence_score']}%. Focus on improving data quality and historical accuracy.",
-            'actions': [
-                'Review and clean forecast data for missing values',
-                'Improve historical data collection process',
-                'Implement forecast accuracy tracking weekly'
-            ]
-        })
-    
-    # Recommendation 2: Based on anomalies
-    if anomalies:
-        recommendations.append({
-            'priority': 'High',
-            'title': 'Address Forecast Anomalies',
-            'description': f"Found {len(anomalies)} anomalies in forecast data. Investigate and correct unusual patterns.",
-            'actions': [
-                'Verify demand assumptions for anomalous months',
-                'Check for potential data entry errors',
-                'Review promotional calendar for those periods'
-            ]
-        })
-    
-    # Recommendation 3: Based on risks
-    if risks:
-        high_risk_count = len([r for r in risks if r['severity'] == 'High'])
-        if high_risk_count > 0:
-            recommendations.append({
-                'priority': 'Critical',
-                'title': 'Mitigate High Risks',
-                'description': f"Found {high_risk_count} high-severity risks requiring immediate attention.",
-                'actions': [
-                    'Develop contingency plans for key risks',
-                    'Increase monitoring frequency of high-risk areas',
-                    'Review supplier contracts for flexibility'
-                ]
-            })
-    
-    # Recommendation 4: Based on seasonality
-    if seasonality:
-        peak_months = [m for m, data in seasonality.items() if data['type'] == 'Peak']
-        if peak_months:
-            recommendations.append({
-                'priority': 'Medium',
-                'title': 'Prepare for Peak Season',
-                'description': f"Peak season identified in {', '.join(peak_months)}. Plan inventory and operations accordingly.",
-                'actions': [
-                    'Increase safety stock 2 months before peak',
-                    'Schedule additional warehouse staffing',
-                    'Coordinate marketing campaigns with inventory'
-                ]
-            })
-    
-    # Default recommendation if none generated
-    if not recommendations:
-        recommendations.append({
-            'priority': 'Low',
-            'title': 'Maintain Current Practices',
-            'description': "Forecast appears stable and well-managed. Continue current processes with regular reviews.",
-            'actions': [
-                'Continue monthly forecast reviews',
-                'Monitor key performance indicators',
-                'Stay updated on market trends'
-            ]
-        })
-    
-    # Display recommendations with FIXED Formatting
-    for rec in recommendations:
-        # Determine Color
-        priority_color = {
-            'Critical': '#F44336',
-            'High': '#FF9800',
-            'Medium': '#FFC107',
-            'Low': '#4CAF50'
-        }.get(rec['priority'], '#9E9E9E')
-        
-        # Prepare Markdown List string (Fixes HTML issue)
-        action_items = "\n".join([f"- {action}" for action in rec['actions']])
-        
-        # Render Card Header & Description using HTML/CSS
-        st.markdown(f"""
-        <div style="border-left: 5px solid {priority_color}; padding: 1.5rem; margin: 1rem 0; 
-                    background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-                <span style="background: {priority_color}; color: white; padding: 4px 12px; 
-                            border-radius: 16px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">
-                    {rec['priority']}
-                </span>
-                <h4 style="margin: 0; color: #333;">{rec['title']}</h4>
-            </div>
-            <p style="margin: 0.5rem 0 1rem 0; color: #555; font-size: 0.95rem;">
-                {rec['description']}
-            </p>
-            <div style="font-size: 0.9rem; font-weight: 700; color: #333; margin-bottom: 0.5rem;">
-                Recommended Actions:
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Render Actions as Native Markdown (outside the HTML div to prevent render issues)
-        # We use a container or specific indent to make it look part of the card if needed, 
-        # but standard markdown below the card is safest and cleanest.
-        st.markdown(action_items)
-        
-        # Add a small spacer
-        st.write("")
-    
-    # ============================================
-    # SECTION 5: FORECAST PERFORMANCE TRACKING
-    # ============================================
-    st.markdown("---")
-    st.markdown("### 📈 FORECAST PERFORMANCE TRACKING")
-    
-    # Performance tracking dashboard
-    perf_col1, perf_col2 = st.columns(2)
-    
-    with perf_col1:
-        # Forecast vs Actual Comparison (if historical data available)
-        if not df_sales.empty and not df_forecast.empty:
-            st.markdown("#### 📊 Historical Accuracy Trend")
-            
-            # Calculate monthly accuracy
-            accuracy_data = []
-            common_months = sorted(set(df_sales['Month'].unique()) & set(df_forecast['Month'].unique()))
-            
-            for month in common_months[-12:]:  # Last 12 months
-                sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-                forecast_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
-                
-                if forecast_qty > 0:
-                    accuracy = 100 - abs((sales_qty / forecast_qty * 100) - 100)
-                    accuracy_data.append({
-                        'Month': month.strftime('%b-%Y'),
-                        'Sales': sales_qty,
-                        'Forecast': forecast_qty,
-                        'Accuracy': accuracy
-                    })
-            
-            if accuracy_data:
-                df_accuracy = pd.DataFrame(accuracy_data)
-                
-                fig_accuracy = go.Figure()
-                
-                # Bar chart for comparison
-                fig_accuracy.add_trace(go.Bar(
-                    x=df_accuracy['Month'],
-                    y=df_accuracy['Sales'],
-                    name='Actual Sales',
-                    marker_color='#4CAF50'
-                ))
-                
-                fig_accuracy.add_trace(go.Bar(
-                    x=df_accuracy['Month'],
-                    y=df_accuracy['Forecast'],
-                    name='Forecast',
-                    marker_color='#667eea',
-                    opacity=0.7
-                ))
-                
-                # Accuracy line
-                fig_accuracy.add_trace(go.Scatter(
-                    x=df_accuracy['Month'],
-                    y=df_accuracy['Accuracy'],
-                    name='Accuracy %',
-                    yaxis='y2',
-                    line=dict(color='#FF5252', width=3),
-                    mode='lines+markers'
-                ))
-                
-                fig_accuracy.update_layout(
-                    height=400,
-                    title='Forecast vs Actual Performance',
-                    xaxis_title='Month',
-                    yaxis=dict(title='Quantity'),
-                    yaxis2=dict(
-                        title='Accuracy %',
-                        overlaying='y',
-                        side='right',
-                        range=[0, 110]
-                    ),
-                    barmode='group',
-                    hovermode='x unified'
+                tier_filter = st.multiselect(
+                    "Apply to Specific Tier (Optional)",
+                    options=df_fcst_active['SKU_Tier'].unique() if 'SKU_Tier' in df_fcst_active.columns else [],
+                    default=[]
                 )
                 
-                st.plotly_chart(fig_accuracy, use_container_width=True)
-        else:
-            st.info("ℹ️ Historical accuracy tracking requires both sales and forecast data")
-    
-    with perf_col2:
-        # Forecast bias analysis
-        st.markdown("#### 🎯 Forecast Bias Analysis")
-        
-        if not df_sales.empty and not df_forecast.empty and common_months:
-            bias_data = []
-            
-            for month in common_months[-12:]:
-                sales_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-                forecast_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
+                st.info(f"💡 **Scenario:** {'Baseline' if growth_pct==0 else ('Aggressive' if growth_pct>0 else 'Conservative')} ({growth_pct:+}% Growth)")
+
+            with col_viz:
+                # Calculate Scenario
+                df_scenario = df_fcst_active.copy()
                 
-                if forecast_qty > 0:
-                    bias_pct = ((sales_qty - forecast_qty) / forecast_qty * 100)
-                    bias_data.append({
-                        'Month': month.strftime('%b-%Y'),
-                        'Bias_Pct': bias_pct,
-                        'Type': 'Over-forecast' if bias_pct < 0 else 'Under-forecast' if bias_pct > 0 else 'Accurate'
-                    })
-            
-            if bias_data:
-                df_bias = pd.DataFrame(bias_data)
+                # Filter Tier if selected
+                mask = pd.Series([True]*len(df_scenario))
+                if tier_filter and 'SKU_Tier' in df_scenario.columns:
+                    mask = df_scenario['SKU_Tier'].isin(tier_filter)
                 
-                # Calculate average bias
-                avg_bias = df_bias['Bias_Pct'].mean()
+                # Apply Growth
+                for c in sorted_fcst_cols:
+                    df_scenario.loc[mask, c] = df_scenario.loc[mask, c] * (1 + growth_pct/100)
                 
-                # Bias gauge
-                fig_bias = go.Figure(go.Indicator(
-                    mode="gauge+number+delta",
-                    value=abs(avg_bias),
-                    domain={'x': [0, 1], 'y': [0, 1]},
-                    title={'text': "Average Forecast Bias"},
-                    number={'suffix': "%"},
-                    delta={'reference': 10, 'increasing': {'color': "red"}},
-                    gauge={
-                        'axis': {'range': [0, 50]},
-                        'bar': {'color': "#FF9800"},
-                        'steps': [
-                            {'range': [0, 10], 'color': "#4CAF50"},
-                            {'range': [10, 20], 'color': "#FFC107"},
-                            {'range': [20, 50], 'color': "#F44336"}
-                        ],
-                        'threshold': {
-                            'line': {'color': "black", 'width': 3},
-                            'thickness': 0.8,
-                            'value': 10
-                        }
-                    }
+                # Aggregate
+                scen_agg = df_scenario[sorted_fcst_cols].sum().reset_index()
+                scen_agg.columns = ['Month', 'Qty_Scenario']
+                
+                # Merge with Baseline
+                merged_scen = pd.merge(monthly_agg, scen_agg, on='Month')
+                merged_scen['Diff'] = merged_scen['Qty_Scenario'] - merged_scen['Qty']
+                
+                # Visualization
+                fig_scen = go.Figure()
+                
+                # Baseline Area
+                fig_scen.add_trace(go.Scatter(
+                    x=merged_scen['Month'], y=merged_scen['Qty'],
+                    name='Baseline Forecast',
+                    mode='lines',
+                    fill='tozeroy',
+                    fillcolor='rgba(129, 140, 248, 0.2)',
+                    line=dict(color='#818CF8', width=2)
                 ))
                 
-                fig_bias.update_layout(height=250)
-                st.plotly_chart(fig_bias, use_container_width=True)
-                
-                # Bias interpretation
-                if abs(avg_bias) <= 10:
-                    st.success("✅ Good: Forecast bias within acceptable range (±10%)")
-                elif abs(avg_bias) <= 20:
-                    st.warning("⚠️ Moderate: Forecast bias needs improvement")
-                else:
-                    st.error("❌ High: Significant forecast bias detected")
-                
-                # Bias trend
-                st.markdown("##### 📈 Bias Trend Over Time")
-                
-                fig_bias_trend = go.Figure()
-                
-                fig_bias_trend.add_trace(go.Scatter(
-                    x=df_bias['Month'],
-                    y=df_bias['Bias_Pct'],
+                # Scenario Line
+                color_scen = '#10B981' if growth_pct >= 0 else '#EF4444'
+                fig_scen.add_trace(go.Scatter(
+                    x=merged_scen['Month'], y=merged_scen['Qty_Scenario'],
+                    name=f'Scenario ({growth_pct:+}%)',
                     mode='lines+markers',
-                    name='Bias %',
-                    line=dict(color='#FF9800', width=2),
-                    marker=dict(
-                        size=8,
-                        color=df_bias['Bias_Pct'].apply(lambda x: '#4CAF50' if -10 <= x <= 10 else '#FF9800' if -20 <= x <= 20 else '#F44336')
-                    )
+                    line=dict(color=color_scen, width=3, dash='dot')
                 ))
                 
-                fig_bias_trend.update_layout(
-                    height=200,
-                    xaxis_title='Month',
-                    yaxis_title='Bias %',
-                    hovermode='x unified'
+                fig_scen.update_layout(
+                    height=350,
+                    title="Baseline vs Scenario Projection",
+                    hovermode="x unified",
+                    plot_bgcolor='white',
+                    yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.05)'),
+                    margin=dict(t=30, b=20, l=20, r=20)
                 )
+                st.plotly_chart(fig_scen, use_container_width=True)
                 
-                st.plotly_chart(fig_bias_trend, use_container_width=True)
-    
-    # ============================================
-    # SECTION 6: EXPORT & REPORTING
-    # ============================================
-    st.markdown("---")
-    st.markdown("### 📊 EXPORT COMPREHENSIVE FORECAST ANALYSIS")
-    
-    # Export options
-    export_col1, export_col2, export_col3 = st.columns(3)
-    
-    with export_col1:
-        if st.button("📥 Export Forecast Intelligence Report", use_container_width=True, type="primary"):
-            # Create comprehensive Excel report
-            import io
-            from pandas import ExcelWriter
+                # Impact Summary
+                diff_total = merged_scen['Diff'].sum()
+                st.caption(f"**Impact Summary:** Total Volume Delta = **{diff_total:+,.0f} units**")
+
+            # ==============================================================================
+            # 5. ANOMALY DETECTION (DATA QUALITY)
+            # ==============================================================================
+            st.divider()
+            st.subheader("🚨 Forecast Anomaly Detection")
+            st.caption("Mendeteksi SKU dengan lonjakan forecast yang tidak wajar (Spike > 3x Rata-rata)")
             
-            output = io.BytesIO()
+            # Logic: Cari SKU yang punya bulan tertentu > 3x rata-rata bulan lainnya (Spike)
+            # Atau SKU yang tiba-tiba 0 (Drop)
             
-            with ExcelWriter(output, engine='openpyxl') as writer:
-                # Sheet 1: Raw Forecast Data
-                df_ecomm_forecast.to_excel(writer, sheet_name='Raw_Forecast_Data', index=False)
+            anomalies = []
+            
+            # Limit check to top 500 SKUs by volume for performance
+            top_skus = df_fcst_active.sort_values(by=sorted_fcst_cols[-1], ascending=False).head(500)
+            
+            for idx, row in top_skus.iterrows():
+                vals = row[sorted_fcst_cols].values
+                avg_val = np.mean(vals)
+                max_val = np.max(vals)
                 
-                # Sheet 2: Summary Statistics
-                summary_data = {
-                    'Metric': [
-                        'Total Forecast 2026',
-                        'Forecast Value 2026',
-                        'Historical Accuracy',
-                        'Forecast Confidence',
-                        'Number of SKUs',
-                        'Number of Months',
-                        'Average Monthly Volume'
-                    ],
-                    'Value': [
-                        total_forecast_2026,
-                        forecast_value_2026,
-                        f"{avg_accuracy_historical:.1f}%",
-                        f"{forecast_confidence.get('confidence_score', 0):.1f}%",
-                        len(df_ecomm_forecast),
-                        len(ecomm_forecast_month_cols),
-                        f"{total_forecast_2026 / len(ecomm_forecast_month_cols):,.0f}" if ecomm_forecast_month_cols else "0"
-                    ]
-                }
-                pd.DataFrame(summary_data).to_excel(writer, sheet_name='Summary_Statistics', index=False)
-                
-                # Sheet 3: Anomalies
-                if anomalies:
-                    pd.DataFrame(anomalies).to_excel(writer, sheet_name='Anomalies', index=False)
-                
-                # Sheet 4: Risks
-                if risks:
-                    pd.DataFrame(risks).to_excel(writer, sheet_name='Risks', index=False)
-                
-                # Sheet 5: Seasonality
-                if seasonality:
-                    seasonality_data = []
-                    for month, data in seasonality.items():
-                        seasonality_data.append({
-                            'Month': month,
-                            'Average Forecast': data['value'],
-                            'Seasonal Index': data['index'],
-                            'Type': data['type']
-                        })
-                    pd.DataFrame(seasonality_data).to_excel(writer, sheet_name='Seasonality', index=False)
-                
-                # Sheet 6: Scenarios
-                if scenario_results:
-                    scenario_export = []
-                    for scenario, results in scenario_results.items():
-                        scenario_export.append({
-                            'Scenario': scenario,
-                            'Total Forecast': results['total_forecast'],
-                            'Change %': results['change_pct']
-                        })
-                    pd.DataFrame(scenario_export).to_excel(writer, sheet_name='Scenarios', index=False)
-                
-                # Sheet 7: Recommendations
-                if recommendations:
-                    rec_export = []
-                    for rec in recommendations:
-                        rec_export.append({
-                            'Priority': rec['priority'],
-                            'Title': rec['title'],
-                            'Description': rec['description'],
-                            'Actions': '; '.join(rec['actions'])
-                        })
-                    pd.DataFrame(rec_export).to_excel(writer, sheet_name='Recommendations', index=False)
-            
-            output.seek(0)
-            
-            st.download_button(
-                label="💾 Download Excel Report",
-                data=output,
-                file_name=f"Forecast_Intelligence_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-    
-    with export_col2:
-        # Export specific analyses
-        export_option = st.selectbox(
-            "Export Specific Analysis",
-            [
-                "Select...",
-                "Anomaly Report",
-                "Risk Assessment",
-                "Seasonality Analysis",
-                "Scenario Comparison"
-            ]
-        )
-        
-        if export_option != "Select...":
-            csv_data = ""
-            filename = ""
-            
-            if export_option == "Anomaly Report" and anomalies:
-                df_export = pd.DataFrame(anomalies)
-                csv_data = df_export.to_csv(index=False)
-                filename = "forecast_anomalies.csv"
-            
-            elif export_option == "Risk Assessment" and risks:
-                df_export = pd.DataFrame(risks)
-                csv_data = df_export.to_csv(index=False)
-                filename = "forecast_risks.csv"
-            
-            elif export_option == "Seasonality Analysis" and seasonality:
-                seasonality_data = []
-                for month, data in seasonality.items():
-                    seasonality_data.append({
-                        'Month': month,
-                        'Average_Forecast': data['value'],
-                        'Seasonal_Index': data['index'],
-                        'Type': data['type']
+                # Simple Outlier Logic: Max > 3 * Avg (dan Avg > 10 unit biar ga false alarm di angka kecil)
+                if avg_val > 10 and max_val > (3 * avg_val):
+                    peak_idx = np.argmax(vals)
+                    peak_m = sorted_fcst_cols[peak_idx]
+                    anomalies.append({
+                        'SKU_ID': row['SKU_ID'],
+                        'Product': row.get('Product_Name', 'N/A'),
+                        'Avg_Qty': avg_val,
+                        'Spike_Qty': max_val,
+                        'Spike_Month': peak_m,
+                        'Factor': max_val / avg_val
                     })
-                df_export = pd.DataFrame(seasonality_data)
-                csv_data = df_export.to_csv(index=False)
-                filename = "seasonality_analysis.csv"
-            
-            elif export_option == "Scenario Comparison" and scenario_results:
-                scenario_data = []
-                for scenario, results in scenario_results.items():
-                    scenario_data.append({
-                        'Scenario': scenario,
-                        'Total_Forecast': results['total_forecast'],
-                        'Change_Pct': results['change_pct']
-                    })
-                df_export = pd.DataFrame(scenario_data)
-                csv_data = df_export.to_csv(index=False)
-                filename = "scenario_comparison.csv"
-            
-            if csv_data:
-                st.download_button(
-                    label=f"📥 Export {export_option}",
-                    data=csv_data,
-                    file_name=filename,
-                    mime="text/csv",
-                    use_container_width=True
-                )
-    
-    with export_col3:
-        # Quick actions
-        if st.button("🔄 Refresh Analysis", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-        
-        if st.button("📊 Generate Executive Summary", use_container_width=True, key="exec_sum_forecast"):
-            # Create executive summary
-            exec_summary = f"""
-            ## 📈 FORECAST INTELLIGENCE EXECUTIVE SUMMARY
-            
-            ### Key Metrics:
-            - **Total 2026 Forecast:** {total_forecast_2026:,.0f} units
-            - **Projected Revenue:** Rp {forecast_value_2026:,.0f}
-            - **Forecast Confidence:** {forecast_confidence.get('confidence_score', 0):.1f}%
-            - **Historical Accuracy:** {avg_accuracy_historical:.1f}%
-            
-            ### Key Findings:
-            """
             
             if anomalies:
-                exec_summary += f"- **⚠️ Anomalies Detected:** {len(anomalies)} unusual patterns requiring review\n"
-            
-            if risks:
-                high_risks = len([r for r in risks if r['severity'] == 'High'])
-                if high_risks > 0:
-                    exec_summary += f"- **🚨 High Risks:** {high_risks} critical risks requiring immediate attention\n"
-            
-            if seasonality:
-                peak_months = [m for m, data in seasonality.items() if data['type'] == 'Peak']
-                if peak_months:
-                    exec_summary += f"- **📈 Peak Season:** Identified in {', '.join(peak_months)}\n"
-            
-            exec_summary += f"""
-            ### Top Recommendations:
-            """
-            
-            for i, rec in enumerate(recommendations[:3], 1):
-                exec_summary += f"{i}. **{rec['title']}** ({rec['priority']} priority)\n"
-            
-            st.markdown(exec_summary)
-    
-    # ============================================
-    # SECTION 7: FORECAST MONITORING DASHBOARD
-    # ============================================
-    st.markdown("---")
-    
-    with st.expander("🔍 REAL-TIME FORECAST MONITORING DASHBOARD", expanded=False):
-        # Monitoring metrics
-        monitor_col1, monitor_col2, monitor_col3, monitor_col4 = st.columns(4)
-        
-        with monitor_col1:
-            # Data freshness
-            data_freshness = "Today"  # Assuming data is fresh
-            st.metric("Data Freshness", data_freshness)
-        
-        with monitor_col2:
-            # SKU coverage
-            active_skus = len(df_ecomm_forecast[df_ecomm_forecast[ecomm_forecast_month_cols].sum(axis=1) > 0])
-            total_skus = len(df_ecomm_forecast)
-            coverage_pct = (active_skus / total_skus * 100) if total_skus > 0 else 0
-            st.metric("Active SKU Coverage", f"{coverage_pct:.1f}%")
-        
-        with monitor_col3:
-            # Forecast volatility
-            if len(ecomm_forecast_month_cols) >= 2:
-                monthly_totals = df_ecomm_forecast[ecomm_forecast_month_cols].sum()
-                volatility = monthly_totals.pct_change().std() * 100
-                st.metric("Forecast Volatility", f"{volatility:.1f}%")
-        
-        with monitor_col4:
-            # Data quality score
-            quality_score = forecast_confidence.get('factors', {}).get('Data Completeness', 0)
-            st.metric("Data Quality Score", f"{quality_score:.0f}/100")
-        
-        # Real-time alerts
-        st.markdown("#### ⚡ REAL-TIME ALERTS")
-        
-        alerts = []
-        
-        # Alert 1: Low confidence
-        if forecast_confidence.get('confidence_score', 0) < 60:
-            alerts.append({
-                'type': 'warning',
-                'message': f"Low forecast confidence ({forecast_confidence['confidence_score']}%)",
-                'action': 'Review data quality'
-            })
-        
-        # Alert 2: High anomalies
-        if len(anomalies) > 3:
-            alerts.append({
-                'type': 'error',
-                'message': f"Multiple anomalies detected ({len(anomalies)})",
-                'action': 'Investigate unusual patterns'
-            })
-        
-        # Alert 3: High risks
-        high_risk_count = len([r for r in risks if r['severity'] == 'High'])
-        if high_risk_count > 0:
-            alerts.append({
-                'type': 'error',
-                'message': f"{high_risk_count} high-severity risks identified",
-                'action': 'Implement mitigation strategies'
-            })
-        
-        # Display alerts
-        if alerts:
-            for alert in alerts:
-                alert_color = "#F44336" if alert['type'] == 'error' else "#FF9800"
-                st.markdown(f"""
-                <div style="border-left: 4px solid {alert_color}; padding: 0.8rem; margin: 0.5rem 0; 
-                            background: {'#FFEBEE' if alert['type'] == 'error' else '#FFF3E0'}; 
-                            border-radius: 5px;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <div style="color: {alert_color}; font-weight: bold;">⚠️</div>
-                        <div>
-                            <strong>{alert['message']}</strong>
-                            <div style="font-size: 0.9rem; color: #666;">Action: {alert['action']}</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                df_anom = pd.DataFrame(anomalies).sort_values('Factor', ascending=False)
+                
+                st.warning(f"⚠️ Ditemukan **{len(df_anom)} SKU** dengan pola forecast yang mencurigakan (Lonjakan Ekstrim).")
+                
+                st.dataframe(
+                    df_anom,
+                    column_config={
+                        "Avg_Qty": st.column_config.NumberColumn("Avg Monthly", format="%.0f"),
+                        "Spike_Qty": st.column_config.NumberColumn("Spike Value", format="%.0f"),
+                        "Factor": st.column_config.NumberColumn("Multiplier", format="%.1fx")
+                    },
+                    use_container_width=True
+                )
+            else:
+                st.success("✅ Data Forecast terlihat stabil. Tidak ada lonjakan ekstrim (>3x Rata-rata) pada Top SKU.")
+
         else:
-            st.success("✅ No critical alerts - Forecast monitoring normal")
+            st.warning("⚠️ Tidak ditemukan kolom bulan (format tanggal) yang valid di data forecast.")
+            st.write("Columns detected:", forecast_cols)
+    else:
+        st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
 
 # --- TAB 8: PROFITABILITY ANALYSIS ---
 with tab8:
