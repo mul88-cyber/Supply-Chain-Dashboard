@@ -4333,493 +4333,274 @@ with tab3:
     else:
         st.error("Unable to process inventory data. Please check the 'Stock_Category' column.")
 
-# --- TAB 4: SKU EVALUATION ---
+# --- TAB 4: SKU EVALUATION (SKU 360 INSIGHT DECK) ---
 with tab4:
-    st.subheader("🔍 SKU Performance Evaluation")
-    
+    st.subheader("🔍 SKU 360° Deep Dive Analysis")
+    st.caption("Micro-level analysis for individual Product Performance & Health")
+
+    # 1. SKU SELECTOR & DATA PREP
     if monthly_performance and not df_sales.empty:
         # Get last month for evaluation
         last_month = sorted(monthly_performance.keys())[-1]
         last_month_data = monthly_performance[last_month]['data'].copy()
         
-        # Get last 3 months sales data for each SKU
-        if not df_sales.empty:
-            sales_months = sorted(df_sales['Month'].unique())
-            if len(sales_months) >= 3:
-                last_3_sales_months = sales_months[-3:]
-                df_sales_last_3 = df_sales[df_sales['Month'].isin(last_3_sales_months)].copy()
-                
-                # Pivot sales data to get last 3 months sales per SKU
-                try:
-                    sales_pivot = df_sales_last_3.pivot_table(
-                        index='SKU_ID',
-                        columns='Month',
-                        values='Sales_Qty',
-                        aggfunc='sum',
-                        fill_value=0
-                    ).reset_index()
-                    
-                    # Rename columns to month names
-                    month_rename = {}
-                    for col in sales_pivot.columns:
-                        if isinstance(col, datetime):
-                            month_rename[col] = col.strftime('%b-%Y')
-                    sales_pivot = sales_pivot.rename(columns=month_rename)
-                    
-                    # Merge with last month data
-                    last_month_data = pd.merge(
-                        last_month_data,
-                        sales_pivot,
-                        on='SKU_ID',
-                        how='left'
-                    )
-                except Exception as e:
-                    st.warning(f"Tidak bisa memproses data sales 3 bulan terakhir: {str(e)}")
-        
-        # Add inventory data
-        if 'inventory_df' in inventory_metrics:
-            inventory_data = inventory_metrics['inventory_df'][['SKU_ID', 'Stock_Qty', 'Avg_Monthly_Sales_3M', 'Cover_Months']]
-            last_month_data = pd.merge(last_month_data, inventory_data, on='SKU_ID', how='left')
-        
-        # Add financial data if available
-        if not df_financial.empty:
-            # Get financial metrics for last month
-            financial_last_month = df_financial[df_financial['Month'] == last_month]
-            if not financial_last_month.empty:
-                financial_metrics = financial_last_month[['SKU_ID', 'Revenue', 'Gross_Margin', 'Margin_Percentage']]
-                last_month_data = pd.merge(last_month_data, financial_metrics, on='SKU_ID', how='left')
-        
-        # Create comprehensive evaluation table
-        # Filter by SKU
-        sku_filter = st.text_input("🔍 Filter by SKU ID or Product Name", "")
-        
-        # Apply filter
-        if sku_filter:
-            filtered_eval_df = last_month_data[
-                last_month_data['SKU_ID'].astype(str).str.contains(sku_filter, case=False, na=False) |
-                (last_month_data['Product_Name'].astype(str).str.contains(sku_filter, case=False, na=False) if 'Product_Name' in last_month_data.columns else False)
-            ].copy()
-        else:
-            filtered_eval_df = last_month_data.copy()
-        
-        # Determine which sales columns to show
-        sales_cols = []
-        for col in filtered_eval_df.columns:
-            if isinstance(col, str) and '-' in col and len(col) in [7, 8]:  # Format seperti 'Sep-2024' atau 'Mar-2025'
-                try:
-                    # Validate it's a proper month-year format
-                    datetime.strptime(col, '%b-%Y')
-                    sales_cols.append(col)
-                except:
-                    pass
-        
-        # Sort sales columns chronologically
-        if sales_cols:
-            sales_cols_sorted = sorted(sales_cols, key=lambda x: datetime.strptime(x, '%b-%Y'))
-            # Get last 3 months only
-            sales_cols_sorted = sales_cols_sorted[-3:] if len(sales_cols_sorted) >= 3 else sales_cols_sorted
-        else:
-            sales_cols_sorted = []
-        
-        # Define columns to display - WAJIB dengan Product_Name
-        eval_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 
-                    'Forecast_Qty', 'PO_Qty', 'PO_Rofo_Ratio',
-                    'Stock_Qty', 'Avg_Monthly_Sales_3M', 'Cover_Months']
-        
-        # Add financial columns if available
-        if 'Revenue' in filtered_eval_df.columns:
-            eval_cols.extend(['Revenue', 'Gross_Margin', 'Margin_Percentage'])
-        
-        # Add sales columns
-        eval_cols.extend(sales_cols_sorted)
-        
-        # Filter hanya kolom yang ada
-        available_cols = [col for col in eval_cols if col in filtered_eval_df.columns]
-        
-        # Pastikan Product_Name selalu ada
-        if 'Product_Name' not in available_cols and 'Product_Name' in filtered_eval_df.columns:
-            available_cols.insert(1, 'Product_Name')
-        
-        eval_df = filtered_eval_df[available_cols].copy()
-        
-        # Format columns
-        if 'PO_Rofo_Ratio' in eval_df.columns:
-            eval_df['PO_Rofo_Ratio'] = eval_df['PO_Rofo_Ratio'].apply(lambda x: f"{x:.1f}%" if pd.notnull(x) else "0%")
-        
-        if 'Cover_Months' in eval_df.columns:
-            eval_df['Cover_Months'] = eval_df['Cover_Months'].apply(lambda x: f"{x:.1f}" if pd.notnull(x) and x < 999 else "N/A")
-        
-        if 'Avg_Monthly_Sales_3M' in eval_df.columns:
-            eval_df['Avg_Monthly_Sales_3M'] = eval_df['Avg_Monthly_Sales_3M'].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "0")
-        
-        # Format financial columns
-        if 'Revenue' in eval_df.columns:
-            eval_df['Revenue'] = eval_df['Revenue'].apply(lambda x: f"Rp {x:,.0f}" if pd.notnull(x) else "Rp 0")
-        
-        if 'Gross_Margin' in eval_df.columns:
-            eval_df['Gross_Margin'] = eval_df['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}" if pd.notnull(x) else "Rp 0")
-        
-        if 'Margin_Percentage' in eval_df.columns:
-            eval_df['Margin_Percentage'] = eval_df['Margin_Percentage'].apply(lambda x: f"{x:.1f}%" if pd.notnull(x) else "0%")
-        
-        # Format sales columns
-        for col in sales_cols_sorted:
-            if col in eval_df.columns:
-                eval_df[col] = eval_df[col].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "0")
-        
-        # Rename columns - WAJIB dengan Product Name
-        column_names = {
-            'SKU_ID': 'SKU ID',
-            'Product_Name': 'Product Name',
-            'Brand': 'Brand',
-            'SKU_Tier': 'Tier',
-            'Forecast_Qty': 'Forecast',
-            'PO_Qty': 'PO',
-            'PO_Rofo_Ratio': 'PO/Rofo %',
-            'Stock_Qty': 'Stock',
-            'Avg_Monthly_Sales_3M': 'Avg Sales (L3M)',
-            'Cover_Months': 'Cover (Months)',
-            'Revenue': 'Revenue',
-            'Gross_Margin': 'Gross Margin',
-            'Margin_Percentage': 'Margin %'
-        }
-        
-        # Add sales columns to rename dict
-        for col in sales_cols_sorted:
-            column_names[col] = col
-        
-        eval_df = eval_df.rename(columns=column_names)
-        
-        # Reorder columns
-        column_order = ['SKU ID', 'Product Name', 'Brand', 'Tier', 'Forecast', 'PO', 
-                       'PO/Rofo %', 'Stock', 'Avg Sales (L3M)', 'Cover (Months)']
-        
-        # Tambahkan financial columns
-        if 'Revenue' in eval_df.columns:
-            column_order.extend(['Revenue', 'Gross Margin', 'Margin %'])
-        
-        # Tambahkan sales columns ke urutan
-        for col in sales_cols_sorted:
-            if col in eval_df.columns:
-                column_order.append(col)
-        
-        # Ensure all columns exist before reordering
-        existing_columns = [col for col in column_order if col in eval_df.columns]
-        eval_df = eval_df[existing_columns]
-        
-        st.dataframe(
-            eval_df,
-            use_container_width=True,
-            height=400
-        )
-        
-        # ================ NEW: SKU DEEP DIVE ANALYSIS ================
-        st.divider()
-        st.subheader("🔬 SKU Deep Dive Analysis")
-        
-        # Pilih SKU untuk deep dive
+        # Prepare list for dropdown
+        available_skus = []
         if not last_month_data.empty:
-            # Get unique SKUs for selection
-            available_skus = last_month_data['SKU_ID'].unique().tolist()
+            # Sort by highest forecast volume (Pareto) to show important items first
+            sorted_skus = last_month_data.sort_values('Forecast_Qty', ascending=False)
             
-            # Jika ada filter SKU, otomatis select yang difilter
-            selected_sku = None
-            if sku_filter and len(filtered_eval_df) == 1:
-                selected_sku = filtered_eval_df.iloc[0]['SKU_ID']
-            else:
-                # Dropdown untuk pilih SKU
-                sku_options = []
-                for sku in available_skus[:50]:  # Limit to first 50 for performance
-                    product_name = last_month_data[last_month_data['SKU_ID'] == sku]['Product_Name'].iloc[0] if 'Product_Name' in last_month_data.columns else sku
-                    sku_options.append(f"{sku} - {product_name}")
-                
-                if sku_options:
-                    selected_sku_display = st.selectbox(
-                        "📋 Select SKU for Deep Dive Analysis",
-                        options=sku_options,
-                        index=0
-                    )
-                    if selected_sku_display:
-                        selected_sku = selected_sku_display.split(" - ")[0]
+            for _, row in sorted_skus.head(200).iterrows(): # Limit 200 for performance
+                sku_label = f"{row['SKU_ID']} - {row.get('Product_Name', 'N/A')}"
+                available_skus.append(sku_label)
+
+        # UI Selectbox
+        col_sel1, col_sel2 = st.columns([2, 1])
+        with col_sel1:
+            selected_sku_display = st.selectbox(
+                "📋 Select SKU to Analyze (Top 200 by Volume)", 
+                options=available_skus
+            )
+        
+        if selected_sku_display:
+            selected_sku = selected_sku_display.split(" - ")[0]
             
-            if selected_sku:
-                st.markdown(f"### 📊 Analysis for SKU: **{selected_sku}**")
+            # Get SKU Details
+            sku_details = last_month_data[last_month_data['SKU_ID'] == selected_sku].iloc[0]
+            
+            # Add Inventory & Sales Stats
+            stock_qty = 0
+            avg_sales_3m = 0
+            cover_months = 0
+            
+            if 'inventory_df' in inventory_metrics:
+                inv_row = inventory_metrics['inventory_df'][inventory_metrics['inventory_df']['SKU_ID'] == selected_sku]
+                if not inv_row.empty:
+                    stock_qty = inv_row.iloc[0]['Stock_Qty']
+                    avg_sales_3m = inv_row.iloc[0].get('Avg_Monthly_Sales_3M', 0)
+                    cover_months = inv_row.iloc[0].get('Cover_Months', 0)
+
+            # ==============================================================================
+            # 2. SKU PROFILE HEADER (HTML/CSS)
+            # ==============================================================================
+            st.markdown("""
+            <style>
+                .sku-header {
+                    background-color: white;
+                    border-radius: 12px;
+                    padding: 1.5rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    border-left: 6px solid #6366F1;
+                    margin-bottom: 1.5rem;
+                }
+                .sku-title { font-size: 1.4rem; font-weight: 800; color: #1F2937; margin-bottom: 0.5rem; }
+                .sku-badges { display: flex; gap: 10px; flex-wrap: wrap; }
+                .badge { 
+                    padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; 
+                    display: flex; align-items: center; gap: 5px;
+                }
+                .badge-blue { background: #E0E7FF; color: #4338CA; }
+                .badge-purple { background: #F3E8FF; color: #7E22CE; }
+                .badge-gray { background: #F3F4F6; color: #4B5563; }
+                .price-tag { font-size: 1.1rem; font-weight: 700; color: #059669; }
+            </style>
+            """, unsafe_allow_html=True)
+
+            product_name = sku_details.get('Product_Name', 'Unknown')
+            brand = sku_details.get('Brand', 'Unknown')
+            tier = sku_details.get('SKU_Tier', 'Standard')
+            price = sku_details.get('Floor_Price', 0)
+            
+            st.markdown(f"""
+            <div class="sku-header">
+                <div class="sku-title">{product_name} <span style="font-weight:400; font-size:1rem; color:#6B7280;">({selected_sku})</span></div>
+                <div class="sku-badges">
+                    <span class="badge badge-blue">🏷️ {brand}</span>
+                    <span class="badge badge-purple">💎 {tier} Tier</span>
+                    <span class="badge badge-gray" style="margin-left:auto;">Floor Price: <span class="price-tag">Rp {price:,.0f}</span></span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ==============================================================================
+            # 3. KEY METRICS GRID (Pastel Gradient Cards)
+            # ==============================================================================
+            # Prepare Colors based on Logic
+            cover_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)" # Green (Ideal)
+            if cover_months < 0.8: cover_color = "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)" # Red
+            elif cover_months > 1.5: cover_color = "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" # Orange
+
+            # Helper for Card
+            def render_sku_card(label, val, sub, bg):
+                return f"""
+                <div style="background: {bg}; border-radius: 12px; padding: 1.2rem; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                    <div style="font-size: 0.8rem; font-weight: 600; opacity: 0.9; text-transform: uppercase;">{label}</div>
+                    <div style="font-size: 1.6rem; font-weight: 800; margin: 5px 0;">{val}</div>
+                    <div style="font-size: 0.85rem; opacity: 0.95; font-weight: 500;">{sub}</div>
+                </div>
+                """
+
+            k1, k2, k3, k4 = st.columns(4)
+            
+            with k1:
+                st.markdown(render_sku_card("Current Stock", f"{stock_qty:,.0f}", "Units Available", 
+                    "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)"), unsafe_allow_html=True) # Indigo
+            with k2:
+                st.markdown(render_sku_card("Stock Cover", f"{cover_months:.1f} Mo", "Inventory Health", 
+                    cover_color), unsafe_allow_html=True) # Dynamic
+            with k3:
+                st.markdown(render_sku_card("Avg Sales (3M)", f"{avg_sales_3m:,.0f}", "Monthly Velocity", 
+                    "linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)"), unsafe_allow_html=True) # Sky Blue
+            with k4:
+                # Calculate Accuracy if data exists
+                acc_val = "N/A"
+                if sku_details['Forecast_Qty'] > 0:
+                    acc = (sku_details['PO_Qty'] / sku_details['Forecast_Qty'] * 100)
+                    acc_val = f"{acc:.1f}%"
                 
-                # Get SKU details
-                sku_details = last_month_data[last_month_data['SKU_ID'] == selected_sku].iloc[0].to_dict() if not last_month_data.empty else {}
-                product_name = sku_details.get('Product_Name', 'N/A')
-                brand = sku_details.get('Brand', 'N/A')
-                tier = sku_details.get('SKU_Tier', 'N/A')
+                st.markdown(render_sku_card("PO vs Rofo", acc_val, f"Last Month: {last_month.strftime('%b')}", 
+                    "linear-gradient(135deg, #EC4899 0%, #DB2777 100%)"), unsafe_allow_html=True) # Pink
+
+            # ==============================================================================
+            # 4. SUPPLY CHAIN PULSE CHART (Combo Chart)
+            # ==============================================================================
+            st.write("")
+            st.subheader("📈 Supply Chain Pulse (Trend Analysis)")
+            
+            # Prepare Historical Data
+            hist_data = []
+            if not df_sales.empty:
+                sales_months = sorted(df_sales['Month'].unique())
+                # Last 12 months
+                target_months = sales_months[-12:] if len(sales_months) >= 12 else sales_months
                 
-                # Display SKU info
-                col_info1, col_info2, col_info3, col_info4 = st.columns(4)
-                with col_info1:
-                    st.metric("Product", product_name)
-                with col_info2:
-                    st.metric("Brand", brand)
-                with col_info3:
-                    st.metric("Tier", tier)
-                with col_info4:
-                    stock_qty = sku_details.get('Stock_Qty', 0)
-                    st.metric("Current Stock", f"{stock_qty:,.0f}")
+                for m in target_months:
+                    s_qty = df_sales[(df_sales['Month'] == m) & (df_sales['SKU_ID'] == selected_sku)]['Sales_Qty'].sum()
+                    f_qty = df_forecast[(df_forecast['Month'] == m) & (df_forecast['SKU_ID'] == selected_sku)]['Forecast_Qty'].sum() if not df_forecast.empty else 0
+                    p_qty = df_po[(df_po['Month'] == m) & (df_po['SKU_ID'] == selected_sku)]['PO_Qty'].sum() if not df_po.empty else 0
+                    
+                    hist_data.append({
+                        'Month': m,
+                        'Month_Txt': m.strftime('%b-%y'),
+                        'Sales': s_qty,
+                        'Forecast': f_qty,
+                        'PO': p_qty
+                    })
+            
+            if hist_data:
+                df_hist = pd.DataFrame(hist_data)
                 
-                # SECTION 1: 12-MONTH PERFORMANCE TIMELINE - SIMPLE VERSION
-                st.markdown("#### 📈 12-Month Performance Timeline")
+                fig = go.Figure()
+
+                # Area: Sales (Realization)
+                fig.add_trace(go.Scatter(
+                    x=df_hist['Month_Txt'], y=df_hist['Sales'],
+                    name='Sales (Real)',
+                    mode='lines',
+                    fill='tozeroy',
+                    line=dict(color='#10B981', width=3), # Emerald Green
+                    fillcolor='rgba(16, 185, 129, 0.1)'
+                ))
+
+                # Line: Forecast (Plan)
+                fig.add_trace(go.Scatter(
+                    x=df_hist['Month_Txt'], y=df_hist['Forecast'],
+                    name='Forecast (Plan)',
+                    mode='lines+markers',
+                    line=dict(color='#6366F1', width=3, dash='dash'), # Indigo Dashed
+                    marker=dict(size=6, color='#6366F1')
+                ))
+
+                # Bar: PO (Execution)
+                fig.add_trace(go.Bar(
+                    x=df_hist['Month_Txt'], y=df_hist['PO'],
+                    name='PO (Order)',
+                    marker_color='rgba(245, 158, 11, 0.4)', # Orange Transparent
+                    marker_line_color='#F59E0B',
+                    marker_line_width=1.5
+                ))
+
+                fig.update_layout(
+                    height=450,
+                    title=dict(text="<b>Plan vs Execution vs Reality</b>", font=dict(size=16)),
+                    hovermode="x unified",
+                    plot_bgcolor="white",
+                    legend=dict(orientation="h", y=1.1),
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.05)', title="Units"),
+                    margin=dict(t=50, l=20, r=20, b=20)
+                )
                 
-                # Prepare historical data for this SKU
-                historical_data = []
+                st.plotly_chart(fig, use_container_width=True)
+
+            # ==============================================================================
+            # 5. SMART DIAGNOSTICS & RECOMMENDATION
+            # ==============================================================================
+            st.write("")
+            c_diag1, c_diag2 = st.columns([1.5, 1])
+
+            with c_diag1:
+                st.subheader("🩺 Smart Diagnostics")
                 
-                # Get last 12 months data
-                if not df_sales.empty:
-                    sales_months = sorted(df_sales['Month'].unique())
-                    last_12_months = sales_months[-12:] if len(sales_months) >= 12 else sales_months
-                    
-                    for month in last_12_months:
-                        month_name = month.strftime('%b-%Y')
-                        
-                        # Get data for this SKU in this month
-                        sales_qty = df_sales[(df_sales['Month'] == month) & 
-                                           (df_sales['SKU_ID'] == selected_sku)]['Sales_Qty'].sum()
-                        
-                        forecast_qty = df_forecast[(df_forecast['Month'] == month) & 
-                                                 (df_forecast['SKU_ID'] == selected_sku)]['Forecast_Qty'].sum() if not df_forecast.empty else 0
-                        
-                        po_qty = df_po[(df_po['Month'] == month) & 
-                                     (df_po['SKU_ID'] == selected_sku)]['PO_Qty'].sum() if not df_po.empty else 0
-                        
-                        historical_data.append({
-                            'Month': month,
-                            'Month_Display': month_name,
-                            'Sales': sales_qty,
-                            'Rofo': forecast_qty,
-                            'PO': po_qty
-                        })
+                # Logic Diagnosa
+                diagnoses = []
                 
-                if historical_data:
-                    hist_df = pd.DataFrame(historical_data)
-                    hist_df = hist_df.sort_values('Month')
+                # Cek Stock Cover
+                if cover_months < 0.8:
+                    diagnoses.append(("🔴", "High Stockout Risk", f"Stock cover is only {cover_months:.1f} months. Urgent replenishment needed."))
+                elif cover_months > 2.0:
+                    diagnoses.append(("🟡", "Overstock Alert", f"Stock cover is {cover_months:.1f} months. Consider holding PO or running promo."))
+                else:
+                    diagnoses.append(("🟢", "Healthy Inventory", "Stock levels are optimal (0.8 - 2.0 months)."))
+
+                # Cek Tren Sales (Growth)
+                if len(df_hist) >= 3:
+                    last_3_sales = df_hist['Sales'].tail(3).mean()
+                    prev_3_sales = df_hist['Sales'].iloc[-6:-3].mean() if len(df_hist) >= 6 else last_3_sales
                     
-                    # SIMPLE CHART - tanpa dual-axis dulu
-                    fig_timeline = go.Figure()
+                    if prev_3_sales > 0:
+                        growth = (last_3_sales - prev_3_sales) / prev_3_sales * 100
+                        if growth > 20:
+                            diagnoses.append(("🚀", "Surging Demand", f"Sales trend is up +{growth:.1f}% vs prev period. Adjust forecast up."))
+                        elif growth < -20:
+                            diagnoses.append(("📉", "Declining Sales", f"Sales trend is down {growth:.1f}%. Review forecast down."))
+
+                # Render Diagnosa
+                for icon, title, desc in diagnoses:
+                    bg_col = "#F0FDF4" if icon == "🟢" else "#FEF2F2" if icon == "🔴" else "#FFFBEB"
+                    border_col = "#22C55E" if icon == "🟢" else "#EF4444" if icon == "🔴" else "#F59E0B"
                     
-                    # Quantity lines
-                    fig_timeline.add_trace(go.Scatter(
-                        x=hist_df['Month_Display'],
-                        y=hist_df['Rofo'],
-                        name='Rofo',
-                        mode='lines+markers',
-                        line=dict(color='#667eea', width=3),
-                        marker=dict(size=8, color='#667eea')
-                    ))
-                    
-                    fig_timeline.add_trace(go.Scatter(
-                        x=hist_df['Month_Display'],
-                        y=hist_df['PO'],
-                        name='PO',
-                        mode='lines+markers',
-                        line=dict(color='#FF9800', width=3),
-                        marker=dict(size=8, color='#FF9800')
-                    ))
-                    
-                    fig_timeline.add_trace(go.Scatter(
-                        x=hist_df['Month_Display'],
-                        y=hist_df['Sales'],
-                        name='Sales',
-                        mode='lines+markers',
-                        line=dict(color='#4CAF50', width=3),
-                        marker=dict(size=8, color='#4CAF50')
-                    ))
-                    
-                    # SIMPLE LAYOUT
-                    fig_timeline.update_layout(
-                        height=400,
-                        title=f'SKU Performance: {selected_sku}',
-                        xaxis_title='Month',
-                        yaxis_title='Quantity',
-                        plot_bgcolor='white'
-                    )
-                    
-                    st.plotly_chart(fig_timeline, use_container_width=True)
-                    
-                    # Tambahkan accuracy chart terpisah
-                    if not df_forecast.empty and not df_po.empty:
-                        # Calculate accuracy per month
-                        accuracy_data = []
-                        for month in last_12_months:
-                            month_name = month.strftime('%b-%Y')
-                            forecast_qty = df_forecast[(df_forecast['Month'] == month) & 
-                                                     (df_forecast['SKU_ID'] == selected_sku)]['Forecast_Qty'].sum()
-                            po_qty = df_po[(df_po['Month'] == month) & 
-                                         (df_po['SKU_ID'] == selected_sku)]['PO_Qty'].sum()
-                            
-                            if forecast_qty > 0 and po_qty > 0:
-                                accuracy = 100 - abs((po_qty / forecast_qty * 100) - 100)
-                                accuracy_data.append({
-                                    'Month': month_name,
-                                    'Accuracy': accuracy
-                                })
-                        
-                        if accuracy_data:
-                            acc_df = pd.DataFrame(accuracy_data)
-                            
-                            fig_acc = go.Figure()
-                            fig_acc.add_trace(go.Scatter(
-                                x=acc_df['Month'],
-                                y=acc_df['Accuracy'],
-                                mode='lines+markers',
-                                name='Accuracy %',
-                                line=dict(color='#FF5252', width=3),
-                                marker=dict(size=8, color='#FF5252')
-                            ))
-                            
-                            fig_acc.update_layout(
-                                height=300,
-                                title='Forecast Accuracy Trend',
-                                xaxis_title='Month',
-                                yaxis_title='Accuracy %',
-                                yaxis_range=[0, 110]
-                            )
-                            
-                            st.plotly_chart(fig_acc, use_container_width=True)
-                    
-                    # SECTION 2: INVENTORY HEALTH
-                    st.markdown("#### 📦 Inventory Health Analysis")
-                    
-                    col_inv1, col_inv2, col_inv3, col_inv4 = st.columns(4)
-                    
-                    with col_inv1:
-                        # Current stock
-                        current_stock = sku_details.get('Stock_Qty', 0)
-                        st.metric("Current Stock", f"{current_stock:,.0f}")
-                    
-                    with col_inv2:
-                        # Avg monthly sales (3-month average)
-                        avg_sales_3m = sku_details.get('Avg_Monthly_Sales_3M', 0)
-                        st.metric("Avg Monthly Sales (3M)", f"{avg_sales_3m:,.0f}")
-                    
-                    with col_inv3:
-                        # Cover months
-                        cover_months = sku_details.get('Cover_Months', 0)
-                        cover_status = "High Stock" if cover_months > 1.5 else "Ideal" if cover_months >= 0.8 else "Low Stock"
-                        st.metric("Cover (Months)", f"{cover_months:.1f}", delta=cover_status)
-                    
-                    with col_inv4:
-                        # Sales trend (last 3 months vs previous 3 months)
-                        if len(hist_df) >= 6:
-                            recent_sales = hist_df.tail(3)['Sales'].sum()
-                            previous_sales = hist_df.head(3)['Sales'].sum() if len(hist_df) >= 6 else recent_sales
-                            sales_growth = ((recent_sales - previous_sales) / previous_sales * 100) if previous_sales > 0 else 0
-                            st.metric("Sales Growth (3M)", f"{sales_growth:+.1f}%")
-                    
-                    # SECTION 3: FORECAST PERFORMANCE METRICS
-                    st.markdown("#### 🎯 Forecast Performance Metrics")
-                    
-                    # Calculate forecast accuracy metrics
-                    if not df_forecast.empty and not df_po.empty:
-                        # Get accuracy data separately
-                        accuracy_data = []
-                        for month in last_12_months:
-                            forecast_qty = df_forecast[(df_forecast['Month'] == month) & 
-                                                     (df_forecast['SKU_ID'] == selected_sku)]['Forecast_Qty'].sum()
-                            po_qty = df_po[(df_po['Month'] == month) & 
-                                         (df_po['SKU_ID'] == selected_sku)]['PO_Qty'].sum()
-                            
-                            if forecast_qty > 0 and po_qty > 0:
-                                accuracy = 100 - abs((po_qty / forecast_qty * 100) - 100)
-                                accuracy_data.append({
-                                    'Month': month,
-                                    'Forecast_Qty': forecast_qty,
-                                    'PO_Qty': po_qty,
-                                    'Accuracy': accuracy
-                                })
-                        
-                        if accuracy_data:
-                            acc_df = pd.DataFrame(accuracy_data)
-                            
-                            col_met1, col_met2, col_met3, col_met4 = st.columns(4)
-                            
-                            with col_met1:
-                                # Average accuracy
-                                avg_accuracy = acc_df['Accuracy'].mean()
-                                accuracy_status = "Good" if avg_accuracy >= 80 else "Needs Improvement"
-                                st.metric("Avg Forecast Accuracy", f"{avg_accuracy:.1f}%", delta=accuracy_status)
-                            
-                            with col_met2:
-                                # Forecast vs Sales ratio
-                                total_forecast = acc_df['Forecast_Qty'].sum()
-                                # Get total sales for same months
-                                total_sales = 0
-                                for month in acc_df['Month']:
-                                    sales_qty = df_sales[(df_sales['Month'] == month) & 
-                                                       (df_sales['SKU_ID'] == selected_sku)]['Sales_Qty'].sum()
-                                    total_sales += sales_qty
-                                
-                                forecast_vs_sales = (total_forecast / total_sales * 100) if total_sales > 0 else 0
-                                st.metric("Forecast/Sales %", f"{forecast_vs_sales:.1f}%")
-                            
-                            with col_met3:
-                                # PO vs Forecast ratio
-                                total_po = acc_df['PO_Qty'].sum()
-                                po_vs_forecast = (total_po / total_forecast * 100) if total_forecast > 0 else 0
-                                st.metric("PO/Forecast %", f"{po_vs_forecast:.1f}%")
-                            
-                            with col_met4:
-                                # Consistency score (std dev of accuracy)
-                                accuracy_std = acc_df['Accuracy'].std()
-                                consistency_score = max(0, 100 - accuracy_std)
-                                st.metric("Consistency Score", f"{consistency_score:.1f}")
-                            
-                            # SECTION 4: RECOMMENDATIONS
-                            st.markdown("#### 💡 Recommendations")
-                            
-                            recommendations = []
-                            
-                            # Stock recommendations
-                            cover_months = sku_details.get('Cover_Months', 0)
-                            if cover_months < 0.8:
-                                recommendations.append("🔄 **Need Replenishment**: Stock cover is below 0.8 months")
-                            elif cover_months > 1.5:
-                                recommendations.append("📉 **Reduce Stock**: High stock coverage (>1.5 months)")
-                            
-                            # Forecast accuracy recommendations
-                            if avg_accuracy < 80:
-                                recommendations.append("🎯 **Improve Forecasting**: Accuracy below 80% target")
-                            
-                            # Sales trend recommendations
-                            sales_growth = 0  # Calculate sales growth
-                            if len(hist_df) >= 6:
-                                recent_sales = hist_df.tail(3)['Sales'].sum()
-                                previous_sales = hist_df.head(3)['Sales'].sum()
-                                sales_growth = ((recent_sales - previous_sales) / previous_sales * 100) if previous_sales > 0 else 0
-                            
-                            if sales_growth < -10:
-                                recommendations.append("📊 **Review Demand**: Sales declining significantly")
-                            elif sales_growth > 50:
-                                recommendations.append("🚀 **Opportunity**: Strong sales growth detected")
-                            
-                            # PO compliance recommendations
-                            if po_vs_forecast < 80:
-                                recommendations.append("📝 **Increase PO Compliance**: PO significantly below forecast")
-                            elif po_vs_forecast > 120:
-                                recommendations.append("⚠️ **Reduce Over-PO**: PO significantly above forecast")
-                            
-                            # Financial recommendations (if financial data available)
-                            if 'Margin_Percentage' in sku_details:
-                                margin = sku_details.get('Margin_Percentage', 0)
-                                if margin < 20:
-                                    recommendations.append("💰 **Low Margin Alert**: Margin below 20%")
-                                elif margin > 40:
-                                    recommendations.append("💰 **High Margin Opportunity**: Excellent margin performance")
-                            
-                            if recommendations:
-                                for rec in recommendations:
-                                    st.write(f"- {rec}")
-                            else:
-                                st.success("✅ **Excellent**: This SKU is performing well across all metrics!")
-                        else:
-                            st.info("No forecast accuracy data available for this SKU")
+                    st.markdown(f"""
+                    <div style="background:{bg_col}; border-left:4px solid {border_col}; padding:12px; border-radius:8px; margin-bottom:10px;">
+                        <div style="font-weight:700; color:#374151; display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:1.2rem;">{icon}</span> {title}
+                        </div>
+                        <div style="font-size:0.9rem; color:#4B5563; margin-left:32px;">{desc}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            with c_diag2:
+                # Mini Stats Table
+                st.subheader("📋 Quick Stats")
+                
+                # Data Variance
+                last_fcst = df_hist.iloc[-1]['Forecast'] if hist_data else 0
+                last_po = df_hist.iloc[-1]['PO'] if hist_data else 0
+                last_sales = df_hist.iloc[-1]['Sales'] if hist_data else 0
+                
+                stats_data = {
+                    "Metric": ["Forecast (Last Mo)", "PO (Last Mo)", "Sales (Last Mo)", "Bias (Last Mo)"],
+                    "Value": [
+                        f"{last_fcst:,.0f}", 
+                        f"{last_po:,.0f}", 
+                        f"{last_sales:,.0f}",
+                        f"{last_po - last_fcst:+,.0f}"
+                    ]
+                }
+                st.table(pd.DataFrame(stats_data))
+
     else:
-        st.info("📊 Insufficient data for SKU evaluation")
+        st.info("👋 Please ensure Sales and Monthly Performance data are loaded to view SKU insights.")
 
 # --- TAB 5: SALES & FORECAST ANALYSIS ---
 with tab5:
