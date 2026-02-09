@@ -3228,14 +3228,22 @@ with tab3:
         occupancy_pct = (current_occupancy / WH_CAPACITY * 100)
 
         # ==============================================================================
-        # 2. EXECUTIVE KPI CARDS (SMART UNIT VERSION)
+        # 2. EXECUTIVE KPI CARDS (SMART UNIT VERSION - FIXED)
         # ==============================================================================
-        total_val = df_batch['Total_Value'].sum() if 'Total_Value' in df_batch.columns else 0
+        
+        # Safe Calculation for Value
+        total_val = 0
+        if 'Total_Value' in df_batch.columns:
+            total_val = df_batch['Total_Value'].sum()
+            
         total_sku = df_batch['SKU_ID'].nunique()
         
-        # Hitung Risk Value
-        risk_mask = df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 Days)'])
-        risk_val = df_batch[risk_mask]['Total_Value'].sum() if 'Total_Value' in df_batch.columns else 0
+        # Hitung Risk Value (Safe Mode)
+        risk_val = 0
+        if 'Expiry_Category' in df_batch.columns and 'Total_Value' in df_batch.columns:
+            risk_mask = df_batch['Expiry_Category'].isin(['❌ EXPIRED', '🚨 Critical (<30 Days)'])
+            risk_val = df_batch[risk_mask]['Total_Value'].sum()
+            
         risk_pct = (risk_val / total_val * 100) if total_val > 0 else 0
 
         # --- Helper: Format Uang Pintar (Otomatis M / Jt / Rb) ---
@@ -3297,13 +3305,21 @@ with tab3:
             st.markdown(render_inv_card("Expiry Risk Value", risk_display, f"{risk_pct:.1f}% of Total", 
                 risk_bg), unsafe_allow_html=True)
 
-        # --- DIAGNOSTIC TOOL (CEK HARGA KOSONG) ---
-        # Ini akan muncul kalau ada masalah harga
-        missing_price = df_batch[df_batch['Floor_Price'] <= 0]
-        if not missing_price.empty:
-            with st.expander(f"⚠️ Warning: {len(missing_price)} SKU terdeteksi memiliki Harga 0 / Missing!", expanded=False):
-                st.warning("SKU berikut tidak memiliki 'Floor_Price' di Product Master, sehingga Asset Value = 0.")
-                st.dataframe(missing_price[['SKU_ID', 'Product_Name', 'Stock_Qty', 'Floor_Price', 'Total_Value']])
+        # --- DIAGNOSTIC TOOL (FIXED) ---
+        # Hanya jalankan jika kolom Floor_Price BENAR-BENAR ADA
+        if 'Floor_Price' in df_batch.columns:
+            missing_price = df_batch[df_batch['Floor_Price'] <= 0]
+            if not missing_price.empty:
+                with st.expander(f"⚠️ Warning: {len(missing_price)} SKU terdeteksi memiliki Harga 0 / Missing!", expanded=False):
+                    st.warning("SKU berikut tidak memiliki 'Floor_Price' di Product Master, sehingga Asset Value = 0.")
+                    # Tampilkan kolom yang aman saja
+                    cols_to_show = ['SKU_ID', 'Stock_Qty', 'Floor_Price']
+                    if 'Product_Name' in df_batch.columns: cols_to_show.insert(1, 'Product_Name')
+                    st.dataframe(missing_price[cols_to_show])
+        else:
+            # Opsional: Info jika kolom harga sama sekali tidak ada
+            # st.info("ℹ️ Kolom 'Floor_Price' tidak ditemukan di data stok. Total Value tidak dapat dihitung.")
+            pass
 
         # ==============================================================================
         # 3. STOCK COVER & OCCUPANCY DASHBOARD (RESTORED & IMPROVED)
