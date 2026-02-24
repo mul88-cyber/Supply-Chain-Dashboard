@@ -1870,7 +1870,7 @@ if monthly_performance:
 
         fig.update_yaxes(
             title="<b>Accuracy (%)</b>", 
-            range=[40, 110], 
+            range=[40, 100], 
             gridcolor='rgba(0,0,0,0.05)',
             secondary_y=False,
             tickfont=dict(color='#4F46E5', weight='bold')
