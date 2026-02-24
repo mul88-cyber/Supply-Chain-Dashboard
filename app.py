@@ -2170,18 +2170,34 @@ if last_3_months_performance:
         st.markdown(html_process, unsafe_allow_html=True)
 
 st.divider()
-# SECTION 2: LAST MONTH EVALUATION (UNDER & OVER ONLY)
-st.subheader("📋 Evaluasi Rofo - Bulan Terakhir (Under & Over Forecast)")
+# SECTION 2: MONTHLY EVALUATION (UNDER & OVER ONLY) DENGAN FILTER BULAN
+st.subheader("📋 Evaluasi Rofo per Bulan (Under & Over Forecast)")
 
 if monthly_performance:
-    # Get last month data
     sorted_months = sorted(monthly_performance.keys())
     if sorted_months:
-        last_month = sorted_months[-1]
-        last_month_data = monthly_performance[last_month]
-        last_month_name = last_month.strftime('%b %Y')
         
-        # Create tabs for Under and Over SKUs
+        # --- MULAI SCRIPT FILTER BULAN ---
+        # 1. Buat list pilihan bulan dalam format string (misal: 'Jan 2025')
+        month_options = [m.strftime('%b %Y') for m in sorted_months]
+        
+        # 2. Buat dropdown selectbox. default index diset ke yang paling akhir (bulan terbaru)
+        selected_month_str = st.selectbox(
+            "📅 Pilih Bulan Evaluasi:", 
+            options=month_options, 
+            index=len(month_options) - 1
+        )
+        
+        # 3. Cari kembali key datetime aslinya berdasarkan pilihan user
+        selected_month_idx = month_options.index(selected_month_str)
+        selected_month_key = sorted_months[selected_month_idx]
+        
+        # 4. Timpa variabel lama agar script tab HTML di bawahnya tetap berjalan normal tanpa error
+        last_month_data = monthly_performance[selected_month_key]
+        last_month_name = selected_month_str
+        # --- AKHIR SCRIPT FILTER BULAN ---
+        
+        # Create tabs for Under and Over SKUs (Script Bapak di bawah ini tetap sama)
         eval_tab1, eval_tab2 = st.tabs([f"📉 UNDER Forecast ({last_month_name})", f"📈 OVER Forecast ({last_month_name})"])
         
         with eval_tab1:
