@@ -1619,18 +1619,20 @@ with st.sidebar:
     theme_css = ""
     
     if theme_choice == "⚪ Tema Semula (Enhanced Light)":
-        # Perbaikan: Background utama dibuat soft grey, Chart & Tabel diberi kotak putih & bayangan agar tidak menyatu.
+        # Perbaikan: Background utama dibuat abu-abu yang lebih jelas agar chart putih sangat menonjol
         theme_css = """
         <style>
-            /* Background utama dibuat sedikit abu-abu agar chart putih bisa terlihat (pop-out) */
-            [data-testid="stAppViewContainer"] { background-color: #F4F6F9 !important; color: #333333 !important; }
-            [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #EAEAEA !important; }
+            /* Background utama abu-abu solid (lebih gelap sedikit) */
+            [data-testid="stAppViewContainer"] { background-color: #E5E7EB !important; color: #333333 !important; }
             
-            /* Membungkus Chart Plotly dengan kotak putih & shadow */
+            /* Sidebar tetap putih dengan border abu-abu agar kontras */
+            [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #D1D5DB !important; }
+            
+            /* Membungkus Chart Plotly dengan kotak putih & shadow yang lebih tegas */
             .stPlotlyChart {
                 background-color: #FFFFFF !important;
                 border-radius: 12px !important;
-                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05) !important;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.08) !important;
                 padding: 10px !important;
             }
             
@@ -1638,7 +1640,7 @@ with st.sidebar:
             .stDataFrame {
                 background-color: #FFFFFF !important;
                 border-radius: 12px !important;
-                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05) !important;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.08) !important;
                 padding: 10px !important;
             }
         </style>
