@@ -444,13 +444,13 @@ def load_and_process_data(_client):
     Load semua data termasuk sheet baru: BS_Fullfilment_Cost
     """
     
-    sheet_id = "1jcs8L0CysdzxemPz1EYVVfVhsSR-ik46khIw5jhhBgw"
+    gsheet_url = st.secrets["gsheet_url"]  # Ambil dari secrets
     data = {}
 
     # --- HELPER: Baca Sheet Manual ---
     def safe_read_stock_sheet(sheet_name):
         try:
-            ws = _client.open_by_key(sheet_id).worksheet(sheet_name)
+            ws = _client.open_by_url(gsheet_url).worksheet(sheet_name)
             raw_data = ws.get_all_values()
             if len(raw_data) < 2: return pd.DataFrame()
             headers = [str(h).strip() for h in raw_data[0]]
@@ -461,7 +461,7 @@ def load_and_process_data(_client):
 
     try:
         # 1. PRODUCT MASTER
-        ws_prod = _client.open_by_key(sheet_id).worksheet("Product_Master")
+        ws_prod = _client.open_by_url(gsheet_url).worksheet("Product_Master")
         df_product = pd.DataFrame(ws_prod.get_all_records())
         df_product.columns = [col.strip().replace(' ', '_') for col in df_product.columns]
         
@@ -477,7 +477,7 @@ def load_and_process_data(_client):
         data['product_active'] = df_product_active
 
         # 2. SALES DATA
-        ws_sales = _client.open_by_key(sheet_id).worksheet("Sales")
+        ws_sales = _client.open_by_url(gsheet_url).worksheet("Sales")
         df_sales_raw = pd.DataFrame(ws_sales.get_all_records())
         df_sales_raw.columns = [col.strip() for col in df_sales_raw.columns]
         month_cols = [c for c in df_sales_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -493,7 +493,7 @@ def load_and_process_data(_client):
             data['sales'] = df_sales_long.sort_values('Month')
 
         # 3. ROFO DATA
-        ws_rofo = _client.open_by_key(sheet_id).worksheet("Rofo")
+        ws_rofo = _client.open_by_url(gsheet_url).worksheet("Rofo")
         df_rofo_raw = pd.DataFrame(ws_rofo.get_all_records())
         df_rofo_raw.columns = [col.strip() for col in df_rofo_raw.columns]
         month_cols_rofo = [c for c in df_rofo_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -509,7 +509,7 @@ def load_and_process_data(_client):
             data['forecast'] = df_rofo_long
 
         # 4. PO DATA
-        ws_po = _client.open_by_key(sheet_id).worksheet("PO")
+        ws_po = _client.open_by_url(gsheet_url).worksheet("PO")
         df_po_raw = pd.DataFrame(ws_po.get_all_records())
         df_po_raw.columns = [col.strip() for col in df_po_raw.columns]
         month_cols_po = [c for c in df_po_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -544,7 +544,7 @@ def load_and_process_data(_client):
 
         # 6. FORECAST 2026 ECOMM
         try:
-            ws_ecomm = _client.open_by_key(sheet_id).worksheet("Forecast_2026_Ecomm")
+            ws_ecomm = _client.open_by_url(gsheet_url).worksheet("Forecast_2026_Ecomm")
             df_ecomm_raw = pd.DataFrame(ws_ecomm.get_all_records())
             df_ecomm_raw.columns = [col.strip().replace(' ', '_') for col in df_ecomm_raw.columns]
             month_cols_ecomm = [c for c in df_ecomm_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -558,7 +558,7 @@ def load_and_process_data(_client):
         
         # 7. FORECAST 2026 RESELLER
         try:
-            ws_reseller = _client.open_by_key(sheet_id).worksheet("Forecast_2026_Reseller")
+            ws_reseller = _client.open_by_url(gsheet_url).worksheet("Forecast_2026_Reseller")
             df_reseller_raw = pd.DataFrame(ws_reseller.get_all_records())
             df_reseller_raw.columns = [col.strip().replace(' ', '_') for col in df_reseller_raw.columns]
             all_month_cols_res = [c for c in df_reseller_raw.columns if any(m in c.upper() for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'])]
@@ -594,7 +594,7 @@ def load_and_process_data(_client):
         # 8. BS FULLFILMENT COST (NEW SHEET)
         # ==============================================================================
         try:
-            ws_bs = _client.open_by_key(sheet_id).worksheet("BS_Fullfilment_Cost")
+            ws_bs = _client.open_by_url(gsheet_url).worksheet("BS_Fullfilment_Cost")
             df_bs = pd.DataFrame(ws_bs.get_all_records())
             
             # Cleaning Headers & Data
@@ -639,13 +639,13 @@ def load_reseller_complete_data(_client):
     """
     Load SEMUA data reseller: forecast, sales, past rofo, past PO
     """
-    # Gunakan sheet_id yang sudah ada
-    sheet_id = "1jcs8L0CysdzxemPz1EYVVfVhsSR-ik46khIw5jhhBgw"
+    # Gunakan url yang sudah ada
+    gsheet_url = st.secrets["gsheet_url"]  # Ambil dari secrets
     reseller_data = {}
     
     try:
         # 1. FORECAST 2026 RESELLER
-        ws_fcst = _client.open_by_key(sheet_id).worksheet("Forecast_2026_Reseller")
+        ws_fcst = _client.open_by_url(gsheet_url).worksheet("Forecast_2026_Reseller")
         df_fcst_raw = pd.DataFrame(ws_fcst.get_all_records())
         df_fcst_raw.columns = [col.strip() for col in df_fcst_raw.columns]
         
@@ -674,7 +674,7 @@ def load_reseller_complete_data(_client):
         
         # 2. SALES RESELLER
         try:
-            ws_sales = _client.open_by_key(sheet_id).worksheet("Sales_Reseller")
+            ws_sales = _client.open_by_url(gsheet_url).worksheet("Sales_Reseller")
             df_sales_raw = pd.DataFrame(ws_sales.get_all_records())
             df_sales_raw.columns = [col.strip() for col in df_sales_raw.columns]
             
@@ -700,7 +700,7 @@ def load_reseller_complete_data(_client):
         
         # 3. PAST ROFO RESELLER
         try:
-            ws_rofo = _client.open_by_key(sheet_id).worksheet("Past_Rofo_Reseller")
+            ws_rofo = _client.open_by_url(gsheet_url).worksheet("Past_Rofo_Reseller")
             df_rofo_raw = pd.DataFrame(ws_rofo.get_all_records())
             df_rofo_raw.columns = [col.strip() for col in df_rofo_raw.columns]
             
@@ -725,7 +725,7 @@ def load_reseller_complete_data(_client):
         
         # 4. PAST PO RESELLER
         try:
-            ws_po = _client.open_by_key(sheet_id).worksheet("Past_PO_Reseller")
+            ws_po = _client.open_by_url(gsheet_url).worksheet("Past_PO_Reseller")
             df_po_raw = pd.DataFrame(ws_po.get_all_records())
             df_po_raw.columns = [col.strip() for col in df_po_raw.columns]
             
@@ -1013,19 +1013,22 @@ def calculate_monthly_performance(df_forecast, df_po, df_product):
                 # Calculate metrics
                 df_merged['Absolute_Percentage_Error'] = abs(df_merged['PO_Rofo_Ratio'] - 100)
                 
-                # Hanya hitung MAPE untuk SKU dengan Forecast_Qty > 0
+                # Hanya hitung MAPE untuk SKU dengan Forecast_Qty > 0 (Tetap disimpan untuk data tabel)
                 valid_skus = df_merged[df_merged['Forecast_Qty'] > 0]
                 if not valid_skus.empty:
                     mape = valid_skus['Absolute_Percentage_Error'].mean()
                 else:
                     mape = 0
                     
-                monthly_accuracy = 100 - mape
-                
-                # Status counts
+                # Status counts dihitung lebih dulu
                 status_counts = df_merged['Accuracy_Status'].value_counts().to_dict()
                 total_records = len(df_merged)
                 status_percentages = {k: (v/total_records*100) for k, v in status_counts.items()}
+                
+                # ---> FIX LOGIC ACCURACY <---
+                # Menghitung persentase dari: (Jumlah SKU Accurate / Total SKU) * 100
+                accurate_count = status_counts.get('Accurate', 0)
+                monthly_accuracy = (accurate_count / total_records * 100) if total_records > 0 else 0
                 
                 # Store results
                 monthly_performance[month] = {
@@ -1600,16 +1603,109 @@ with st.sidebar:
     high_margin_threshold = st.slider("High Margin Threshold (%)", 0, 100, 40)
     low_margin_threshold = st.slider("Low Margin Threshold (%)", 0, 100, 20)
     
-    # Dark mode toggle
+    # --- 🎨 THEME SELECTOR (ENHANCED EDITION) ---
     st.markdown("---")
-    dark_mode = st.checkbox("🌙 Dark Mode", value=False)
-    if dark_mode:
-        st.markdown("""
+    st.markdown("### 🎨 UI Theme Settings")
+    
+    theme_choice = st.selectbox(
+        "Pilih Tema Dashboard:",
+        [
+            "⚪ Tema Semula (Enhanced Light)", 
+            "⬛ Material Dark (Solid & Colored)"
+        ],
+        index=0
+    )
+
+    theme_css = ""
+    
+    if theme_choice == "⚪ Tema Semula (Enhanced Light)":
+        # Perbaikan: Background utama dibuat soft grey, Chart & Tabel diberi kotak putih & bayangan agar tidak menyatu.
+        theme_css = """
         <style>
-            .stApp { background-color: #0E1117; color: white; }
-            .stDataFrame { background-color: #1E1E1E; }
+            /* Background utama dibuat sedikit abu-abu agar chart putih bisa terlihat (pop-out) */
+            [data-testid="stAppViewContainer"] { background-color: #F4F6F9 !important; color: #333333 !important; }
+            [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #EAEAEA !important; }
+            
+            /* Membungkus Chart Plotly dengan kotak putih & shadow */
+            .stPlotlyChart {
+                background-color: #FFFFFF !important;
+                border-radius: 12px !important;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05) !important;
+                padding: 10px !important;
+            }
+            
+            /* Membungkus Dataframe dengan kotak putih */
+            .stDataFrame {
+                background-color: #FFFFFF !important;
+                border-radius: 12px !important;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.05) !important;
+                padding: 10px !important;
+            }
         </style>
-        """, unsafe_allow_html=True)
+        """
+        
+    elif theme_choice == "⬛ Material Dark (Solid & Colored)":
+        # Perbaikan: Tabel diubah dark mode. Card bewarna dibiarkan tetap bewarna (gradient tidak ditimpa).
+        theme_css = """
+        <style>
+            /* Base Material Dark BG */
+            [data-testid="stAppViewContainer"] { background-color: #1A2035 !important; color: #FFFFFF !important; }
+            [data-testid="stSidebar"] { background-color: #1F283E !important; border-right: none !important; }
+            h1, h2, h3, h4, p, label, .stMarkdown, .stText { color: #FFFFFF !important; }
+            hr { border-color: rgba(255,255,255,0.1) !important; }
+            
+            /* === FIX 1: TABEL (DATAFRAME) MENJADI DARK === */
+            [data-testid="stDataFrame"] > div, 
+            [data-testid="stDataFrame"] table, 
+            [data-testid="stDataFrame"] th, 
+            [data-testid="stDataFrame"] td {
+                background-color: #1F283E !important;
+                color: #FFFFFF !important;
+                border-color: rgba(255,255,255,0.05) !important;
+            }
+            /* Warna Header Tabel sedikit lebih gelap */
+            [data-testid="stDataFrame"] th { background-color: #171d30 !important; }
+            
+            /* === FIX 2: BIARKAN GRADIENT CARD TETAP BERWARNA === */
+            /* Pastikan font di dalam card berwarna tetap putih agar terbaca */
+            .grad-label, .grad-value, .grad-sub, .tm-title, .tm-main-val, .tm-unit, .tm-sub-row, .fin-title, .fin-val, .fin-sub { 
+                color: #FFFFFF !important; 
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important; 
+            }
+            
+            /* Custom HTML Cards yang memang tidak punya warna khusus, kita buat Dark Blue solid */
+            .p-card, .sku-header, .metric-highlight {
+                background-color: #1F283E !important;
+                border: none !important;
+                border-radius: 8px !important;
+                box-shadow: 0 4px 20px 0 rgba(0,0,0,.14), 0 7px 10px -5px rgba(0,0,0,.4) !important;
+                color: #FFFFFF !important;
+            }
+            .p-val, .p-label { color: #FFFFFF !important; text-shadow: none !important;}
+            
+            /* Native Streamlit Metrics */
+            [data-testid="stMetric"] {
+                background-color: #1F283E !important;
+                border-radius: 8px !important;
+                border: none !important;
+                box-shadow: 0 4px 20px 0 rgba(0,0,0,.14) !important;
+                padding: 15px !important;
+            }
+            [data-testid="stMetricValue"] { color: #FFFFFF !important; }
+            
+            /* Tabs Styling */
+            .stTabs [data-baseweb="tab"] { background: #1F283E !important; color: #A9AFBB !important; border: none !important; }
+            .stTabs [aria-selected="true"] { background: #9C27B0 !important; color: white !important; box-shadow: 0 4px 20px 0 rgba(0,0,0,.14), 0 7px 10px -5px rgba(156,39,176,.4) !important; }
+            
+            /* Fix Plotly White Backgrounds to Transparent */
+            .js-plotly-plot .plotly .bg, .js-plotly-plot .plotly .paper-bg { fill: transparent !important; }
+            .js-plotly-plot .plotly text { fill: #A9AFBB !important; }
+            .js-plotly-plot .plotly .gridlayer path { stroke: rgba(255,255,255,0.05) !important; }
+        </style>
+        """
+
+    if theme_css:
+        st.markdown(theme_css, unsafe_allow_html=True)
 
 # Data quality check
 if 'show_stats' in st.session_state and st.session_state.show_stats:
@@ -3726,208 +3822,230 @@ with tab4:
         st.info("👋 Please ensure Sales and Monthly Performance data are loaded to view SKU insights.")
 
 # --- TAB 5: SALES & FORECAST ANALYSIS (EASY TO UNDERSTAND VERSION) ---
+# --- TAB 5: SALES & FORECAST ANALYSIS (EASY TO UNDERSTAND VERSION) ---
 with tab5:
     st.subheader("📈 Realization & Gap Analysis")
     st.caption("Membandingkan Perencanaan (Rofo), Eksekusi (PO), dan Hasil Akhir (Sales)")
 
     if not df_sales.empty and not df_forecast.empty:
         # ==============================================================================
-        # 1. DATA PREPARATION
+        # 1. DATA PREPARATION & FILTER TAHUN
         # ==============================================================================
         
-        # Get unique months
+        # Get all unique months from the datasets
         all_months = sorted(list(set(df_sales['Month'].unique()) | set(df_forecast['Month'].unique()) | set(df_po['Month'].unique())))
         
-        monthly_data = []
-        for month in all_months:
-            # Sales, Forecast, PO
-            s_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
-            f_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
-            p_qty = df_po[df_po['Month'] == month]['PO_Qty'].sum()
-            
-            monthly_data.append({
-                'Month': month,
-                'Month_Txt': month.strftime('%b-%y'),
-                'Rofo': f_qty,
-                'Sales': s_qty,
-                'PO': p_qty,
-                # Hitung selisih untuk visualisasi
-                'Gap_Sales_Rofo': s_qty - f_qty
-            })
-            
-        df_trend = pd.DataFrame(monthly_data)
+        # Ekstrak Tahun unik dari semua bulan
+        available_years = sorted(list(set([m.year for m in all_months if pd.notnull(m)])))
         
-        # Totals for KPI
-        total_rofo = df_trend['Rofo'].sum()
-        total_sales = df_trend['Sales'].sum()
-        total_po = df_trend['PO'].sum()
-        
-        # ==============================================================================
-        # 2. KPI CARDS (PASTEL GRADIENT)
-        # ==============================================================================
-        st.markdown("""
-        <style>
-            .kpi-box {
-                border-radius: 12px; padding: 1.2rem; color: white;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative;
-                transition: transform 0.3s;
-            }
-            .kpi-box:hover { transform: translateY(-3px); }
-            .kpi-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
-            .kpi-num { font-size: 1.8rem; font-weight: 800; margin-bottom: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-            .kpi-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
-        </style>
-        """, unsafe_allow_html=True)
-
-        def render_kpi(title, val, sub, gradient):
-            return f"""
-            <div class="kpi-box" style="background: {gradient};">
-                <div class="kpi-title">{title}</div>
-                <div class="kpi-num">{val}</div>
-                <div class="kpi-sub">{sub}</div>
-            </div>
-            """
-
-        c1, c2, c3, c4 = st.columns(4)
-        
-        with c1:
-            # Rofo (Plan) - Indigo
-            st.markdown(render_kpi("1. PLAN (ROFO)", f"{total_rofo:,.0f}", "Total Forecast", 
-                "linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%)"), unsafe_allow_html=True)
-        with c2:
-            # PO (Execution) - Orange
-            po_vs_rofo = (total_po / total_rofo * 100) if total_rofo > 0 else 0
-            st.markdown(render_kpi("2. EXECUTION (PO)", f"{total_po:,.0f}", f"{po_vs_rofo:.1f}% of Plan", 
-                "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
-        with c3:
-            # Sales (Result) - Green
-            sales_vs_rofo = (total_sales / total_rofo * 100) if total_rofo > 0 else 0
-            st.markdown(render_kpi("3. RESULT (SALES)", f"{total_sales:,.0f}", f"{sales_vs_rofo:.1f}% Achievement", 
-                "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
-        with c4:
-            # Gap - Red/Grey
-            gap = total_sales - total_rofo
-            gap_col = "linear-gradient(135deg, #ef5350 0%, #e53935 100%)" if gap < 0 else "linear-gradient(135deg, #66bb6a 0%, #43a047 100%)"
-            st.markdown(render_kpi("GAP (SALES vs PLAN)", f"{gap:+,.0f}", "Units Variance", gap_col), unsafe_allow_html=True)
-
-        # ==============================================================================
-        # 3. MAIN COMPARISON CHART (GROUPED BAR) - "MUDAH DIPAHAMI"
-        # ==============================================================================
-        st.divider()
-        st.subheader("📊 Performance Triad: Plan vs Exec vs Result")
-        st.caption("Grafik ini membandingkan langsung posisi Rencana (Rofo), Pembelian (PO), dan Penjualan (Sales) setiap bulan.")
-
-        fig_main = go.Figure()
-
-        # Rofo (Plan) - Garis Putus-putus (sebagai baseline/acuan)
-        fig_main.add_trace(go.Scatter(
-            x=df_trend['Month_Txt'], y=df_trend['Rofo'],
-            name='Plan (Rofo)',
-            mode='lines+markers',
-            line=dict(color='#3949AB', width=3, dash='dash'), # Indigo putus-putus
-            marker=dict(size=8, color='#3949AB')
-        ))
-
-        # PO (Execution) - Bar Kuning
-        fig_main.add_trace(go.Bar(
-            x=df_trend['Month_Txt'], y=df_trend['PO'],
-            name='Execution (PO)',
-            marker_color='#FFB74D', # Soft Orange
-            text=[f"{x:,.0f}" for x in df_trend['PO']],
-            textposition='auto'
-        ))
-
-        # Sales (Result) - Bar Hijau
-        fig_main.add_trace(go.Bar(
-            x=df_trend['Month_Txt'], y=df_trend['Sales'],
-            name='Result (Sales)',
-            marker_color='#4DB6AC', # Soft Teal
-            text=[f"{x:,.0f}" for x in df_trend['Sales']],
-            textposition='auto'
-        ))
-
-        fig_main.update_layout(
-            height=450,
-            xaxis_title="Month",
-            yaxis_title="Quantity (Units)",
-            barmode='group', # Grouped bar agar berdampingan
-            hovermode="x unified",
-            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
-            plot_bgcolor='white',
-            margin=dict(t=50, b=20, l=20, r=20)
+        # UI Filter Multi-Select untuk Tahun
+        selected_years = st.multiselect(
+            "📅 Filter Tahun:",
+            options=available_years,
+            default=available_years, # Default: tampilkan semua tahun
+            help="Pilih satu atau beberapa tahun untuk menganalisis performa pada periode tertentu."
         )
         
-        st.plotly_chart(fig_main, use_container_width=True)
+        # Filter list bulan berdasarkan tahun yang dipilih
+        filtered_months = [m for m in all_months if m.year in selected_years]
 
-        # ==============================================================================
-        # 4. TOP GAP ANALYSIS (PENGGANTI PARETO)
-        # ==============================================================================
-        st.divider()
-        st.subheader("🚨 Top Gap Analysis (SKU Level)")
-        st.caption("Daftar barang dengan selisih terbesar antara Forecast vs Realisasi Sales.")
-
-        # Data processing untuk Gap per SKU
-        # Gabungkan sales & forecast all time (atau bisa difilter last month jika mau)
-        df_f_sku = df_forecast.groupby(['SKU_ID', 'Product_Name'])['Forecast_Qty'].sum().reset_index()
-        df_s_sku = df_sales.groupby(['SKU_ID', 'Product_Name'])['Sales_Qty'].sum().reset_index()
-        
-        df_gap = pd.merge(df_f_sku, df_s_sku, on=['SKU_ID', 'Product_Name'], how='outer').fillna(0)
-        df_gap['Gap'] = df_gap['Sales_Qty'] - df_gap['Forecast_Qty']
-        
-        # Pisahkan menjadi dua kelompok
-        # 1. Demand Spikes (Sales > Forecast) -> Under-forecasted
-        top_spikes = df_gap[df_gap['Gap'] > 0].sort_values('Gap', ascending=False).head(10)
-        
-        # 2. Low Performance (Sales < Forecast) -> Over-forecasted
-        top_drops = df_gap[df_gap['Gap'] < 0].sort_values('Gap', ascending=True).head(10)
-
-        c_gap1, c_gap2 = st.columns(2)
-
-        with c_gap1:
-            st.markdown("##### 🚀 Top Unexpected Demand (Sales > Rofo)")
-            st.caption("Barang ini **LAKU KERAS** melebihi prediksi. Cek stok, awas barang kosong!")
+        # Cegah error jika user menghapus semua pilihan tahun
+        if not filtered_months:
+            st.warning("⚠️ Silakan pilih minimal 1 tahun untuk menampilkan data.")
+        else:
+            monthly_data = []
+            for month in filtered_months:
+                # Sales, Forecast, PO
+                s_qty = df_sales[df_sales['Month'] == month]['Sales_Qty'].sum()
+                f_qty = df_forecast[df_forecast['Month'] == month]['Forecast_Qty'].sum()
+                p_qty = df_po[df_po['Month'] == month]['PO_Qty'].sum()
+                
+                monthly_data.append({
+                    'Month': month,
+                    'Month_Txt': month.strftime('%b-%y'),
+                    'Rofo': f_qty,
+                    'Sales': s_qty,
+                    'PO': p_qty,
+                    # Hitung selisih untuk visualisasi
+                    'Gap_Sales_Rofo': s_qty - f_qty
+                })
+                
+            df_trend = pd.DataFrame(monthly_data)
             
-            fig_spike = go.Figure()
-            fig_spike.add_trace(go.Bar(
-                y=top_spikes['Product_Name'].str[:20], # Truncate nama biar rapi
-                x=top_spikes['Gap'],
-                orientation='h',
-                marker_color='#66BB6A', # Green
-                text=[f"+{x:,.0f}" for x in top_spikes['Gap']],
-                textposition='auto',
-                name='Extra Sales'
-            ))
-            fig_spike.update_layout(
-                height=400,
-                xaxis_title="Extra Units Sold vs Plan",
-                yaxis=dict(autorange="reversed"), # Urutan dari atas ke bawah
-                plot_bgcolor='white',
-                margin=dict(l=10, r=10, t=10, b=10)
-            )
-            st.plotly_chart(fig_spike, use_container_width=True)
-
-        with c_gap2:
-            st.markdown("##### 🐌 Top Slow Moving vs Plan (Sales < Rofo)")
-            st.caption("Barang ini **KURANG LAKU** dibanding prediksi. Cek overstock, perlu promo?")
+            # Totals for KPI
+            total_rofo = df_trend['Rofo'].sum()
+            total_sales = df_trend['Sales'].sum()
+            total_po = df_trend['PO'].sum()
             
-            fig_drop = go.Figure()
-            fig_drop.add_trace(go.Bar(
-                y=top_drops['Product_Name'].str[:20],
-                x=top_drops['Gap'], # Nilai negatif
-                orientation='h',
-                marker_color='#EF5350', # Red
-                text=[f"{x:,.0f}" for x in top_drops['Gap']],
-                textposition='auto', # inside/outside auto
-                name='Missed Sales'
+            # ==============================================================================
+            # 2. KPI CARDS (PASTEL GRADIENT)
+            # ==============================================================================
+            st.markdown("""
+            <style>
+                .kpi-box {
+                    border-radius: 12px; padding: 1.2rem; color: white;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative;
+                    transition: transform 0.3s;
+                }
+                .kpi-box:hover { transform: translateY(-3px); }
+                .kpi-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
+                .kpi-num { font-size: 1.8rem; font-weight: 800; margin-bottom: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+                .kpi-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
+            </style>
+            """, unsafe_allow_html=True)
+
+            def render_kpi(title, val, sub, gradient):
+                return f"""
+                <div class="kpi-box" style="background: {gradient};">
+                    <div class="kpi-title">{title}</div>
+                    <div class="kpi-num">{val}</div>
+                    <div class="kpi-sub">{sub}</div>
+                </div>
+                """
+
+            c1, c2, c3, c4 = st.columns(4)
+            
+            with c1:
+                # Rofo (Plan) - Indigo
+                st.markdown(render_kpi("1. PLAN (ROFO)", f"{total_rofo:,.0f}", "Total Forecast", 
+                    "linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%)"), unsafe_allow_html=True)
+            with c2:
+                # PO (Execution) - Orange
+                po_vs_rofo = (total_po / total_rofo * 100) if total_rofo > 0 else 0
+                st.markdown(render_kpi("2. EXECUTION (PO)", f"{total_po:,.0f}", f"{po_vs_rofo:.1f}% of Plan", 
+                    "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
+            with c3:
+                # Sales (Result) - Green
+                sales_vs_rofo = (total_sales / total_rofo * 100) if total_rofo > 0 else 0
+                st.markdown(render_kpi("3. RESULT (SALES)", f"{total_sales:,.0f}", f"{sales_vs_rofo:.1f}% Achievement", 
+                    "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
+            with c4:
+                # Gap - Red/Grey
+                gap = total_sales - total_rofo
+                gap_col = "linear-gradient(135deg, #ef5350 0%, #e53935 100%)" if gap < 0 else "linear-gradient(135deg, #66bb6a 0%, #43a047 100%)"
+                st.markdown(render_kpi("GAP (SALES vs PLAN)", f"{gap:+,.0f}", "Units Variance", gap_col), unsafe_allow_html=True)
+
+            # ==============================================================================
+            # 3. MAIN COMPARISON CHART (GROUPED BAR) - "MUDAH DIPAHAMI"
+            # ==============================================================================
+            st.divider()
+            st.subheader("📊 Performance Triad: Plan vs Exec vs Result")
+            st.caption("Grafik ini membandingkan langsung posisi Rencana (Rofo), Pembelian (PO), dan Penjualan (Sales) setiap bulan.")
+
+            fig_main = go.Figure()
+
+            # Rofo (Plan) - Garis Putus-putus (sebagai baseline/acuan)
+            fig_main.add_trace(go.Scatter(
+                x=df_trend['Month_Txt'], y=df_trend['Rofo'],
+                name='Plan (Rofo)',
+                mode='lines+markers',
+                line=dict(color='#3949AB', width=3, dash='dash'), # Indigo putus-putus
+                marker=dict(size=8, color='#3949AB')
             ))
-            fig_drop.update_layout(
-                height=400,
-                xaxis_title="Missed Units vs Plan",
-                yaxis=dict(autorange="reversed", side="right"), # Label di kanan biar tidak tabrakan
+
+            # PO (Execution) - Bar Kuning
+            fig_main.add_trace(go.Bar(
+                x=df_trend['Month_Txt'], y=df_trend['PO'],
+                name='Execution (PO)',
+                marker_color='#FFB74D', # Soft Orange
+                text=[f"{x:,.0f}" for x in df_trend['PO']],
+                textposition='auto'
+            ))
+
+            # Sales (Result) - Bar Hijau
+            fig_main.add_trace(go.Bar(
+                x=df_trend['Month_Txt'], y=df_trend['Sales'],
+                name='Result (Sales)',
+                marker_color='#4DB6AC', # Soft Teal
+                text=[f"{x:,.0f}" for x in df_trend['Sales']],
+                textposition='auto'
+            ))
+
+            fig_main.update_layout(
+                height=450,
+                xaxis_title="Month",
+                yaxis_title="Quantity (Units)",
+                barmode='group', # Grouped bar agar berdampingan
+                hovermode="x unified",
+                legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
                 plot_bgcolor='white',
-                margin=dict(l=10, r=10, t=10, b=10)
+                margin=dict(t=50, b=20, l=20, r=20)
             )
-            st.plotly_chart(fig_drop, use_container_width=True)
+            
+            st.plotly_chart(fig_main, use_container_width=True)
+
+            # ==============================================================================
+            # 4. TOP GAP ANALYSIS (PENGGANTI PARETO)
+            # ==============================================================================
+            st.divider()
+            st.subheader("🚨 Top Gap Analysis (SKU Level)")
+            st.caption(f"Daftar barang dengan selisih terbesar antara Forecast vs Realisasi Sales untuk Tahun {', '.join(map(str, selected_years))}.")
+
+            # FILTER DATA BERDASARKAN TAHUN YANG DIPILIH AGAR SINKRON DENGAN CHART ATASNYA
+            df_f_filtered = df_forecast[df_forecast['Month'].dt.year.isin(selected_years)]
+            df_s_filtered = df_sales[df_sales['Month'].dt.year.isin(selected_years)]
+
+            # Data processing untuk Gap per SKU
+            df_f_sku = df_f_filtered.groupby(['SKU_ID', 'Product_Name'])['Forecast_Qty'].sum().reset_index()
+            df_s_sku = df_s_filtered.groupby(['SKU_ID', 'Product_Name'])['Sales_Qty'].sum().reset_index()
+            
+            df_gap = pd.merge(df_f_sku, df_s_sku, on=['SKU_ID', 'Product_Name'], how='outer').fillna(0)
+            df_gap['Gap'] = df_gap['Sales_Qty'] - df_gap['Forecast_Qty']
+            
+            # Pisahkan menjadi dua kelompok
+            # 1. Demand Spikes (Sales > Forecast) -> Under-forecasted
+            top_spikes = df_gap[df_gap['Gap'] > 0].sort_values('Gap', ascending=False).head(10)
+            
+            # 2. Low Performance (Sales < Forecast) -> Over-forecasted
+            top_drops = df_gap[df_gap['Gap'] < 0].sort_values('Gap', ascending=True).head(10)
+
+            c_gap1, c_gap2 = st.columns(2)
+
+            with c_gap1:
+                st.markdown("##### 🚀 Top Unexpected Demand (Sales > Rofo)")
+                st.caption("Barang ini **LAKU KERAS** melebihi prediksi. Cek stok, awas barang kosong!")
+                
+                fig_spike = go.Figure()
+                fig_spike.add_trace(go.Bar(
+                    y=top_spikes['Product_Name'].str[:20], # Truncate nama biar rapi
+                    x=top_spikes['Gap'],
+                    orientation='h',
+                    marker_color='#66BB6A', # Green
+                    text=[f"+{x:,.0f}" for x in top_spikes['Gap']],
+                    textposition='auto',
+                    name='Extra Sales'
+                ))
+                fig_spike.update_layout(
+                    height=400,
+                    xaxis_title="Extra Units Sold vs Plan",
+                    yaxis=dict(autorange="reversed"), # Urutan dari atas ke bawah
+                    plot_bgcolor='white',
+                    margin=dict(l=10, r=10, t=10, b=10)
+                )
+                st.plotly_chart(fig_spike, use_container_width=True)
+
+            with c_gap2:
+                st.markdown("##### 🐌 Top Slow Moving vs Plan (Sales < Rofo)")
+                st.caption("Barang ini **KURANG LAKU** dibanding prediksi. Cek overstock, perlu promo?")
+                
+                fig_drop = go.Figure()
+                fig_drop.add_trace(go.Bar(
+                    y=top_drops['Product_Name'].str[:20],
+                    x=top_drops['Gap'], # Nilai negatif
+                    orientation='h',
+                    marker_color='#EF5350', # Red
+                    text=[f"{x:,.0f}" for x in top_drops['Gap']],
+                    textposition='auto', # inside/outside auto
+                    name='Missed Sales'
+                ))
+                fig_drop.update_layout(
+                    height=400,
+                    xaxis_title="Missed Units vs Plan",
+                    yaxis=dict(autorange="reversed", side="right"), # Label di kanan biar tidak tabrakan
+                    plot_bgcolor='white',
+                    margin=dict(l=10, r=10, t=10, b=10)
+                )
+                st.plotly_chart(fig_drop, use_container_width=True)
 
     else:
         st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
@@ -4136,17 +4254,34 @@ with tab7:
                         row['Total'] = total_row
                         q_brand_qty.append(row)
                     
-                    df_q_qty = pd.DataFrame(q_brand_qty).sort_values('Total', ascending=False).head(15) # Top 15 Brands
+                    df_all_qty = pd.DataFrame(q_brand_qty)
+                    df_q_qty = df_all_qty.sort_values('Total', ascending=False).head(15) # Top 15 Brands
+                    
+                    # Hitung Grand Total (dari SEMUA brand, bukan hanya top 15)
+                    grand_total_qty = {'Brand': 'TOTAL (ALL BRANDS)'}
+                    for col in active_quarters + ['Total']:
+                        grand_total_qty[col] = df_all_qty[col].sum()
+                    
+                    # Gabungkan baris Total ke dalam dataframe display
+                    df_q_qty = pd.concat([df_q_qty, pd.DataFrame([grand_total_qty])], ignore_index=True)
+                    
+                    # Tambahkan 'Total' ke kolom yang akan didisplay di Heatmap
+                    display_cols = active_quarters + ['Total']
                     
                     fig_heat_qty = go.Figure(data=go.Heatmap(
-                        z=df_q_qty[active_quarters].values,
-                        x=active_quarters,
+                        z=df_q_qty[display_cols].values,
+                        x=display_cols,
                         y=df_q_qty['Brand'],
                         colorscale='Blues',
-                        text=df_q_qty[active_quarters].values,
+                        text=df_q_qty[display_cols].values,
                         texttemplate="%{text:,.0f}"
                     ))
-                    fig_heat_qty.update_layout(height=500, title="Top 15 Brands - Quarterly Volume")
+                    
+                    fig_heat_qty.update_layout(
+                        height=550, 
+                        title="Top 15 Brands - Quarterly Volume",
+                        yaxis=dict(autorange="reversed") # Balik Y-axis agar Top 1 di atas & Total di bawah
+                    )
                     st.plotly_chart(fig_heat_qty, use_container_width=True)
 
                 # --- VALUE HEATMAP ---
@@ -4171,17 +4306,34 @@ with tab7:
                             row['Total'] = total_row
                             q_brand_val.append(row)
                         
-                        df_q_val = pd.DataFrame(q_brand_val).sort_values('Total', ascending=False).head(15)
+                        df_all_val = pd.DataFrame(q_brand_val)
+                        df_q_val = df_all_val.sort_values('Total', ascending=False).head(15)
+                        
+                        # Hitung Grand Total Value (dari SEMUA brand)
+                        grand_total_val = {'Brand': 'TOTAL (ALL BRANDS)'}
+                        for col in active_quarters + ['Total']:
+                            grand_total_val[col] = df_all_val[col].sum()
+                            
+                        # Gabungkan baris Total ke dalam dataframe display
+                        df_q_val = pd.concat([df_q_val, pd.DataFrame([grand_total_val])], ignore_index=True)
+                        
+                        # Tambahkan 'Total' ke kolom yang akan didisplay di Heatmap
+                        display_cols = active_quarters + ['Total']
                         
                         fig_heat_val = go.Figure(data=go.Heatmap(
-                            z=df_q_val[active_quarters].values,
-                            x=active_quarters,
+                            z=df_q_val[display_cols].values,
+                            x=display_cols,
                             y=df_q_val['Brand'],
                             colorscale='Greens',
-                            text=df_q_val[active_quarters].values,
+                            text=df_q_val[display_cols].values,
                             texttemplate="Rp %{text:,.0f}" # Full number format
                         ))
-                        fig_heat_val.update_layout(height=500, title="Top 15 Brands - Quarterly Revenue Projection")
+                        
+                        fig_heat_val.update_layout(
+                            height=550, 
+                            title="Top 15 Brands - Quarterly Revenue Projection",
+                            yaxis=dict(autorange="reversed") # Balik Y-axis agar Top 1 di atas & Total di bawah
+                        )
                         st.plotly_chart(fig_heat_val, use_container_width=True)
                     else:
                         st.warning("⚠️ Data Harga (Floor_Price) tidak ditemukan.")
