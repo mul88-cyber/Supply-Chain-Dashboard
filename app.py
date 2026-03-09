@@ -371,11 +371,17 @@ def calc_monthly_performance(df_forecast, df_po, df_product):
         if merged.empty:
             continue
         merged['PO_Rofo_Ratio']  = merged['PO_Qty'] / merged['Forecast_Qty'] * 100
-        merged['Accuracy_Status'] = pd.cut(
-            merged['PO_Rofo_Ratio'],
-            bins=[0, 80, 120, np.inf],
-            labels=['Under','Accurate','Over']
-        ).astype(str)
+        # Under  : PO/Rofo < 80%   (strictly less than)
+        # Accurate: 80% <= PO/Rofo <= 120%  (inclusive both ends)
+        # Over   : PO/Rofo > 120%  (strictly greater than)
+        merged['Accuracy_Status'] = np.select(
+            [
+                merged['PO_Rofo_Ratio'] < 80,
+                merged['PO_Rofo_Ratio'] > 120,
+            ],
+            ['Under', 'Over'],
+            default='Accurate'
+        )
         merged['APE'] = (merged['PO_Rofo_Ratio'] - 100).abs()
 
         sc   = merged['Accuracy_Status'].value_counts().to_dict()
