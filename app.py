@@ -464,36 +464,49 @@ def calc_yoy(df_sales):
     return pivot.reset_index().rename(columns={'Mo_Num':'Month'})
 
 
-def calc_channel_accuracy(df_forecast, df_ecomm, df_reseller, df_po, df_product):
-    """Forecast accuracy split by channel: Ecomm vs Reseller."""
+def calc_channel_accuracy(df_forecast, df_ecomm, df_rofo_reseller, df_po_reseller, df_po, df_product):
+    """
+    Forecast accuracy split by channel.
+    - Ecomm   : df_forecast (long, has Month + Forecast_Qty) vs df_po (long, has Month + PO_Qty)
+    - Reseller: df_rofo_reseller (long, past rofo) vs df_po_reseller (long, past PO)
+    All inputs must be long-format DataFrames with columns [SKU_ID, Month, value_col].
+    """
     result = {}
 
-    # Ecomm: uses main Rofo vs PO
-    if not df_forecast.empty and not df_po.empty:
+    def _safe_cols(df, required):
+        """Return True only if df is non-empty and has all required columns."""
+        return (not df.empty) and all(c in df.columns for c in required)
+
+    # ── Ecomm channel ──────────────────────────────────────────────────────
+    if _safe_cols(df_forecast, ['SKU_ID','Month','Forecast_Qty']) and \
+       _safe_cols(df_po,       ['SKU_ID','Month','PO_Qty']):
         merged = pd.merge(
             df_forecast[['SKU_ID','Month','Forecast_Qty']],
-            df_po[['SKU_ID','Month','PO_Qty']],
+            df_po      [['SKU_ID','Month','PO_Qty']],
             on=['SKU_ID','Month'], how='inner'
         )
         merged = merged[merged['Forecast_Qty'] > 0]
         if not merged.empty:
-            merged['Acc'] = 100 - (merged['PO_Qty']/merged['Forecast_Qty']*100 - 100).abs()
-            result['Ecomm'] = merged.groupby('Month')['Acc'].mean().reset_index(name='Accuracy')
-            result['Ecomm']['Channel'] = 'Ecommerce'
+            merged['Acc'] = 100 - (merged['PO_Qty'] / merged['Forecast_Qty'] * 100 - 100).abs()
+            r = merged.groupby('Month')['Acc'].mean().reset_index(name='Accuracy')
+            r['Channel'] = 'Ecommerce'
+            result['Ecommerce'] = r
 
-    # Reseller: uses Past_Rofo_Reseller vs Past_PO_Reseller
-    if not df_reseller.empty and not df_po.empty:
-        # reuse same structure
-        pf = df_reseller.rename(columns={'Forecast_Qty':'Forecast_Qty'})
-        pp = df_po.rename(columns={'PO_Qty':'PO_Qty'})
-        mrgd = pd.merge(pf[['SKU_ID','Month','Forecast_Qty']],
-                        pp[['SKU_ID','Month','PO_Qty']],
-                        on=['SKU_ID','Month'], how='inner')
+    # ── Reseller channel ───────────────────────────────────────────────────
+    # Uses past_rofo_reseller vs past_po_reseller (both long format from melt_wide)
+    if _safe_cols(df_rofo_reseller, ['SKU_ID','Month','Forecast_Qty']) and \
+       _safe_cols(df_po_reseller,   ['SKU_ID','Month','PO_Qty']):
+        mrgd = pd.merge(
+            df_rofo_reseller[['SKU_ID','Month','Forecast_Qty']],
+            df_po_reseller  [['SKU_ID','Month','PO_Qty']],
+            on=['SKU_ID','Month'], how='inner'
+        )
         mrgd = mrgd[mrgd['Forecast_Qty'] > 0]
         if not mrgd.empty:
-            mrgd['Acc'] = 100 - (mrgd['PO_Qty']/mrgd['Forecast_Qty']*100 - 100).abs()
-            result['Reseller'] = mrgd.groupby('Month')['Acc'].mean().reset_index(name='Accuracy')
-            result['Reseller']['Channel'] = 'Reseller'
+            mrgd['Acc'] = 100 - (mrgd['PO_Qty'] / mrgd['Forecast_Qty'] * 100 - 100).abs()
+            r = mrgd.groupby('Month')['Acc'].mean().reset_index(name='Accuracy')
+            r['Channel'] = 'Reseller'
+            result['Reseller'] = r
 
     return result
 
@@ -558,7 +571,7 @@ last_3_perf     = {k: monthly_perf[k] for k in sorted(monthly_perf)[-3:]} if mon
 inv_metrics     = calc_inventory_metrics(df_stock, df_sales, df_product)
 df_financial    = calc_financial(df_sales, df_product)
 df_yoy          = calc_yoy(df_sales)
-channel_acc     = calc_channel_accuracy(df_forecast, df_ecomm, df_res_fcst, df_po, df_product)
+channel_acc     = calc_channel_accuracy(df_forecast, df_ecomm, df_rofo_res, df_po_res, df_po, df_product)
 alerts          = get_critical_alerts(inv_metrics, df_product)
 
 # ==============================================================================
