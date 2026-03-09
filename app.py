@@ -354,7 +354,7 @@ st.markdown("""
 
 # --- Judul Dashboard ---
 st.markdown('<h1 class="main-header">💰 FORECAST & INVENTORY CONTROL PRO DASHBOARD</h1>', unsafe_allow_html=True)
-st.caption(f"🚀 Inventory Control & Forecast Analytics - D2C Demand Planner Mulyanto | Real-time Insights | Updated: {datetime.now().strftime('%d %B %Y %H:%M')}")
+st.caption(f"🚀 Inventory Control & Forecast Analytics - Mulyanto | Real-time Insights | Updated: {datetime.now().strftime('%d %B %Y %H:%M')}")
 
 # --- ====================================================== ---
 # ---                KONEKSI & LOAD DATA                    ---
