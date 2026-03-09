@@ -24,11 +24,132 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# GLOBAL CSS
+# THEME DEFINITIONS
 # ==============================================================================
-st.markdown("""
+THEMES = {
+    "🌐 Corporate Blue (Light)": {
+        "id": "corporate_blue",
+        "bg":          "#F0F4FF",
+        "sidebar_bg":  "#FFFFFF",
+        "card_bg":     "#FFFFFF",
+        "text":        "#0F172A",
+        "text_muted":  "#475569",
+        "border":      "#CBD5E1",
+        "accent1":     "#2563EB",   # vivid blue
+        "accent2":     "#7C3AED",   # vivid purple
+        "tab_active":  "linear-gradient(135deg,#2563EB,#7C3AED)",
+        "tab_inactive":"#E2E8F0",
+        "tab_text_inactive": "#334155",
+        "header_grad": "linear-gradient(90deg,#2563EB 0%,#7C3AED 100%)",
+        "chart_bg":    "#FFFFFF",
+        "chart_paper": "#FFFFFF",
+        "chart_font":  "#0F172A",
+        "chart_grid":  "rgba(15,23,42,0.06)",
+        "card_shadow": "0 4px 20px rgba(37,99,235,0.12)",
+        "metric_border":"#2563EB",
+        "plotly_template": "plotly_white",
+        "colors":["#2563EB","#7C3AED","#0EA5E9","#06B6D4","#10B981","#F59E0B","#EF4444"],
+    },
+    "🌙 Dark Corporate": {
+        "id": "dark_corporate",
+        "bg":          "#0A0F1E",
+        "sidebar_bg":  "#0D1425",
+        "card_bg":     "#111827",
+        "text":        "#F1F5F9",
+        "text_muted":  "#94A3B8",
+        "border":      "#1E293B",
+        "accent1":     "#3B82F6",
+        "accent2":     "#8B5CF6",
+        "tab_active":  "linear-gradient(135deg,#3B82F6,#8B5CF6)",
+        "tab_inactive":"#1E293B",
+        "tab_text_inactive": "#94A3B8",
+        "header_grad": "linear-gradient(90deg,#3B82F6 0%,#8B5CF6 50%,#06B6D4 100%)",
+        "chart_bg":    "#111827",
+        "chart_paper": "#111827",
+        "chart_font":  "#E2E8F0",
+        "chart_grid":  "rgba(148,163,184,0.08)",
+        "card_shadow": "0 4px 24px rgba(0,0,0,0.5)",
+        "metric_border":"#3B82F6",
+        "plotly_template": "plotly_dark",
+        "colors":["#3B82F6","#8B5CF6","#06B6D4","#10B981","#F59E0B","#F43F5E","#A78BFA"],
+    },
+    "🔥 Midnight Red": {
+        "id": "midnight_red",
+        "bg":          "#0D0A0A",
+        "sidebar_bg":  "#120D0D",
+        "card_bg":     "#1A1010",
+        "text":        "#FAF5F5",
+        "text_muted":  "#9CA3AF",
+        "border":      "#2D1515",
+        "accent1":     "#EF4444",
+        "accent2":     "#F97316",
+        "tab_active":  "linear-gradient(135deg,#EF4444,#F97316)",
+        "tab_inactive":"#1F1111",
+        "tab_text_inactive": "#9CA3AF",
+        "header_grad": "linear-gradient(90deg,#EF4444 0%,#F97316 50%,#FBBF24 100%)",
+        "chart_bg":    "#1A1010",
+        "chart_paper": "#1A1010",
+        "chart_font":  "#FAF5F5",
+        "chart_grid":  "rgba(250,245,245,0.06)",
+        "card_shadow": "0 4px 24px rgba(239,68,68,0.2)",
+        "metric_border":"#EF4444",
+        "plotly_template": "plotly_dark",
+        "colors":["#EF4444","#F97316","#FBBF24","#10B981","#3B82F6","#8B5CF6","#EC4899"],
+    },
+    "🌿 Executive Green": {
+        "id": "exec_green",
+        "bg":          "#F0FDF4",
+        "sidebar_bg":  "#FFFFFF",
+        "card_bg":     "#FFFFFF",
+        "text":        "#052E16",
+        "text_muted":  "#166534",
+        "border":      "#BBF7D0",
+        "accent1":     "#059669",
+        "accent2":     "#0284C7",
+        "tab_active":  "linear-gradient(135deg,#059669,#0284C7)",
+        "tab_inactive":"#D1FAE5",
+        "tab_text_inactive": "#065F46",
+        "header_grad": "linear-gradient(90deg,#059669 0%,#0284C7 100%)",
+        "chart_bg":    "#FFFFFF",
+        "chart_paper": "#FFFFFF",
+        "chart_font":  "#052E16",
+        "chart_grid":  "rgba(5,46,22,0.06)",
+        "card_shadow": "0 4px 20px rgba(5,150,105,0.15)",
+        "metric_border":"#059669",
+        "plotly_template": "plotly_white",
+        "colors":["#059669","#0284C7","#7C3AED","#F59E0B","#EF4444","#0EA5E9","#10B981"],
+    },
+    "⚡ Neon Dark": {
+        "id": "neon_dark",
+        "bg":          "#05050F",
+        "sidebar_bg":  "#08081A",
+        "card_bg":     "#0D0D24",
+        "text":        "#E0E7FF",
+        "text_muted":  "#818CF8",
+        "border":      "#1E1B4B",
+        "accent1":     "#6366F1",
+        "accent2":     "#22D3EE",
+        "tab_active":  "linear-gradient(135deg,#6366F1,#22D3EE)",
+        "tab_inactive":"#0F0F2D",
+        "tab_text_inactive": "#818CF8",
+        "header_grad": "linear-gradient(90deg,#6366F1 0%,#22D3EE 50%,#A78BFA 100%)",
+        "chart_bg":    "#0D0D24",
+        "chart_paper": "#0D0D24",
+        "chart_font":  "#E0E7FF",
+        "chart_grid":  "rgba(99,102,241,0.1)",
+        "card_shadow": "0 0 20px rgba(99,102,241,0.3), 0 4px 15px rgba(0,0,0,0.5)",
+        "metric_border":"#6366F1",
+        "plotly_template": "plotly_dark",
+        "colors":["#6366F1","#22D3EE","#A78BFA","#34D399","#FBBF24","#F43F5E","#38BDF8"],
+    },
+}
+
+# ==============================================================================
+# GLOBAL BASE CSS  (mobile-first, theme-agnostic structure)
+# ==============================================================================
+BASE_CSS = """
 <style>
-/* ── PRINT / PDF ─────────────────────────────────────────────────── */
+/* ── PRINT ───────────────────────────────────────────────────────── */
 @media print {
     *{overflow:visible!important;position:static!important;display:block!important;
       float:none!important;height:auto!important;max-height:none!important;
@@ -44,60 +165,293 @@ st.markdown("""
         margin:0!important;padding:0!important;overflow:visible!important;display:block!important;}
 }
 
-/* ── HEADER ──────────────────────────────────────────────────────── */
-.main-header{
-    font-size:2.8rem;font-weight:900;
-    background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-    text-align:center;padding:1rem;margin-bottom:1rem;
+/* ── MOBILE RESPONSIVE ───────────────────────────────────────────── */
+/* Stack columns on small screens */
+@media (max-width: 768px) {
+    /* Reduce padding on mobile */
+    [data-testid="block-container"] {
+        padding: 0.5rem !important;
+    }
+    /* Make columns stack vertically */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+    }
+    [data-testid="stHorizontalBlock"] > div {
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    /* Smaller header on mobile */
+    .main-header {
+        font-size: 1.6rem !important;
+        padding: 0.5rem !important;
+    }
+    /* Cards full width on mobile */
+    .grad-card {
+        margin-bottom: 0.6rem !important;
+    }
+    .grad-value {
+        font-size: 1.5rem !important;
+    }
+    /* Tabs scrollable on mobile */
+    .stTabs [data-baseweb="tab-list"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none !important;
+    }
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none !important; }
+    .stTabs [data-baseweb="tab"] {
+        min-width: max-content !important;
+        font-size: 0.78rem !important;
+        padding: 8px 12px !important;
+        height: 40px !important;
+    }
+    /* Sidebar collapsed by default hint */
+    [data-testid="stSidebar"] {
+        min-width: 0 !important;
+    }
+    /* Metric cards responsive */
+    [data-testid="stMetric"] {
+        padding: 0.6rem !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.2rem !important;
+    }
+    /* Charts full width */
+    .stPlotlyChart {
+        width: 100% !important;
+    }
+    /* Dataframe horizontal scroll */
+    .stDataFrame {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    /* Hide sidebar toggle label on very small screens */
+    .st-emotion-cache-1cypcdb { font-size: 0.7rem !important; }
 }
 
-/* ── GRADIENT CARDS ──────────────────────────────────────────────── */
-.grad-card{border-radius:15px;padding:1.4rem;color:white;
-           box-shadow:0 4px 15px rgba(0,0,0,.1);transition:transform .3s ease;
-           position:relative;overflow:hidden;margin-bottom:.8rem;}
-.grad-card:hover{transform:translateY(-5px);box-shadow:0 8px 25px rgba(0,0,0,.15);}
-.grad-label{font-size:.8rem;font-weight:700;text-transform:uppercase;
-            letter-spacing:1px;opacity:.9;margin-bottom:.4rem;}
-.grad-value{font-size:2rem;font-weight:800;margin-bottom:.2rem;
-            text-shadow:0 2px 4px rgba(0,0,0,.1);}
-.grad-sub{font-size:.85rem;font-weight:500;opacity:.9;display:flex;
-          align-items:center;gap:5px;}
-.pill{background:rgba(255,255,255,.25);padding:2px 8px;border-radius:12px;
-      font-size:.75rem;backdrop-filter:blur(4px);}
+@media (max-width: 480px) {
+    .main-header { font-size: 1.2rem !important; }
+    .grad-value  { font-size: 1.3rem !important; }
+    .grad-label  { font-size: 0.7rem !important; }
+    [data-testid="stHorizontalBlock"] > div { min-width: 48% !important; flex: 1 1 48% !important; }
+}
+
+/* ── CARD BASE ───────────────────────────────────────────────────── */
+.grad-card{
+    border-radius:14px;padding:1.2rem 1.4rem;color:white;
+    transition:transform .25s ease, box-shadow .25s ease;
+    position:relative;overflow:hidden;margin-bottom:.8rem;
+}
+.grad-card:hover{transform:translateY(-4px);}
+.grad-card::before{
+    content:"";position:absolute;top:-40%;right:-20%;
+    width:180px;height:180px;border-radius:50%;
+    background:rgba(255,255,255,0.07);pointer-events:none;
+}
+.grad-label{font-size:.72rem;font-weight:700;text-transform:uppercase;
+            letter-spacing:1.2px;opacity:.85;margin-bottom:.3rem;}
+.grad-value{font-size:1.9rem;font-weight:800;margin-bottom:.15rem;
+            text-shadow:0 2px 6px rgba(0,0,0,.2);line-height:1.1;}
+.grad-sub{font-size:.8rem;font-weight:500;opacity:.88;
+          display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.pill{background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px;
+      font-size:.72rem;font-weight:600;backdrop-filter:blur(6px);
+      border:1px solid rgba(255,255,255,.15);}
 
 /* ── ALERT BANNERS ───────────────────────────────────────────────── */
-.alert-critical{background:linear-gradient(135deg,#FF5252,#FF1744);
-                color:white;border-radius:10px;padding:1rem;margin:.4rem 0;
-                border-left:5px solid #D32F2F;font-weight:700;}
-.alert-warning{background:linear-gradient(135deg,#FF9800,#F57C00);
-               color:white;border-radius:10px;padding:1rem;margin:.4rem 0;
-               border-left:5px solid #E65100;font-weight:700;}
-.alert-ok{background:linear-gradient(135deg,#4CAF50,#2E7D32);
-          color:white;border-radius:10px;padding:1rem;margin:.4rem 0;
-          border-left:5px solid #1B5E20;font-weight:700;}
-
-/* ── TABS ────────────────────────────────────────────────────────── */
-.stTabs [data-baseweb="tab"]{height:48px;background:linear-gradient(135deg,#F8F9FA,#E9ECEF);
-    border-radius:10px 10px 0 0;padding:12px 20px;font-weight:700;font-size:.95rem;}
-.stTabs [aria-selected="true"]{
-    background:linear-gradient(135deg,#667eea,#764ba2)!important;
-    color:white!important;box-shadow:0 4px 15px rgba(102,126,234,.3);}
+.alert-critical{
+    background:linear-gradient(135deg,#DC2626,#B91C1C);
+    color:white;border-radius:10px;padding:1rem;margin:.4rem 0;
+    border-left:5px solid #7F1D1D;font-weight:700;
+    box-shadow:0 4px 12px rgba(220,38,38,0.3);}
+.alert-warning{
+    background:linear-gradient(135deg,#D97706,#B45309);
+    color:white;border-radius:10px;padding:1rem;margin:.4rem 0;
+    border-left:5px solid #78350F;font-weight:700;
+    box-shadow:0 4px 12px rgba(217,119,6,0.3);}
+.alert-ok{
+    background:linear-gradient(135deg,#059669,#047857);
+    color:white;border-radius:10px;padding:1rem;margin:.4rem 0;
+    border-left:5px solid #064E3B;font-weight:700;}
 
 /* ── DATAFRAME ───────────────────────────────────────────────────── */
-.stDataFrame{border-radius:10px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,.08);}
+.stDataFrame{border-radius:10px;overflow:hidden;}
 
-/* ── THEME: DARK (toggle via sidebar) ───────────────────────────── */
-body[data-theme="dark"] [data-testid="stAppViewContainer"]{
-    background-color:#1A2035!important;color:#FFF!important;}
+/* ── METRIC CARD NATIVE STREAMLIT ────────────────────────────────── */
+[data-testid="stMetric"]{
+    border-radius:12px;padding:1rem 1.2rem;
+    transition:transform .2s ease;
+}
+[data-testid="stMetric"]:hover{ transform:translateY(-2px); }
+
+/* ── SMOOTH SCROLLBAR ────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{border-radius:3px;}
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(BASE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# HEADER
+# THEME SELECTION — must happen BEFORE sidebar renders widgets
 # ==============================================================================
-st.markdown('<h1 class="main-header">💰 FORECAST & INVENTORY CONTROL PRO v7</h1>', unsafe_allow_html=True)
-st.caption(f"🚀 D2C Demand Planner | Real-time Insights | Updated: {datetime.now().strftime('%d %B %Y %H:%M')}")
+# Use session state so theme persists across reruns
+if "theme_name" not in st.session_state:
+    st.session_state.theme_name = "🌐 Corporate Blue (Light)"
+
+# Quick theme selector in a top-of-page row (mobile friendly)
+_top_col1, _top_col2 = st.columns([3, 1])
+with _top_col2:
+    _selected_theme = st.selectbox(
+        "🎨 Theme",
+        list(THEMES.keys()),
+        index=list(THEMES.keys()).index(st.session_state.theme_name),
+        key="theme_selector_top",
+        label_visibility="collapsed",
+    )
+    st.session_state.theme_name = _selected_theme
+
+T = THEMES[st.session_state.theme_name]   # active theme dict
+
+# Inject dynamic theme CSS
+def _theme_css(t):
+    is_dark = t["id"] in ("dark_corporate","midnight_red","neon_dark")
+    scrollbar_color = t["accent1"]
+    neon_glow = f"box-shadow:{t['card_shadow']};" if t["id"]=="neon_dark" else ""
+    return f"""
+<style>
+/* ── APP BACKGROUND ──────────────────────────────────────────────── */
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"] > div {{
+    background-color:{t["bg"]} !important;
+    color:{t["text"]} !important;
+}}
+/* ── SIDEBAR ─────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {{
+    background-color:{t["sidebar_bg"]} !important;
+    border-right:1px solid {t["border"]} !important;
+}}
+[data-testid="stSidebar"] * {{
+    color:{t["text"]} !important;
+}}
+/* ── ALL TEXT ────────────────────────────────────────────────────── */
+h1,h2,h3,h4,h5,h6,p,span,div,label {{
+    color:{t["text"]};
+}}
+.stMarkdown, .stCaption, [data-testid="stCaptionContainer"] {{
+    color:{t["text_muted"]} !important;
+}}
+/* ── HEADER GRADIENT TEXT ────────────────────────────────────────── */
+.main-header {{
+    background:{t["header_grad"]};
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+    font-size:2.6rem;font-weight:900;
+    text-align:center;padding:.8rem .5rem .4rem;
+    margin-bottom:.2rem;
+}}
+/* ── TABS ────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {{
+    background:{t["bg"]} !important;
+    gap:6px;padding:6px 0;
+}}
+.stTabs [data-baseweb="tab"] {{
+    background:{t["tab_inactive"]} !important;
+    color:{t["tab_text_inactive"]} !important;
+    border-radius:10px 10px 0 0 !important;
+    font-weight:700;font-size:.88rem;
+    border:1px solid {t["border"]} !important;
+    transition:all .2s ease;
+}}
+.stTabs [aria-selected="true"] {{
+    background:{t["tab_active"]} !important;
+    color:#FFFFFF !important;
+    border-color:transparent !important;
+    box-shadow:0 4px 14px rgba(0,0,0,.25) !important;
+}}
+/* ── NATIVE STREAMLIT METRICS ────────────────────────────────────── */
+[data-testid="stMetric"] {{
+    background:{t["card_bg"]} !important;
+    border:1px solid {t["border"]} !important;
+    border-top:3px solid {t["metric_border"]} !important;
+    box-shadow:{t["card_shadow"]} !important;
+    {neon_glow}
+}}
+[data-testid="stMetricValue"] {{
+    color:{t["accent1"]} !important;
+    font-weight:800 !important;
+}}
+[data-testid="stMetricLabel"] {{
+    color:{t["text_muted"]} !important;
+    font-weight:600 !important;
+}}
+[data-testid="stMetricDelta"] {{
+    font-weight:700 !important;
+}}
+/* ── DATAFRAME ───────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {{
+    border:1px solid {t["border"]} !important;
+    box-shadow:{t["card_shadow"]} !important;
+    background:{t["card_bg"]} !important;
+}}
+/* ── SLIDERS & INPUTS ────────────────────────────────────────────── */
+[data-testid="stSlider"] > div > div > div {{
+    background:{t["accent1"]} !important;
+}}
+/* ── BUTTONS ─────────────────────────────────────────────────────── */
+[data-testid="baseButton-primary"] {{
+    background:{t["tab_active"]} !important;
+    border:none !important;
+    font-weight:700 !important;
+}}
+/* ── EXPANDER ────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {{
+    border:1px solid {t["border"]} !important;
+    background:{t["card_bg"]} !important;
+    border-radius:10px !important;
+}}
+/* ── BLOCK CONTAINER ─────────────────────────────────────────────── */
+[data-testid="block-container"] {{
+    background:{t["bg"]} !important;
+}}
+/* ── SCROLLBAR ACCENT ────────────────────────────────────────────── */
+::-webkit-scrollbar-thumb {{ background:{scrollbar_color}; }}
+/* ── SELECT BOX & MULTISELECT ────────────────────────────────────── */
+[data-testid="stSelectbox"] > div,
+[data-testid="stMultiSelect"] > div {{
+    background:{t["card_bg"]} !important;
+    border-color:{t["border"]} !important;
+    color:{t["text"]} !important;
+}}
+</style>
+"""
+
+st.markdown(_theme_css(T), unsafe_allow_html=True)
+
+# Plotly theme helper — inject into every chart call
+def plotly_layout(fig, title="", height=420):
+    """Apply active theme to any plotly figure."""
+    fig.update_layout(
+        title=dict(text=f"<b>{title}</b>", font=dict(size=15, color=T["chart_font"])) if title else {},
+        height=height,
+        plot_bgcolor=T["chart_bg"],
+        paper_bgcolor=T["chart_paper"],
+        font=dict(color=T["chart_font"], size=12),
+        xaxis=dict(showgrid=False, tickfont=dict(color=T["chart_font"])),
+        yaxis=dict(gridcolor=T["chart_grid"], tickfont=dict(color=T["chart_font"])),
+        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=T["chart_font"])),
+        margin=dict(t=50, b=30, l=30, r=30),
+        hoverlabel=dict(bgcolor=T["card_bg"], font_color=T["text"], font_size=13),
+    )
+    return fig
+
+# ==============================================================================
+# HEADER  (rendered after theme injection)
+# ==============================================================================
+st.markdown(f'<h1 class="main-header">💰 FORECAST & INVENTORY CONTROL PRO v7</h1>', unsafe_allow_html=True)
+st.caption(f"🚀 D2C Demand Planner · {T['id'].replace('_',' ').title()} · Updated: {datetime.now().strftime('%d %B %Y %H:%M')}")
 
 # ==============================================================================
 # HELPERS — PERFORMANCE (vectorised, no iterrows)
@@ -637,17 +991,7 @@ with st.sidebar:
     high_cov    = st.slider("High Stock (mo)",     1.0, 6.0, 1.5, 0.1)
 
     st.markdown("---")
-    theme = st.selectbox("🎨 Theme", ["⚪ Light","⬛ Dark"])
-    if theme == "⬛ Dark":
-        st.markdown("""
-        <style>
-          [data-testid="stAppViewContainer"]{background:#1A2035!important;color:#FFF!important;}
-          [data-testid="stSidebar"]{background:#1F283E!important;}
-          h1,h2,h3,p,label,.stMarkdown{color:#FFF!important;}
-          [data-testid="stMetricValue"]{color:#FFF!important;}
-          .stTabs [data-baseweb="tab"]{background:#1F283E!important;color:#A9AFBB!important;}
-          .stTabs [aria-selected="true"]{background:#9C27B0!important;color:white!important;}
-        </style>""", unsafe_allow_html=True)
+    st.caption(f"🎨 Active theme: **{st.session_state.get('theme_name','—')}**  \nChange via selector top-right ↗")
 
 
 # ==============================================================================
@@ -756,17 +1100,19 @@ if monthly_perf:
     mc = ['#EF4444' if v<70 else '#F59E0B' if v<80 else '#10B981' for v in sum_df['Accuracy']]
     fig.add_trace(go.Scatter(x=sum_df['Month_Display'], y=sum_df['Accuracy'],
         name="Accuracy %", mode='lines+markers',
-        line=dict(color='#6366F1',width=3,shape='spline',smoothing=1.3),
+        line=dict(color=T['accent1'],width=3,shape='spline',smoothing=1.3),
         marker=dict(size=14,color=mc,line=dict(width=2,color='white')),
         hovertemplate="<b>%{x}</b><br>Accuracy: <b>%{y:.1f}%</b><extra></extra>"),
         secondary_y=False)
     fig.add_hrect(y0=80,y1=110,fillcolor="rgba(16,185,129,.08)",layer="below",line_width=0)
     fig.update_yaxes(title="Accuracy (%)",range=[40,100],secondary_y=False,
-        gridcolor='rgba(0,0,0,.05)',tickfont=dict(color='#4F46E5',weight='bold'))
+        gridcolor=T['chart_grid'],tickfont=dict(color=T['accent1'],weight='bold'))
     fig.update_yaxes(visible=False, secondary_y=True)
     fig.update_xaxes(showgrid=False, tickfont=dict(weight='bold'))
-    fig.update_layout(height=460,plot_bgcolor='white',paper_bgcolor='white',
-        hovermode='x unified',legend=dict(orientation="h",y=1.02,x=1,xanchor="right"),
+    fig.update_layout(height=460,plot_bgcolor=T['chart_bg'],paper_bgcolor=T['chart_paper'],
+        font=dict(color=T['chart_font']),
+        hovermode='x unified',
+        legend=dict(orientation="h",y=1.02,x=1,xanchor="right",font=dict(color=T['chart_font'])),
         margin=dict(t=60,b=40,l=40,r=40))
     st.plotly_chart(fig, use_container_width=True)
 
@@ -964,7 +1310,8 @@ with tab1:
                 textposition='auto', marker_color=colors))
             fig_b.add_hrect(y0=-10,y1=10,fillcolor="green",opacity=.05,line_width=0)
             fig_b.add_hline(y=0,line_color='black',line_width=2)
-            fig_b.update_layout(height=380, plot_bgcolor='white',
+            fig_b.update_layout(
+        font=dict(color=T['chart_font']),height=380, plot_bgcolor=T['chart_bg'],
                 title="Monthly Bias (+ = Under-forecast, - = Over-forecast)",
                 yaxis_title="Bias %", xaxis_title="Month")
             st.plotly_chart(fig_b, use_container_width=True)
@@ -1027,8 +1374,9 @@ with tab2:
         fig_q.add_hline(y=80, line_dash="dash", line_color="gray")
         fig_q.add_vline(x=brand_df['Forecast_Qty'].median(), line_dash="dash", line_color="gray")
         fig_q.update_traces(textposition='top center')
-        fig_q.update_layout(height=480, xaxis_type="log", yaxis_range=[40,105],
-            plot_bgcolor='white', title="Brand Positioning Matrix")
+        fig_q.update_layout(
+        font=dict(color=T['chart_font']),height=480, xaxis_type="log", yaxis_range=[40,105],
+            plot_bgcolor=T['chart_bg'], title="Brand Positioning Matrix")
         st.plotly_chart(fig_q, use_container_width=True)
 
         # Combo bar + line
@@ -1043,7 +1391,7 @@ with tab2:
         fig_c.update_layout(height=400,
             yaxis=dict(title="Volume",showgrid=False),
             yaxis2=dict(title="Accuracy %",overlaying='y',side='right',range=[0,110],showgrid=True),
-            hovermode="x unified", plot_bgcolor='white',
+            hovermode="x unified", plot_bgcolor=T['chart_bg'],
             legend=dict(orientation="h",y=1.1))
         st.plotly_chart(fig_c, use_container_width=True)
 
@@ -1191,9 +1539,10 @@ with tab4:
                 mode='lines+markers',line=dict(color='#6366F1',width=3,dash='dash'),marker=dict(size=6)))
             fig_t.add_trace(go.Bar(x=hdf['Month'],y=hdf['PO'],name='PO',
                 marker_color='rgba(245,158,11,.4)',marker_line_color='#F59E0B',marker_line_width=1.5))
-            fig_t.update_layout(height=420,hovermode="x unified",plot_bgcolor='white',
+            fig_t.update_layout(
+        font=dict(color=T['chart_font']),height=420,hovermode="x unified",plot_bgcolor=T['chart_bg'],
                 legend=dict(orientation="h",y=1.1),
-                yaxis=dict(title="Units",gridcolor='rgba(0,0,0,.05)'))
+                yaxis=dict(title="Units",gridcolor=T['chart_grid']))
             st.plotly_chart(fig_t, use_container_width=True)
     else:
         st.info("Load sales & monthly performance data first.")
@@ -1231,11 +1580,12 @@ with tab5:
             fig_t.add_trace(go.Scatter(x=trd['Month_Txt'],y=trd['Rofo'],name='Rofo',
                 mode='lines+markers',line=dict(color='#3949AB',width=3,dash='dash')))
             fig_t.add_trace(go.Bar(x=trd['Month_Txt'],y=trd['PO'],name='PO',
-                marker_color='#FFB74D',opacity=.7))
+                marker_color=T['colors'][5],opacity=.7))
             fig_t.add_trace(go.Bar(x=trd['Month_Txt'],y=trd['Sales'],name='Sales',
-                marker_color='#4DB6AC',opacity=.7))
-            fig_t.update_layout(height=420,barmode='group',hovermode='x unified',
-                plot_bgcolor='white',legend=dict(orientation="h",y=1.1))
+                marker_color=T['colors'][2],opacity=.7))
+            fig_t.update_layout(
+        font=dict(color=T['chart_font']),height=420,barmode='group',hovermode='x unified',
+                plot_bgcolor=T['chart_bg'],legend=dict(orientation="h",y=1.1))
             st.plotly_chart(fig_t, use_container_width=True)
 
             # Gap pareto
@@ -1252,18 +1602,20 @@ with tab5:
                 st.markdown("##### 🚀 Top Demand Spikes")
                 top_sp = gap_df[gap_df['Gap']>0].sort_values('Gap',ascending=False).head(10)
                 fig_sp = go.Figure(go.Bar(y=top_sp['Product_Name'].str[:22],x=top_sp['Gap'],
-                    orientation='h',marker_color='#66BB6A',
+                    orientation='h',marker_color=T['colors'][4],
                     text=[f"+{x:,.0f}" for x in top_sp['Gap']],textposition='auto'))
-                fig_sp.update_layout(height=380,plot_bgcolor='white',
+                fig_sp.update_layout(
+        font=dict(color=T['chart_font']),height=380,plot_bgcolor=T['chart_bg'],
                     yaxis=dict(autorange="reversed"),xaxis_title="Extra Units vs Plan")
                 st.plotly_chart(fig_sp, use_container_width=True)
             with g2:
                 st.markdown("##### 🐌 Top Slow Movers")
                 top_dr = gap_df[gap_df['Gap']<0].sort_values('Gap').head(10)
                 fig_dr = go.Figure(go.Bar(y=top_dr['Product_Name'].str[:22],x=top_dr['Gap'],
-                    orientation='h',marker_color='#EF5350',
+                    orientation='h',marker_color=T['colors'][6],
                     text=[f"{x:,.0f}" for x in top_dr['Gap']],textposition='auto'))
-                fig_dr.update_layout(height=380,plot_bgcolor='white',
+                fig_dr.update_layout(
+        font=dict(color=T['chart_font']),height=380,plot_bgcolor=T['chart_bg'],
                     yaxis=dict(autorange="reversed",side='right'),xaxis_title="Missed Units vs Plan")
                 st.plotly_chart(fig_dr, use_container_width=True)
     else:
@@ -1318,9 +1670,10 @@ with tab7:
         # Monthly trend
         monthly_agg = df_e[ecomm_month_cols].sum()
         fig_t = go.Figure()
-        fig_t.add_trace(go.Bar(x=monthly_agg.index, y=monthly_agg.values, marker_color='#818CF8'))
+        fig_t.add_trace(go.Bar(x=monthly_agg.index, y=monthly_agg.values, marker_color=T['accent2']))
         fig_t.add_hline(y=monthly_agg.mean(), line_dash='dash', line_color='#F59E0B', annotation_text='Avg')
-        fig_t.update_layout(height=320,plot_bgcolor='white',hovermode='x unified',
+        fig_t.update_layout(
+        font=dict(color=T['chart_font']),height=320,plot_bgcolor=T['chart_bg'],hovermode='x unified',
             margin=dict(t=20,b=20))
         st.plotly_chart(fig_t, use_container_width=True)
 
@@ -1425,7 +1778,8 @@ with tab8:
             increasing={"marker":{"color":"#6366F1"}},
             decreasing={"marker":{"color":"#F59E0B"}},
             totals={"marker":{"color":"#10B981"}}))
-        fig_w.update_layout(height=380, showlegend=False, plot_bgcolor='white')
+        fig_w.update_layout(
+        font=dict(color=T['chart_font']),height=380, showlegend=False, plot_bgcolor=T['chart_bg'])
         st.plotly_chart(fig_w, use_container_width=True)
 
         # SKU matrix
@@ -1439,7 +1793,8 @@ with tab8:
             title="SKU Profitability Matrix (Revenue vs Margin %)")
         fig_sc.add_hline(y=sku_g['Margin_Pct'].mean(), line_dash='dash', line_color='gray')
         fig_sc.add_vline(x=sku_g['Revenue'].mean(),    line_dash='dash', line_color='gray')
-        fig_sc.update_layout(height=480, plot_bgcolor='white', xaxis_type='log')
+        fig_sc.update_layout(
+        font=dict(color=T['chart_font']),height=480, plot_bgcolor=T['chart_bg'], xaxis_type='log')
         st.plotly_chart(fig_sc, use_container_width=True)
 
         # Pareto
@@ -1448,13 +1803,13 @@ with tab8:
         p30['Cum_Pct'] = p30['Gross_Margin'].cumsum() / tm * 100
         fig_p = go.Figure()
         fig_p.add_trace(go.Bar(x=p30['Product_Name'].str[:18], y=p30['Gross_Margin'],
-            marker_color='#10B981', name='Margin'))
+            marker_color=T['colors'][4], name='Margin'))
         fig_p.add_trace(go.Scatter(x=p30['Product_Name'].str[:18], y=p30['Cum_Pct'],
             yaxis='y2', name='Cum %', line=dict(color='#F59E0B',width=2)))
         fig_p.add_hline(y=80,line_dash='dash',line_color='gray',annotation_text='80%',yref='y2')
         fig_p.update_layout(height=420,
             yaxis2=dict(overlaying='y',side='right',range=[0,110],showgrid=False),
-            xaxis_tickangle=-45, hovermode='x unified', plot_bgcolor='white')
+            xaxis_tickangle=-45, hovermode='x unified', plot_bgcolor=T['chart_bg'])
         st.plotly_chart(fig_p, use_container_width=True)
     else:
         st.info("Need Ecomm or Reseller forecast with price data.")
@@ -1528,8 +1883,9 @@ with tab9:
             for col,clr,name in [('Rofo','#667eea','Rofo'),('PO','#FF9800','PO'),('Sales','#4CAF50','Sales')]:
                 fig_rc.add_trace(go.Bar(x=comp['Month_Txt'],y=comp[col],name=name,
                     marker_color=clr, opacity=.75))
-            fig_rc.update_layout(height=380,barmode='group',hovermode='x unified',
-                plot_bgcolor='white', legend=dict(orientation="h",y=1.1))
+            fig_rc.update_layout(
+        font=dict(color=T['chart_font']),height=380,barmode='group',hovermode='x unified',
+                plot_bgcolor=T['chart_bg'], legend=dict(orientation="h",y=1.1))
             st.plotly_chart(fig_rc, use_container_width=True)
 
     with tr2:
@@ -1551,8 +1907,9 @@ with tab9:
             c3.metric("Need Review",    f"{(acc_df['Status']=='Need Review').sum()}")
 
             fig_hist = px.histogram(acc_df, x='Accuracy', nbins=20, title='Accuracy Distribution',
-                color_discrete_sequence=['#667eea'])
-            fig_hist.update_layout(height=300, plot_bgcolor='white')
+                color_discrete_sequence=[T['accent1']])
+            fig_hist.update_layout(
+        font=dict(color=T['chart_font']),height=300, plot_bgcolor=T['chart_bg'])
             st.plotly_chart(fig_hist, use_container_width=True)
             st.dataframe(acc_df.sort_values('Accuracy').reset_index(), use_container_width=True, height=380)
         else:
@@ -1586,8 +1943,9 @@ with tab9:
             if rev_rows:
                 rdf = pd.DataFrame(rev_rows).sort_values('Month_Date')
                 fig_rev = go.Figure(go.Bar(x=rdf['Label'],y=rdf['Rev'],
-                    marker_color='#4CAF50',text=[fmt_money(v) for v in rdf['Rev']],textposition='auto'))
-                fig_rev.update_layout(height=380,plot_bgcolor='white',
+                    marker_color=T['colors'][4],text=[fmt_money(v) for v in rdf['Rev']],textposition='auto'))
+                fig_rev.update_layout(
+        font=dict(color=T['chart_font']),height=380,plot_bgcolor=T['chart_bg'],
                     title="Reseller Monthly Revenue Projection",xaxis_title="Month",yaxis_title="Revenue (Rp)")
                 st.plotly_chart(fig_rev, use_container_width=True)
         else:
@@ -1638,7 +1996,7 @@ with tab10:
         fig_ue.update_layout(height=400,
             yaxis=dict(title="Basket Size (Rp)",showgrid=False),
             yaxis2=dict(title="CPO (Rp)",overlaying='y',side='right',showgrid=True),
-            hovermode='x unified',legend=dict(orientation="h",y=1.1),plot_bgcolor='white',
+            hovermode='x unified',legend=dict(orientation="h",y=1.1),plot_bgcolor=T['chart_bg'],
             title="Unit Economics: Basket Size vs Cost Per Order")
         st.plotly_chart(fig_ue, use_container_width=True)
 
@@ -1648,13 +2006,13 @@ with tab10:
         with cv1:
             fig_vc = go.Figure()
             fig_vc.add_trace(go.Bar(x=df_b['Month'],y=df_b['Total Order(BS)'],
-                name='Orders',marker_color='#3B82F6',opacity=.6))
+                name='Orders',marker_color=T['accent1'],opacity=.6))
             fig_vc.add_trace(go.Scatter(x=df_b['Month'],y=df_b['Total Cost'],
                 name='Total Cost',yaxis='y2',line=dict(color='#F97316',width=3)))
             fig_vc.update_layout(height=360,
                 yaxis=dict(title="Orders",showgrid=False),
                 yaxis2=dict(title="Cost (Rp)",overlaying='y',side='right'),
-                plot_bgcolor='white', title="Volume vs Cost")
+                plot_bgcolor=T['chart_bg'], title="Volume vs Cost")
             st.plotly_chart(fig_vc, use_container_width=True)
         with cv2:
             fig_cr = go.Figure(go.Scatter(x=df_b['Month'],y=df_b['%Cost'],
@@ -1663,7 +2021,8 @@ with tab10:
             avg_c = df_b['%Cost'].mean()
             fig_cr.add_hline(y=avg_c, line_dash='dash', line_color='gray',
                 annotation_text=f"Avg {avg_c:.1f}%")
-            fig_cr.update_layout(height=360,plot_bgcolor='white',
+            fig_cr.update_layout(
+        font=dict(color=T['chart_font']),height=360,plot_bgcolor=T['chart_bg'],
                 title="% Cost Ratio Trend",yaxis_title="% Cost")
             st.plotly_chart(fig_cr, use_container_width=True)
 
@@ -1672,11 +2031,12 @@ with tab10:
         df_b['GMV Non-BS'] = df_b['GMV Total (MP)'] - df_b['GMV (Fullfil By BS)']
         fig_ms = go.Figure()
         fig_ms.add_trace(go.Bar(x=df_b['Month'],y=df_b['GMV (Fullfil By BS)'],
-            name='Fulfilled by BS',marker_color='#6366F1'))
+            name='Fulfilled by BS',marker_color=T['accent1']))
         fig_ms.add_trace(go.Bar(x=df_b['Month'],y=df_b['GMV Non-BS'],
-            name='Non-BS',marker_color='#E5E7EB'))
-        fig_ms.update_layout(barmode='stack',height=360,
-            plot_bgcolor='white',title="GMV Market Share")
+            name='Non-BS',marker_color=T['border']))
+        fig_ms.update_layout(
+        font=dict(color=T['chart_font']),barmode='stack',height=360,
+            plot_bgcolor=T['chart_bg'],title="GMV Market Share")
         st.plotly_chart(fig_ms, use_container_width=True)
 
         # Detail + DOWNLOAD (was missing before)
@@ -1705,7 +2065,7 @@ with tab11:
 
         # Heatmap of monthly sales per year
         fig_yoy = go.Figure()
-        colors_yoy = ['#667eea','#10B981','#F59E0B','#EF4444','#9C27B0']
+        colors_yoy = T['colors']
         for i,yr in enumerate(years):
             fig_yoy.add_trace(go.Bar(
                 x=df_yoy['Month'] if 'Month' in df_yoy.columns else df_yoy.index,
@@ -1718,8 +2078,9 @@ with tab11:
                 name="YoY Growth %", yaxis='y2',
                 mode='lines+markers',
                 line=dict(color='#374151',width=2,dash='dot')))
-        fig_yoy.update_layout(height=440, barmode='group', hovermode='x unified',
-            plot_bgcolor='white',
+        fig_yoy.update_layout(
+        font=dict(color=T['chart_font']),height=440, barmode='group', hovermode='x unified',
+            plot_bgcolor=T['chart_bg'],
             yaxis2=dict(title="YoY Growth %",overlaying='y',side='right',showgrid=False),
             legend=dict(orientation="h",y=1.1))
         st.plotly_chart(fig_yoy, use_container_width=True)
@@ -1757,7 +2118,8 @@ with tab11:
                 color_discrete_map={'Ecommerce':'#667eea','Reseller':'#10B981'})
             fig_ch.add_hline(y=80, line_dash='dash', line_color='gray',
                 annotation_text='Target 80%')
-            fig_ch.update_layout(height=380, plot_bgcolor='white',
+            fig_ch.update_layout(
+        font=dict(color=T['chart_font']),height=380, plot_bgcolor=T['chart_bg'],
                 yaxis=dict(range=[40,105]), hovermode='x unified',
                 legend=dict(orientation="h",y=1.1))
             st.plotly_chart(fig_ch, use_container_width=True)
