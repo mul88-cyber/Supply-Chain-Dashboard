@@ -1333,11 +1333,11 @@ with tab0:
     else:
         _rev = _cogs = _gm = _gm_pct = 0
 
-    if 'inventory_df' in inventory_metrics:
-        _inv_df = inventory_metrics['inventory_df']
+    if 'inventory_df' in inv_metrics:
+        _inv_df = inv_metrics['inventory_df']
         _critical_ct = len(_inv_df[_inv_df['Inventory_Status'] == 'Need Replenishment'])
         _overstock_ct = len(_inv_df[_inv_df['Inventory_Status'] == 'High Stock'])
-        _avg_cov = _inv_df['Coverage_Months'].mean() if 'Coverage_Months' in _inv_df.columns else 0
+        _avg_cov = _inv_df['Cover_Months'].mean() if 'Cover_Months' in _inv_df.columns else 0
     else:
         _critical_ct = _overstock_ct = 0; _avg_cov = 0
 
@@ -1455,7 +1455,7 @@ with tab0:
             ), row=1, col=1)
 
             # Bar — inventory status
-            if 'inventory_df' in inventory_metrics:
+            if 'inventory_df' in inv_metrics:
                 _inv_counts = _inv_df['Inventory_Status'].value_counts().reset_index()
                 _inv_counts.columns = ['Status', 'Count']
                 _clr_map = {
