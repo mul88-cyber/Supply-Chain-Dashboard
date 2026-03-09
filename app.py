@@ -614,6 +614,8 @@ def load_all_data(_client):
                                           'Stock_Category':'Stock_Category','Expiry_Date':'Expiry_Date'})
             df_st['Stock_Qty'] = pd.to_numeric(df_st['Stock_Qty'], errors='coerce').fillna(0)
             df_st['SKU_ID']    = df_st['SKU_ID'].astype(str).str.strip()
+            # ── Filter to active regular SKUs only (exclude gimmick/non-sell) ──
+            df_st = df_st[df_st['SKU_ID'].isin(active_skus)]
             D['stock'] = df_st
         else:
             D['stock'] = pd.DataFrame(columns=['SKU_ID','Stock_Qty'])
