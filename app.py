@@ -1232,9 +1232,10 @@ st.divider()
 # ==============================================================================
 #  ███████  MAIN TABS
 # ==============================================================================
-(tab1, tab2, tab3, tab4, tab5,
+(tab0, tab1, tab2, tab3, tab4, tab5,
  tab6, tab7, tab8, tab9, tab10,
  tab11) = st.tabs([
+    "🏠 Executive Overview",   # NEW — compact KPI dashboard
     "📅 Monthly Details",
     "🏷️ Brand & Tier",
     "📦 Inventory",
@@ -1245,8 +1246,426 @@ st.divider()
     "💰 Profitability",
     "🤝 Reseller",
     "🚚 Fulfillment Cost",
-    "📊 YoY & Channel",   # NEW
+    "📊 YoY & Channel",
 ])
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 0 — EXECUTIVE OVERVIEW  (compact KPI command centre)
+# ─────────────────────────────────────────────────────────────────────────────
+with tab0:
+    # ── CSS for exec overview ─────────────────────────────────────────────
+    st.markdown(f"""
+    <style>
+    .eo-section-title{{
+        font-size:.7rem;font-weight:800;text-transform:uppercase;
+        letter-spacing:2px;color:{T['text_muted']};
+        margin:1.2rem 0 .5rem;border-bottom:1px solid {T['border']};
+        padding-bottom:.3rem;
+    }}
+    .kpi-card{{
+        background:{T['card_bg']};
+        border:1px solid {T['border']};
+        border-radius:12px;padding:1rem 1.2rem;
+        box-shadow:{T['card_shadow']};
+        transition:transform .2s ease;
+        position:relative;overflow:hidden;
+    }}
+    .kpi-card:hover{{transform:translateY(-3px);}}
+    .kpi-card::after{{
+        content:"";position:absolute;top:0;left:0;right:0;height:3px;
+        background:{T['tab_active']};border-radius:3px 3px 0 0;
+    }}
+    .kpi-label{{font-size:.68rem;font-weight:700;text-transform:uppercase;
+                letter-spacing:1.2px;color:{T['text_muted']};margin-bottom:.25rem;}}
+    .kpi-value{{font-size:1.7rem;font-weight:900;color:{T['accent1']};
+                line-height:1;margin-bottom:.2rem;}}
+    .kpi-sub{{font-size:.75rem;color:{T['text_muted']};font-weight:500;}}
+    .kpi-up{{color:#10B981;font-weight:700;}}
+    .kpi-down{{color:#EF4444;font-weight:700;}}
+    .kpi-neutral{{color:{T['text_muted']};font-weight:700;}}
+    .alert-strip{{
+        background:{T['card_bg']};border:1px solid {T['border']};
+        border-radius:10px;padding:.6rem 1rem;
+        display:flex;align-items:center;gap:.6rem;
+        font-size:.82rem;font-weight:600;color:{T['text']};
+        box-shadow:{T['card_shadow']};
+    }}
+    @media(max-width:768px){{
+        .kpi-value{{font-size:1.3rem!important;}}
+        .kpi-label{{font-size:.62rem!important;}}
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # timestamp
+    st.caption(f"🕒 Last updated: {datetime.now().strftime('%d %B %Y · %H:%M')}  ·  Theme: **{st.session_state.get('theme_name','—')}**")
+
+    # ── ROW 1 — KPI CARDS ─────────────────────────────────────────────────
+    st.markdown('<div class="eo-section-title">📊 Key Performance Indicators</div>', unsafe_allow_html=True)
+
+    # Gather KPIs
+    _active_skus  = len(df_product_active) if not df_product_active.empty else 0
+    _total_stock  = int(df_stock['Stock_Qty'].sum()) if not df_stock.empty else 0
+
+    if monthly_perf:
+        _sorted_months = sorted(monthly_perf.keys())
+        _lm   = _sorted_months[-1]
+        _prev = _sorted_months[-2] if len(_sorted_months) > 1 else None
+        _acc  = monthly_perf[_lm]['accuracy']
+        _acc_delta = (_acc - monthly_perf[_prev]['accuracy']) if _prev else 0
+        _mape = monthly_perf[_lm]['mape']
+        _under_ct = monthly_perf[_lm]['status_counts'].get('Under', 0)
+        _over_ct  = monthly_perf[_lm]['status_counts'].get('Over', 0)
+        _acc_ok   = monthly_perf[_lm]['status_counts'].get('Accurate', 0)
+        _total_ct = monthly_perf[_lm]['total_records']
+        _acc_lbl  = _lm.strftime('%b %Y')
+    else:
+        _acc = _acc_delta = _mape = 0; _under_ct = _over_ct = _acc_ok = _total_ct = 0; _acc_lbl = "—"
+
+    if not df_financial.empty:
+        _rev   = df_financial['Revenue'].sum()
+        _cogs  = df_financial['COGS'].sum() if 'COGS' in df_financial.columns else 0
+        _gm    = df_financial['Gross_Margin'].sum() if 'Gross_Margin' in df_financial.columns else 0
+        _gm_pct= (_gm / _rev * 100) if _rev > 0 else 0
+    else:
+        _rev = _cogs = _gm = _gm_pct = 0
+
+    if 'inventory_df' in inventory_metrics:
+        _inv_df = inventory_metrics['inventory_df']
+        _critical_ct = len(_inv_df[_inv_df['Inventory_Status'] == 'Need Replenishment'])
+        _overstock_ct = len(_inv_df[_inv_df['Inventory_Status'] == 'High Stock'])
+        _avg_cov = _inv_df['Coverage_Months'].mean() if 'Coverage_Months' in _inv_df.columns else 0
+    else:
+        _critical_ct = _overstock_ct = 0; _avg_cov = 0
+
+    def _delta_html(val, suffix="%", inverse=False):
+        if val == 0: return f'<span class="kpi-neutral">→ ±0{suffix}</span>'
+        good = val > 0 if not inverse else val < 0
+        cls  = "kpi-up" if good else "kpi-down"
+        arrow = "▲" if val > 0 else "▼"
+        return f'<span class="{cls}">{arrow} {abs(val):.1f}{suffix}</span>'
+
+    def _kpi(label, value, sub="", delta_html=""):
+        return f"""
+        <div class="kpi-card">
+          <div class="kpi-label">{label}</div>
+          <div class="kpi-value">{value}</div>
+          <div class="kpi-sub">{sub} {delta_html}</div>
+        </div>"""
+
+    # Row 1 — 5 KPIs
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1:
+        st.markdown(_kpi("Forecast Accuracy", f"{_acc:.1f}%", _acc_lbl,
+                         _delta_html(_acc_delta)), unsafe_allow_html=True)
+    with k2:
+        st.markdown(_kpi("MAPE", f"{_mape:.1f}%", "Mean Abs % Error",
+                         _delta_html(-_mape, "%", inverse=True)), unsafe_allow_html=True)
+    with k3:
+        st.markdown(_kpi("Revenue (Total)", fmt_money(_rev), "All periods"), unsafe_allow_html=True)
+    with k4:
+        st.markdown(_kpi("Gross Margin", f"{_gm_pct:.1f}%", fmt_money(_gm)), unsafe_allow_html=True)
+    with k5:
+        st.markdown(_kpi("Active SKUs", f"{_active_skus:,}", "In product master"), unsafe_allow_html=True)
+
+    # Row 2 — 5 more KPIs
+    k6, k7, k8, k9, k10 = st.columns(5)
+    with k6:
+        st.markdown(_kpi("Total Stock (units)", f"{_total_stock:,}", "Current on-hand"), unsafe_allow_html=True)
+    with k7:
+        st.markdown(_kpi("Avg Coverage", f"{_avg_cov:.1f} mo", "Months of supply"), unsafe_allow_html=True)
+    with k8:
+        _crit_cls = "kpi-down" if _critical_ct > 0 else "kpi-up"
+        st.markdown(_kpi("⚠️ Critical Stock",
+                         f'<span style="color:{"#EF4444" if _critical_ct>0 else "#10B981"}">{_critical_ct}</span>',
+                         "Need replenishment"), unsafe_allow_html=True)
+    with k9:
+        st.markdown(_kpi("📦 Overstock", f"{_overstock_ct}", "High inventory SKUs"), unsafe_allow_html=True)
+    with k10:
+        _acc_rate = (_acc_ok / _total_ct * 100) if _total_ct else 0
+        st.markdown(_kpi("Accurate SKUs", f"{_acc_ok}", f"{_acc_rate:.0f}% of {_total_ct}"), unsafe_allow_html=True)
+
+    # ── ROW 2 — ALERTS STRIP ──────────────────────────────────────────────
+    if alerts:
+        st.markdown('<div class="eo-section-title">🔔 Live Alerts</div>', unsafe_allow_html=True)
+        crit_alerts = [a for a in alerts if a['level'] == 'critical'][:4]
+        warn_alerts = [a for a in alerts if a['level'] == 'warning'][:3]
+        show_alerts = (crit_alerts + warn_alerts)[:6]
+        _acols = st.columns(len(show_alerts)) if show_alerts else []
+        for i, a in enumerate(show_alerts):
+            bg = "#DC2626" if a['level'] == 'critical' else "#D97706"
+            with _acols[i]:
+                st.markdown(f'<div class="alert-strip" style="border-left:3px solid {bg};">'
+                            f'{a["icon"]} {a["msg"]}</div>', unsafe_allow_html=True)
+
+    # ── ROW 3 — CHARTS (3-column grid) ───────────────────────────────────
+    st.markdown('<div class="eo-section-title">📈 Performance at a Glance</div>', unsafe_allow_html=True)
+    ch_left, ch_mid, ch_right = st.columns([1.2, 1.2, 0.9])
+
+    # Chart 1 — Accuracy trend (left)
+    with ch_left:
+        if monthly_perf and len(sum_df) > 0:
+            mc_bar = [T['colors'][6] if v < 70 else T['colors'][5] if v < 80 else T['colors'][4]
+                      for v in sum_df['Accuracy']]
+            fig_acc = go.Figure()
+            fig_acc.add_trace(go.Bar(
+                x=sum_df['Month_Display'], y=sum_df['Accuracy'],
+                marker_color=mc_bar, name='Accuracy %',
+                text=[f"{v:.0f}%" for v in sum_df['Accuracy']],
+                textposition='outside', textfont=dict(size=9, color=T['chart_font'])
+            ))
+            fig_acc.add_hline(y=80, line_dash='dot', line_color=T['accent2'],
+                              annotation_text='Target 80%',
+                              annotation_font=dict(color=T['chart_font'], size=10))
+            fig_acc.update_layout(
+                font=dict(color=T['chart_font']),
+                title=dict(text="<b>Forecast Accuracy Trend</b>", font=dict(size=13, color=T['chart_font'])),
+                height=280, plot_bgcolor=T['chart_bg'], paper_bgcolor=T['chart_paper'],
+                margin=dict(t=45, b=30, l=30, r=15),
+                yaxis=dict(range=[0, 115], gridcolor=T['chart_grid'],
+                           tickfont=dict(color=T['chart_font'], size=10)),
+                xaxis=dict(showgrid=False, tickfont=dict(color=T['chart_font'], size=9),
+                           tickangle=-30),
+                showlegend=False,
+                hoverlabel=dict(bgcolor=T['card_bg'], font_color=T['text'])
+            )
+            st.plotly_chart(fig_acc, use_container_width=True)
+        else:
+            st.info("No accuracy data")
+
+    # Chart 2 — SKU Status donut + Inventory breakdown (mid)
+    with ch_mid:
+        if monthly_perf and _total_ct > 0:
+            fig_donut = make_subplots(
+                rows=1, cols=2,
+                specs=[[{"type":"pie"},{"type":"bar"}]],
+                subplot_titles=["SKU Status", "Inventory Health"]
+            )
+            # Donut — accuracy breakdown
+            fig_donut.add_trace(go.Pie(
+                labels=['✅ Accurate', '📉 Under', '📈 Over'],
+                values=[_acc_ok, _under_ct, _over_ct],
+                hole=.55,
+                marker_colors=[T['colors'][4], T['colors'][6], T['colors'][5]],
+                textfont=dict(size=9, color=T['chart_font']),
+                hovertemplate="<b>%{label}</b><br>%{value} SKUs (%{percent})<extra></extra>"
+            ), row=1, col=1)
+
+            # Bar — inventory status
+            if 'inventory_df' in inventory_metrics:
+                _inv_counts = _inv_df['Inventory_Status'].value_counts().reset_index()
+                _inv_counts.columns = ['Status', 'Count']
+                _clr_map = {
+                    'Normal':       T['colors'][4],
+                    'High Stock':   T['colors'][5],
+                    'Need Replenishment': T['colors'][6],
+                    'Out of Stock': '#DC2626',
+                }
+                fig_donut.add_trace(go.Bar(
+                    x=_inv_counts['Status'],
+                    y=_inv_counts['Count'],
+                    marker_color=[_clr_map.get(s, T['accent1']) for s in _inv_counts['Status']],
+                    text=_inv_counts['Count'],
+                    textposition='outside',
+                    textfont=dict(size=9, color=T['chart_font'])
+                ), row=1, col=2)
+
+            fig_donut.update_layout(
+                font=dict(color=T['chart_font']),
+                title=dict(text="<b>SKU Status Mix</b>", font=dict(size=13, color=T['chart_font'])),
+                height=280, plot_bgcolor=T['chart_bg'], paper_bgcolor=T['chart_paper'],
+                margin=dict(t=45, b=30, l=10, r=10),
+                showlegend=False,
+                hoverlabel=dict(bgcolor=T['card_bg'], font_color=T['text'])
+            )
+            fig_donut.update_annotations(font=dict(size=10, color=T['chart_font']))
+            fig_donut.update_xaxes(showgrid=False, tickfont=dict(size=8, color=T['chart_font']))
+            fig_donut.update_yaxes(showgrid=False, visible=False)
+            st.plotly_chart(fig_donut, use_container_width=True)
+        else:
+            st.info("No status data")
+
+    # Chart 3 — Revenue gauge / profitability (right)
+    with ch_right:
+        if not df_financial.empty and _rev > 0:
+            # Gauge — gross margin %
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=_gm_pct,
+                delta={'reference': 30, 'relative': False,
+                       'increasing': {'color': '#10B981'},
+                       'decreasing': {'color': '#EF4444'}},
+                number={'suffix': '%', 'font': {'size': 30, 'color': T['accent1']}},
+                title={'text': "<b>Gross Margin %</b>",
+                       'font': {'size': 13, 'color': T['chart_font']}},
+                gauge={
+                    'axis': {'range': [0, 60],
+                             'tickcolor': T['chart_font'],
+                             'tickfont': {'size': 9, 'color': T['chart_font']}},
+                    'bar': {'color': T['accent1'], 'thickness': .28},
+                    'bgcolor': T['chart_bg'],
+                    'bordercolor': T['border'],
+                    'steps': [
+                        {'range': [0, 20],  'color': '#3F1212'},
+                        {'range': [20, 35], 'color': '#3F2D0A'},
+                        {'range': [35, 60], 'color': '#0A3F1C'},
+                    ],
+                    'threshold': {
+                        'line': {'color': T['accent2'], 'width': 3},
+                        'thickness': .85, 'value': 30
+                    }
+                }
+            ))
+            fig_gauge.update_layout(
+                font=dict(color=T['chart_font']),
+                height=280, paper_bgcolor=T['chart_paper'],
+                margin=dict(t=50, b=10, l=20, r=20)
+            )
+            st.plotly_chart(fig_gauge, use_container_width=True)
+        elif _total_stock > 0:
+            # Fallback — stock coverage gauge
+            fig_gauge2 = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=_avg_cov,
+                number={'suffix': ' mo', 'font': {'size': 30, 'color': T['accent1']}},
+                title={'text': "<b>Avg Stock Coverage</b>",
+                       'font': {'size': 13, 'color': T['chart_font']}},
+                gauge={
+                    'axis': {'range': [0, 4], 'tickfont': {'size': 9, 'color': T['chart_font']}},
+                    'bar': {'color': T['accent1'], 'thickness': .28},
+                    'bgcolor': T['chart_bg'],
+                    'bordercolor': T['border'],
+                    'steps': [
+                        {'range': [0, 0.8],  'color': '#3F1212'},
+                        {'range': [0.8, 1.5],'color': '#0A3F1C'},
+                        {'range': [1.5, 4],  'color': '#3F2D0A'},
+                    ],
+                    'threshold': {
+                        'line': {'color': T['accent2'], 'width': 3},
+                        'thickness': .85, 'value': 1.5
+                    }
+                }
+            ))
+            fig_gauge2.update_layout(
+                font=dict(color=T['chart_font']),
+                height=280, paper_bgcolor=T['chart_paper'],
+                margin=dict(t=50, b=10, l=20, r=20)
+            )
+            st.plotly_chart(fig_gauge2, use_container_width=True)
+        else:
+            st.info("No financial/stock data")
+
+    # ── ROW 4 — BOTTOM CHARTS (2-column) ─────────────────────────────────
+    st.markdown('<div class="eo-section-title">📦 Inventory & Forecast Detail</div>', unsafe_allow_html=True)
+    b_left, b_right = st.columns(2)
+
+    # Chart 4 — Top 10 SKUs by stock (bar, horizontal)
+    with b_left:
+        if not df_stock.empty and not df_product.empty:
+            _top_stock = df_stock.groupby('SKU_ID')['Stock_Qty'].sum().reset_index()
+            _top_stock = _top_stock.merge(
+                df_product[['SKU_ID','Product_Name']].drop_duplicates(), on='SKU_ID', how='left')
+            _top_stock['Label'] = _top_stock['Product_Name'].fillna(_top_stock['SKU_ID'])
+            _top_stock['Label'] = _top_stock['Label'].str[:22]
+            _top_stock = _top_stock.nlargest(10, 'Stock_Qty').sort_values('Stock_Qty')
+            _bar_colors = [T['colors'][i % len(T['colors'])] for i in range(len(_top_stock))]
+            fig_top = go.Figure(go.Bar(
+                x=_top_stock['Stock_Qty'], y=_top_stock['Label'],
+                orientation='h',
+                marker=dict(color=_bar_colors,
+                            line=dict(color='rgba(255,255,255,0.1)', width=0.5)),
+                text=[f"{v:,.0f}" for v in _top_stock['Stock_Qty']],
+                textposition='outside',
+                textfont=dict(size=9, color=T['chart_font'])
+            ))
+            fig_top.update_layout(
+                font=dict(color=T['chart_font']),
+                title=dict(text="<b>Top 10 SKUs by Stock</b>",
+                           font=dict(size=13, color=T['chart_font'])),
+                height=310, plot_bgcolor=T['chart_bg'], paper_bgcolor=T['chart_paper'],
+                margin=dict(t=45, b=20, l=10, r=60),
+                xaxis=dict(showgrid=True, gridcolor=T['chart_grid'],
+                           tickfont=dict(size=9, color=T['chart_font'])),
+                yaxis=dict(showgrid=False, tickfont=dict(size=9, color=T['chart_font'])),
+                hoverlabel=dict(bgcolor=T['card_bg'], font_color=T['text'])
+            )
+            st.plotly_chart(fig_top, use_container_width=True)
+        else:
+            st.info("No stock data")
+
+    # Chart 5 — Under/Accurate/Over trend (stacked area)
+    with b_right:
+        if monthly_perf and len(sum_df) >= 2:
+            fig_area = go.Figure()
+            fig_area.add_trace(go.Scatter(
+                x=sum_df['Month_Display'], y=sum_df['Under'],
+                name='Under', fill='tozeroy', mode='lines',
+                line=dict(color=T['colors'][6], width=2),
+                fillcolor=f"rgba({int(T['colors'][6][1:3],16)},"
+                          f"{int(T['colors'][6][3:5],16)},"
+                          f"{int(T['colors'][6][5:7],16)},0.3)",
+                hovertemplate="<b>Under</b>: %{y}<extra></extra>"
+            ))
+            fig_area.add_trace(go.Scatter(
+                x=sum_df['Month_Display'], y=sum_df['Accurate'],
+                name='Accurate', fill='tozeroy', mode='lines',
+                line=dict(color=T['colors'][4], width=2),
+                fillcolor=f"rgba({int(T['colors'][4][1:3],16)},"
+                          f"{int(T['colors'][4][3:5],16)},"
+                          f"{int(T['colors'][4][5:7],16)},0.25)",
+                hovertemplate="<b>Accurate</b>: %{y}<extra></extra>"
+            ))
+            fig_area.add_trace(go.Scatter(
+                x=sum_df['Month_Display'], y=sum_df['Over'],
+                name='Over', fill='tozeroy', mode='lines',
+                line=dict(color=T['colors'][5], width=2),
+                fillcolor=f"rgba({int(T['colors'][5][1:3],16)},"
+                          f"{int(T['colors'][5][3:5],16)},"
+                          f"{int(T['colors'][5][5:7],16)},0.25)",
+                hovertemplate="<b>Over</b>: %{y}<extra></extra>"
+            ))
+            fig_area.update_layout(
+                font=dict(color=T['chart_font']),
+                title=dict(text="<b>SKU Count Trend by Forecast Status</b>",
+                           font=dict(size=13, color=T['chart_font'])),
+                height=310, plot_bgcolor=T['chart_bg'], paper_bgcolor=T['chart_paper'],
+                margin=dict(t=45, b=20, l=30, r=15),
+                hovermode='x unified',
+                legend=dict(orientation="h", y=1.12, x=0.5, xanchor='center',
+                            font=dict(size=10, color=T['chart_font'])),
+                xaxis=dict(showgrid=False,
+                           tickfont=dict(size=9, color=T['chart_font']), tickangle=-30),
+                yaxis=dict(gridcolor=T['chart_grid'],
+                           tickfont=dict(size=9, color=T['chart_font'])),
+                hoverlabel=dict(bgcolor=T['card_bg'], font_color=T['text'])
+            )
+            st.plotly_chart(fig_area, use_container_width=True)
+        else:
+            st.info("Need 2+ months for trend")
+
+    # ── BOTTOM SUMMARY TABLE ──────────────────────────────────────────────
+    st.markdown('<div class="eo-section-title">📋 Monthly Snapshot</div>', unsafe_allow_html=True)
+    if monthly_perf:
+        _snap_rows = []
+        for _m, _d in sorted(monthly_perf.items(), reverse=True)[:6]:
+            _sc = _d['status_counts']
+            _tot = _d['total_records']
+            _snap_rows.append({
+                'Month':    _m.strftime('%b %Y'),
+                'Accuracy': f"{_d['accuracy']:.1f}%",
+                'MAPE':     f"{_d['mape']:.1f}%",
+                'Accurate': f"{_sc.get('Accurate',0)} ({_sc.get('Accurate',0)/_tot*100 if _tot else 0:.0f}%)",
+                'Under':    f"{_sc.get('Under',0)}",
+                'Over':     f"{_sc.get('Over',0)}",
+                'Status':   ('🟢 GOOD' if _d['accuracy'] >= 80 else
+                             '🟡 FAIR' if _d['accuracy'] >= 70 else '🔴 POOR'),
+            })
+        st.dataframe(pd.DataFrame(_snap_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No monthly data available.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
