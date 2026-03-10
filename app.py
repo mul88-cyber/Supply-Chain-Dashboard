@@ -4131,7 +4131,7 @@ with tab5:
         st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
 
 
-# --- TAB 7: ECOMMERCE FORECAST INTELLIGENCE (COMPLETE WITH QUARTERLY & EXPLORER) ---
+# --- TAB 6: ECOMMERCE FORECAST INTELLIGENCE (COMPLETE WITH QUARTERLY & EXPLORER) ---
 with tab6:
     st.subheader("🔮 Ecommerce Forecast Intelligence")
     st.caption("Future Planning: Seasonality Analysis, Quarterly Strategy, Scenario Testing & Data Explorer")
@@ -4460,7 +4460,7 @@ with tab6:
     else:
         st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
 
-# --- TAB 8: PROFITABILITY & MARGIN ANALYSIS (WITH TIER ANALYSIS) ---
+# --- TAB 7: PROFITABILITY & MARGIN ANALYSIS (WITH TIER ANALYSIS) ---
 with tab7:
     st.subheader("💰 Profitability & Margin Intelligence")
     st.caption("Financial Projection 2026: Revenue, Cost of Goods Sold (COGS), and Gross Margin Analysis")
@@ -4755,7 +4755,7 @@ with tab7:
     else:
         st.info("ℹ️ Tidak ada data forecast Ecommerce atau Reseller untuk dianalisis.")
 
-# --- TAB 9: RESELLER PERFORMANCE DASHBOARD ---
+# --- TAB 8: RESELLER PERFORMANCE DASHBOARD ---
 with tab8:
     st.subheader("🤝 Reseller Performance Dashboard")
     st.markdown("**Comprehensive Reseller Analytics: Forecast Accuracy, Sales Performance & Inventory Planning**")
@@ -5514,7 +5514,7 @@ with tab8:
                     key="dl_po"
                 )
 
-# --- TAB 10: FULFILLMENT COST ANALYSIS (UNIT ECONOMICS) ---
+# --- TAB 9: FULFILLMENT COST ANALYSIS (UNIT ECONOMICS) ---
 with tab9:
     st.subheader("🚚 Fulfillment Cost Intelligence")
     st.caption("Operational Efficiency: Cost per Order (CPO), Contribution, and Unit Economics Analysis")
