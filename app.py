@@ -2827,14 +2827,10 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
     
-            # --- 3. DIVERGING BAR CHART (Visualisasi Bias) ---
+            # --- 3. DIVERGING BAR CHART (Visualisasi Bias PREMIUM) ---
             st.write("") # Spacer
             
             # Prepare colors based on severity
-            # Hijau: -10% s/d 10% (Aman)
-            # Kuning: -20% s/d -10% ATAU 10% s/d 20% (Warning)
-            # Merah: < -20% ATAU > 20% (Critical)
-            
             colors = []
             for val in forecast_bias['Avg_Bias_Percentage']:
                 if abs(val) <= 10:
@@ -2851,21 +2847,42 @@ with tab1:
                 y=forecast_bias['Avg_Bias_Percentage'],
                 text=[f"{x:+.1f}%" for x in forecast_bias['Avg_Bias_Percentage']],
                 textposition='auto',
+                textfont=dict(color='white', weight='bold'), # Text lebih tebal
                 marker_color=colors,
-                name='Bias %'
+                name='Bias %',
+                hovertemplate='<b>%{x}</b><br>Bias: %{y:+.1f}%<extra></extra>'
             ))
     
             # Add Reference Lines (Zones)
-            fig_bias.add_hrect(y0=-10, y1=10, fillcolor="green", opacity=0.05, line_width=0, annotation_text="Safe Zone", annotation_position="top left")
-            fig_bias.add_hrect(y0=-20, y1=20, line_dash="dot", line_color="gray", fillcolor="yellow", opacity=0.05, line_width=1, annotation_text="Warning Limit")
+            fig_bias.add_hrect(y0=-10, y1=10, fillcolor="green", opacity=0.05, line_width=0, annotation_text="🟢 SAFE ZONE (±10%)", annotation_position="top left", annotation_font_color="green")
+            fig_bias.add_hrect(y0=-20, y1=-10, fillcolor="yellow", opacity=0.05, line_width=0)
+            fig_bias.add_hrect(y0=10, y1=20, fillcolor="yellow", opacity=0.05, line_width=0)
+            
+            # Tambahkan Anotasi Penjelasan Langsung di Chart (Ini yang bikin Pro!)
+            max_bias = max(forecast_bias['Avg_Bias_Percentage'].max(), 25)
+            min_bias = min(forecast_bias['Avg_Bias_Percentage'].min(), -25)
+            
+            fig_bias.add_annotation(
+                x=0.02, y=0.95, xref="paper", yref="paper",
+                text="⬆️ UNDER FORECAST<br><span style='font-size:10px'>(Risiko Stockout / Lost Sales)</span>",
+                showarrow=False, font=dict(color="#ef5350", size=12, weight="bold"), align="left"
+            )
+            fig_bias.add_annotation(
+                x=0.02, y=0.05, xref="paper", yref="paper",
+                text="⬇️ OVER FORECAST<br><span style='font-size:10px'>(Risiko Dead Stock / Overstock)</span>",
+                showarrow=False, font=dict(color="#ef5350", size=12, weight="bold"), align="left"
+            )
     
             fig_bias.update_layout(
-                title="<b>📉 Monthly Forecast Bias Trend</b> (Positive = Under Forecast, Negative = Over Forecast)",
+                title="<b>📉 Monthly Forecast Bias Trend & Health Diagnostics</b>",
                 yaxis_title="Bias Percentage (%)",
                 xaxis_title="Period",
-                height=400,
+                height=450,
                 hovermode="x unified",
-                yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'), # Garis nol dipertegas
+                yaxis=dict(
+                    zeroline=True, zerolinewidth=3, zerolinecolor='rgba(0,0,0,0.5)', # Garis nol lebih tegas
+                    range=[min_bias*1.2, max_bias*1.2] # Memberi ruang untuk anotasi
+                ), 
                 plot_bgcolor='white',
                 margin=dict(t=50, b=20, l=20, r=20)
             )
