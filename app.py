@@ -3503,22 +3503,25 @@ with tab3:
             st.caption(f"Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs")
 
         # ==============================================================================
-        # 3.5 ACTIONABLE INVENTORY ALERTS (KHUSUS SKU REGULAR)
+        # 3.5 ACTIONABLE INVENTORY ALERTS (ACTIVE & REGULAR SKU ONLY)
         # ==============================================================================
         st.divider()
-        st.subheader("🚨 Actionable Inventory Alerts (SKU Regular Only)")
-        st.caption("Daftar *SKU Regular* yang membutuhkan tindakan operasional segera berdasarkan rata-rata sales 3 bulan terakhir.")
+        st.subheader("🚨 Actionable Inventory Alerts (Active & Regular SKU Only)")
+        st.caption("Daftar *SKU Regular* berstatus **Active** yang membutuhkan tindakan operasional segera berdasarkan sales 3 bulan terakhir.")
         
-        # Ekstrak list SKU yang hanya berstatus 'SKU Regular'
-        regular_skus = df_batch[df_batch['Stock_Category'].str.contains('Regular', case=False, na=False)]['SKU_ID'].unique()
+        # Ekstrak list SKU yang HANYA berstatus 'SKU Regular' DAN 'Active'
+        active_regular_skus = df_batch[
+            (df_batch['Stock_Category'].str.contains('Regular', case=False, na=False)) &
+            (df_batch['Status'].str.upper() == 'ACTIVE')
+        ]['SKU_ID'].unique()
         
         if 'high_stock' in inventory_metrics and 'low_stock' in inventory_metrics:
             df_low = inventory_metrics['low_stock'].copy()
             df_high = inventory_metrics['high_stock'].copy()
             
-            # Terapkan Filter
-            df_low = df_low[df_low['SKU_ID'].isin(regular_skus)]
-            df_high = df_high[df_high['SKU_ID'].isin(regular_skus)]
+            # Terapkan Filter Lapis Ganda
+            df_low = df_low[df_low['SKU_ID'].isin(active_regular_skus)]
+            df_high = df_high[df_high['SKU_ID'].isin(active_regular_skus)]
             
             cols_to_show = ['SKU_ID', 'Product_Name', 'Stock_Qty', 'Avg_Monthly_Sales_3M', 'Cover_Months']
             
