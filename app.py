@@ -3699,14 +3699,10 @@ with tab4:
     st.subheader("🔍 SKU 360° Deep Dive Analysis")
     st.caption("Micro-level analysis for individual Product Performance, Health, and Financials")
 
-    # ==============================================================================
-    # 1. SKU SELECTOR (ALL ACTIVE SKUS) & DATA PREP
-    # ==============================================================================
     if not df_product_active.empty:
         # Siapkan list SEMUA SKU Active untuk dropdown
         available_skus = df_product_active.apply(lambda x: f"{x['SKU_ID']} - {x['Product_Name']}", axis=1).tolist()
         
-        # UI Selectbox
         col_sel1, col_sel2 = st.columns([2, 1])
         with col_sel1:
             selected_sku_display = st.selectbox(
@@ -3717,14 +3713,14 @@ with tab4:
         if selected_sku_display:
             selected_sku = selected_sku_display.split(" - ")[0]
             
-            # --- GET PRODUCT MASTER INFO ---
+            # --- 1. GET PRODUCT MASTER INFO ---
             sku_master = df_product_active[df_product_active['SKU_ID'] == selected_sku].iloc[0]
             product_name = sku_master.get('Product_Name', 'Unknown')
             brand = sku_master.get('Brand', 'Unknown')
             tier = sku_master.get('SKU_Tier', 'Standard')
             price = sku_master.get('Floor_Price', 0)
             
-            # --- GET INVENTORY INFO ---
+            # --- 2. GET INVENTORY INFO ---
             stock_qty = 0
             avg_sales_3m = 0
             cover_months = 0
@@ -3735,19 +3731,27 @@ with tab4:
                     avg_sales_3m = inv_row.iloc[0].get('Avg_Monthly_Sales_3M', 0)
                     cover_months = inv_row.iloc[0].get('Cover_Months', 0)
             
-            # --- GET LAST MONTH FORECAST INFO ---
-            last_po_vs_rofo = 0
+            # --- 3. GET LAST MONTH FORECAST INFO (SAFE EVALUATION) ---
             last_month_name = "N/A"
+            acc_val = "N/A"
             if monthly_performance:
                 last_month = sorted(monthly_performance.keys())[-1]
-                last_month_name = last_month.strftime('%b %Y')
+                last_month_name = last_month.strftime('%b')
                 lm_data = monthly_performance[last_month]['data']
                 sku_lm = lm_data[lm_data['SKU_ID'] == selected_sku]
                 
-                if not sku_lm.empty and sku_lm.iloc[0]['Forecast_Qty'] > 0:
-                    last_po_vs_rofo = (sku_lm.iloc[0]['PO_Qty'] / sku_lm.iloc[0]['Forecast_Qty']) * 100
-                    
-            # --- GET FINANCIAL INFO (YTD) ---
+                if not sku_lm.empty:
+                    fcst_q = sku_lm.iloc[0]['Forecast_Qty']
+                    po_q = sku_lm.iloc[0]['PO_Qty']
+                    if fcst_q > 0:
+                        acc = (po_q / fcst_q * 100)
+                        acc_val = f"{acc:.1f}%"
+                    elif po_q > 0:
+                        acc_val = "Over (No Plan)"
+                    else:
+                        acc_val = "0%"
+
+            # --- 4. GET FINANCIAL INFO (YTD) ---
             ytd_revenue = 0
             ytd_margin_pct = 0
             if not df_financial.empty:
@@ -3758,15 +3762,11 @@ with tab4:
                     ytd_margin_pct = (ytd_gross / ytd_revenue * 100) if ytd_revenue > 0 else 0
 
             # ==============================================================================
-            # 2. SKU PROFILE HEADER (PRO LEVEL WITH FINANCIALS)
+            # 5. SKU PROFILE HEADER (HTML/CSS)
             # ==============================================================================
             st.markdown("""
             <style>
-                .sku-header {
-                    background-color: white; border-radius: 12px; padding: 1.5rem;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 6px solid #6366F1;
-                    margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
-                }
+                .sku-header { background-color: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 6px solid #6366F1; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
                 .sku-title-box { flex: 2; min-width: 300px; }
                 .sku-title { font-size: 1.4rem; font-weight: 800; color: #1F2937; margin-bottom: 0.5rem; }
                 .sku-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
@@ -3781,7 +3781,7 @@ with tab4:
             </style>
             """, unsafe_allow_html=True)
             
-            # Smart money formatter
+            # Format Uang Cerdas
             rev_display = f"Rp {ytd_revenue/1e6:,.1f} Jt" if ytd_revenue >= 1e6 else f"Rp {ytd_revenue:,.0f}"
             if ytd_revenue >= 1e9: rev_display = f"Rp {ytd_revenue/1e9:,.2f} M"
 
@@ -3803,31 +3803,13 @@ with tab4:
             </div>
             """, unsafe_allow_html=True)
 
-            product_name = sku_details.get('Product_Name', 'Unknown')
-            brand = sku_details.get('Brand', 'Unknown')
-            tier = sku_details.get('SKU_Tier', 'Standard')
-            price = sku_details.get('Floor_Price', 0)
-            
-            st.markdown(f"""
-            <div class="sku-header">
-                <div class="sku-title">{product_name} <span style="font-weight:400; font-size:1rem; color:#6B7280;">({selected_sku})</span></div>
-                <div class="sku-badges">
-                    <span class="badge badge-blue">🏷️ {brand}</span>
-                    <span class="badge badge-purple">💎 {tier} Tier</span>
-                    <span class="badge badge-gray" style="margin-left:auto;">Floor Price: <span class="price-tag">Rp {price:,.0f}</span></span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
             # ==============================================================================
-            # 3. KEY METRICS GRID (Pastel Gradient Cards)
+            # 6. KEY METRICS GRID (Pastel Gradient Cards)
             # ==============================================================================
-            # Prepare Colors based on Logic
-            cover_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)" # Green (Ideal)
-            if cover_months < 0.8: cover_color = "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)" # Red
-            elif cover_months > 1.5: cover_color = "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" # Orange
+            cover_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)"
+            if cover_months < 0.8: cover_color = "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)"
+            elif cover_months > 1.5: cover_color = "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"
 
-            # Helper for Card
             def render_sku_card(label, val, sub, bg):
                 return f"""
                 <div style="background: {bg}; border-radius: 12px; padding: 1.2rem; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
@@ -3838,37 +3820,20 @@ with tab4:
                 """
 
             k1, k2, k3, k4 = st.columns(4)
-            
-            with k1:
-                st.markdown(render_sku_card("Current Stock", f"{stock_qty:,.0f}", "Units Available", 
-                    "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)"), unsafe_allow_html=True) # Indigo
-            with k2:
-                st.markdown(render_sku_card("Stock Cover", f"{cover_months:.1f} Mo", "Inventory Health", 
-                    cover_color), unsafe_allow_html=True) # Dynamic
-            with k3:
-                st.markdown(render_sku_card("Avg Sales (3M)", f"{avg_sales_3m:,.0f}", "Monthly Velocity", 
-                    "linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)"), unsafe_allow_html=True) # Sky Blue
-            with k4:
-                # Calculate Accuracy if data exists
-                acc_val = "N/A"
-                if sku_details['Forecast_Qty'] > 0:
-                    acc = (sku_details['PO_Qty'] / sku_details['Forecast_Qty'] * 100)
-                    acc_val = f"{acc:.1f}%"
-                
-                st.markdown(render_sku_card("PO vs Rofo", acc_val, f"Last Month: {last_month.strftime('%b')}", 
-                    "linear-gradient(135deg, #EC4899 0%, #DB2777 100%)"), unsafe_allow_html=True) # Pink
+            with k1: st.markdown(render_sku_card("Current Stock", f"{stock_qty:,.0f}", "Units Available", "linear-gradient(135deg, #6366F1 0%, #4338CA 100%)"), unsafe_allow_html=True)
+            with k2: st.markdown(render_sku_card("Stock Cover", f"{cover_months:.1f} Mo", "Inventory Health", cover_color), unsafe_allow_html=True)
+            with k3: st.markdown(render_sku_card("Avg Sales (3M)", f"{avg_sales_3m:,.0f}", "Monthly Velocity", "linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)"), unsafe_allow_html=True)
+            with k4: st.markdown(render_sku_card("PO vs Rofo", acc_val, f"Last Month: {last_month_name}", "linear-gradient(135deg, #EC4899 0%, #DB2777 100%)"), unsafe_allow_html=True)
 
             # ==============================================================================
-            # 4. SUPPLY CHAIN PULSE CHART (Combo Chart)
+            # 7. SUPPLY CHAIN PULSE CHART
             # ==============================================================================
             st.write("")
             st.subheader("📈 Supply Chain Pulse (Trend Analysis)")
             
-            # Prepare Historical Data
             hist_data = []
             if not df_sales.empty:
                 sales_months = sorted(df_sales['Month'].unique())
-                # Last 12 months
                 target_months = sales_months[-12:] if len(sales_months) >= 12 else sales_months
                 
                 for m in target_months:
@@ -3877,96 +3842,43 @@ with tab4:
                     p_qty = df_po[(df_po['Month'] == m) & (df_po['SKU_ID'] == selected_sku)]['PO_Qty'].sum() if not df_po.empty else 0
                     
                     hist_data.append({
-                        'Month': m,
-                        'Month_Txt': m.strftime('%b-%y'),
-                        'Sales': s_qty,
-                        'Forecast': f_qty,
-                        'PO': p_qty
+                        'Month': m, 'Month_Txt': m.strftime('%b-%y'),
+                        'Sales': s_qty, 'Forecast': f_qty, 'PO': p_qty
                     })
             
             if hist_data:
                 df_hist = pd.DataFrame(hist_data)
-                
                 fig = go.Figure()
-
-                # Area: Sales (Realization)
-                fig.add_trace(go.Scatter(
-                    x=df_hist['Month_Txt'], y=df_hist['Sales'],
-                    name='Sales (Real)',
-                    mode='lines',
-                    fill='tozeroy',
-                    line=dict(color='#10B981', width=3), # Emerald Green
-                    fillcolor='rgba(16, 185, 129, 0.1)'
-                ))
-
-                # Line: Forecast (Plan)
-                fig.add_trace(go.Scatter(
-                    x=df_hist['Month_Txt'], y=df_hist['Forecast'],
-                    name='Forecast (Plan)',
-                    mode='lines+markers',
-                    line=dict(color='#6366F1', width=3, dash='dash'), # Indigo Dashed
-                    marker=dict(size=6, color='#6366F1')
-                ))
-
-                # Bar: PO (Execution)
-                fig.add_trace(go.Bar(
-                    x=df_hist['Month_Txt'], y=df_hist['PO'],
-                    name='PO (Order)',
-                    marker_color='rgba(245, 158, 11, 0.4)', # Orange Transparent
-                    marker_line_color='#F59E0B',
-                    marker_line_width=1.5
-                ))
-
-                fig.update_layout(
-                    height=450,
-                    title=dict(text="<b>Plan vs Execution vs Reality</b>", font=dict(size=16)),
-                    hovermode="x unified",
-                    plot_bgcolor="white",
-                    legend=dict(orientation="h", y=1.1),
-                    xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.05)', title="Units"),
-                    margin=dict(t=50, l=20, r=20, b=20)
-                )
-                
+                fig.add_trace(go.Scatter(x=df_hist['Month_Txt'], y=df_hist['Sales'], name='Sales (Real)', mode='lines', fill='tozeroy', line=dict(color='#10B981', width=3), fillcolor='rgba(16, 185, 129, 0.1)'))
+                fig.add_trace(go.Scatter(x=df_hist['Month_Txt'], y=df_hist['Forecast'], name='Forecast (Plan)', mode='lines+markers', line=dict(color='#6366F1', width=3, dash='dash'), marker=dict(size=6, color='#6366F1')))
+                fig.add_trace(go.Bar(x=df_hist['Month_Txt'], y=df_hist['PO'], name='PO (Order)', marker_color='rgba(245, 158, 11, 0.4)', marker_line_color='#F59E0B', marker_line_width=1.5))
+                fig.update_layout(height=450, hovermode="x unified", plot_bgcolor="white", legend=dict(orientation="h", y=1.1), yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.05)', title="Units"), margin=dict(t=50, l=20, r=20, b=20))
                 st.plotly_chart(fig, use_container_width=True)
 
             # ==============================================================================
-            # 5. SMART DIAGNOSTICS & RECOMMENDATION
+            # 8. SMART DIAGNOSTICS & QUICK STATS
             # ==============================================================================
             st.write("")
             c_diag1, c_diag2 = st.columns([1.5, 1])
 
             with c_diag1:
                 st.subheader("🩺 Smart Diagnostics")
-                
-                # Logic Diagnosa
                 diagnoses = []
-                
-                # Cek Stock Cover
-                if cover_months < 0.8:
-                    diagnoses.append(("🔴", "High Stockout Risk", f"Stock cover is only {cover_months:.1f} months. Urgent replenishment needed."))
-                elif cover_months > 2.0:
-                    diagnoses.append(("🟡", "Overstock Alert", f"Stock cover is {cover_months:.1f} months. Consider holding PO or running promo."))
-                else:
-                    diagnoses.append(("🟢", "Healthy Inventory", "Stock levels are optimal (0.8 - 2.0 months)."))
+                if cover_months < 0.8: diagnoses.append(("🔴", "High Stockout Risk", f"Stock cover is only {cover_months:.1f} months. Urgent replenishment needed."))
+                elif cover_months > 2.0: diagnoses.append(("🟡", "Overstock Alert", f"Stock cover is {cover_months:.1f} months. Consider holding PO or running promo."))
+                else: diagnoses.append(("🟢", "Healthy Inventory", "Stock levels are optimal (0.8 - 2.0 months)."))
 
-                # Cek Tren Sales (Growth)
                 if len(df_hist) >= 3:
                     last_3_sales = df_hist['Sales'].tail(3).mean()
                     prev_3_sales = df_hist['Sales'].iloc[-6:-3].mean() if len(df_hist) >= 6 else last_3_sales
-                    
                     if prev_3_sales > 0:
                         growth = (last_3_sales - prev_3_sales) / prev_3_sales * 100
-                        if growth > 20:
-                            diagnoses.append(("🚀", "Surging Demand", f"Sales trend is up +{growth:.1f}% vs prev period. Adjust forecast up."))
-                        elif growth < -20:
-                            diagnoses.append(("📉", "Declining Sales", f"Sales trend is down {growth:.1f}%. Review forecast down."))
+                        if growth > 20: diagnoses.append(("🚀", "Surging Demand", f"Sales trend is up +{growth:.1f}% vs prev period. Adjust forecast up."))
+                        elif growth < -20: diagnoses.append(("📉", "Declining Sales", f"Sales trend is down {growth:.1f}%. Review forecast down."))
 
-                # Render Diagnosa
                 for icon, title, desc in diagnoses:
                     bg_col = "#F0FDF4" if icon == "🟢" else "#FEF2F2" if icon == "🔴" else "#FFFBEB"
                     border_col = "#22C55E" if icon == "🟢" else "#EF4444" if icon == "🔴" else "#F59E0B"
-                    
                     st.markdown(f"""
                     <div style="background:{bg_col}; border-left:4px solid {border_col}; padding:12px; border-radius:8px; margin-bottom:10px;">
                         <div style="font-weight:700; color:#374151; display:flex; align-items:center; gap:8px;">
@@ -3977,29 +3889,19 @@ with tab4:
                     """, unsafe_allow_html=True)
 
             with c_diag2:
-                # Mini Stats Table
                 st.subheader("📋 Quick Stats")
-                
-                # Data Variance
                 last_fcst = df_hist.iloc[-1]['Forecast'] if hist_data else 0
                 last_po = df_hist.iloc[-1]['PO'] if hist_data else 0
                 last_sales = df_hist.iloc[-1]['Sales'] if hist_data else 0
-                
                 stats_data = {
                     "Metric": ["Forecast (Last Mo)", "PO (Last Mo)", "Sales (Last Mo)", "Bias (Last Mo)"],
-                    "Value": [
-                        f"{last_fcst:,.0f}", 
-                        f"{last_po:,.0f}", 
-                        f"{last_sales:,.0f}",
-                        f"{last_po - last_fcst:+,.0f}"
-                    ]
+                    "Value": [f"{last_fcst:,.0f}", f"{last_po:,.0f}", f"{last_sales:,.0f}", f"{last_po - last_fcst:+,.0f}"]
                 }
                 st.table(pd.DataFrame(stats_data))
 
     else:
         st.info("👋 Please ensure Sales and Monthly Performance data are loaded to view SKU insights.")
 
-# --- TAB 5: SALES & FORECAST ANALYSIS (EASY TO UNDERSTAND VERSION) ---
 # --- TAB 5: SALES & FORECAST ANALYSIS (EASY TO UNDERSTAND VERSION) ---
 with tab5:
     st.subheader("📈 Realization & Gap Analysis")
