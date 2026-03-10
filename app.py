@@ -1554,37 +1554,52 @@ with st.sidebar:
     st.caption("Tip: Pilih Destination **'Save as PDF'** & centang **'Background graphics'** di settings print.")
     # ----------------------------------
 
-    # --- 🔒 SECURITY (PIN PROTECTION) ---
+    # --- 🔒 SECURITY (SESSION STATE PIN PROTECTION) ---
     st.markdown("---")
     st.markdown("### 🔒 Data Security")
     
-    # Input PIN dengan format password (bintang-bintang)
-    admin_pin = st.text_input("Enter Admin PIN to Unmask:", type="password", help="Hanya untuk presentasi internal.")
-    
-    # Logika Penguncian
-    mask_financials = True # Default SELALU TERSENSOR
-    
-    if admin_pin == "FOOM2026": # <-- BAPAK BISA GANTI PIN INI SESUKANYA
-        mask_financials = False
-        st.success("🔓 Akses Terbuka (Admin Mode)")
-    elif admin_pin != "":
-        st.error("❌ PIN Salah. Akses Ditolak.")
+    # Inisialisasi state kunci di memori Streamlit
+    if "unlocked" not in st.session_state:
+        st.session_state.unlocked = False
 
-    # FUNGSI MASTER FORMAT RUPIAH
+    # Jika masih terkunci, tampilkan kolom PIN
+    if not st.session_state.unlocked:
+        admin_pin = st.text_input("Enter Admin PIN to Unmask:", type="password", help="Hanya untuk presentasi internal.")
+        if admin_pin == "FOOM2026":
+            st.session_state.unlocked = True
+            st.rerun() # Refresh seketika untuk menghilangkan kolom password
+        elif admin_pin != "":
+            st.error("❌ PIN Salah. Akses Ditolak.")
+    else:
+        # Jika sudah terbuka, hilangkan kolom PIN, munculkan tombol Lock
+        st.success("🔓 Mode Terbuka (Admin)")
+        if st.button("🔒 Lock Dashboard", use_container_width=True):
+            st.session_state.unlocked = False
+            st.rerun()
+
+    # FUNGSI MASTER FORMAT RUPIAH (DYNAMIC ASTERISK MASKING)
     def format_rupiah(value):
-        """Format angka menjadi Rupiah. Jika Mask=True, angka akan disensor."""
+        """Format angka menjadi Rupiah. Jika Mask=True, bintang menyesuaikan jumlah digit."""
         if pd.isna(value) or value == 0: return "Rp 0"
         
         abs_val = abs(value)
         sign = "-" if value < 0 else ""
         
-        if mask_financials:
-            # MODE SENSOR
-            if abs_val >= 1_000_000_000: return f"{sign}Rp ***.* M"
-            elif abs_val >= 1_000_000: return f"{sign}Rp ***.* Jt"
-            else: return f"{sign}Rp ***,***"
-        else:
-            # MODE TERBUKA
+        # Helper: Mengubah angka menjadi bintang, tapi membiarkan titik/koma
+        def mask_digits(text_num):
+            return "".join(["*" if char.isdigit() else char for char in text_num])
+        
+        if not st.session_state.unlocked: # JIKA TERKUNCI (SENSOR)
+            if abs_val >= 1_000_000_000: 
+                base_str = f"{abs_val/1e9:,.1f}"
+                return f"{sign}Rp {mask_digits(base_str)} M"
+            elif abs_val >= 1_000_000: 
+                base_str = f"{abs_val/1e6:,.1f}"
+                return f"{sign}Rp {mask_digits(base_str)} Jt"
+            else: 
+                base_str = f"{abs_val:,.0f}"
+                return f"{sign}Rp {mask_digits(base_str)}"
+        else: # JIKA TERBUKA (ASLI)
             if abs_val >= 1_000_000_000: return f"{sign}Rp {abs_val/1e9:,.1f} M"
             elif abs_val >= 1_000_000: return f"{sign}Rp {abs_val/1e6:,.1f} Jt"
             else: return f"{sign}Rp {abs_val:,.0f}"
@@ -4509,16 +4524,13 @@ with tab7:
     # ==============================================================================
     combined_data = []
     
-    # A. Process Ecommerce
     if not df_ecomm_forecast.empty:
-        # Detect numeric columns (months)
         fcst_cols = [c for c in df_ecomm_forecast.columns if any(char.isdigit() for char in str(c))]
         if fcst_cols:
             df_e = df_ecomm_forecast.melt(id_vars=['SKU_ID'], value_vars=fcst_cols, var_name='Month_Label', value_name='Qty')
             df_e['Channel'] = 'Ecommerce'
             combined_data.append(df_e)
 
-    # B. Process Reseller
     if not df_reseller_forecast.empty:
         fcst_cols_res = [c for c in df_reseller_forecast.columns if any(char.isdigit() for char in str(c))]
         if fcst_cols_res:
@@ -4527,19 +4539,15 @@ with tab7:
             combined_data.append(df_r)
 
     if combined_data:
-        # Combine
         df_fin = pd.concat(combined_data, ignore_index=True)
         df_fin['Qty'] = pd.to_numeric(df_fin['Qty'], errors='coerce').fillna(0)
-        df_fin = df_fin[df_fin['Qty'] > 0] # Filter non-zero
+        df_fin = df_fin[df_fin['Qty'] > 0]
 
-        # Merge with Product Master for Prices
-        # Need: Floor_Price (Revenue) and Net_Order_Price (COGS/HPP)
         if not df_product.empty:
             cols_price = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Floor_Price', 'Net_Order_Price']
             existing_cols = [c for c in cols_price if c in df_product.columns]
             df_fin = pd.merge(df_fin, df_product[existing_cols], on='SKU_ID', how='left')
             
-            # Fill NaNs
             if 'Floor_Price' in df_fin.columns: df_fin['Floor_Price'] = pd.to_numeric(df_fin['Floor_Price'], errors='coerce').fillna(0)
             if 'Net_Order_Price' in df_fin.columns: df_fin['Net_Order_Price'] = pd.to_numeric(df_fin['Net_Order_Price'], errors='coerce').fillna(0)
             
@@ -4556,13 +4564,9 @@ with tab7:
             total_margin = df_fin['Gross_Margin'].sum()
             margin_pct = (total_margin / total_rev * 100) if total_rev > 0 else 0
             
-            # CSS
             st.markdown("""
             <style>
-                .fin-card {
-                    border-radius: 12px; padding: 1.2rem; color: white;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s;
-                }
+                .fin-card { border-radius: 12px; padding: 1.2rem; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s; position: relative; overflow: hidden; }
                 .fin-card:hover { transform: translateY(-3px); }
                 .fin-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
                 .fin-val { font-size: 1.5rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
@@ -4572,21 +4576,12 @@ with tab7:
 
             c1, c2, c3, c4 = st.columns(4)
             
-            # Helper Format
-            def fmt_money(x): 
-                if x >= 1e9: return f"Rp {x/1e9:,.1f} M"
-                elif x >= 1e6: return f"Rp {x/1e6:,.1f} Jt"
-                return f"Rp {x:,.0f}"
-
-            with c1:
-                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);"><div class="fin-title">Total Revenue</div><div class="fin-val">{fmt_money(total_rev)}</div><div class="fin-sub">Gross Sales</div></div>""", unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);"><div class="fin-title">Total COGS (HPP)</div><div class="fin-val">{fmt_money(total_cogs)}</div><div class="fin-sub">Cost of Goods</div></div>""", unsafe_allow_html=True)
-            with c3:
-                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);"><div class="fin-title">Gross Margin (Cuan)</div><div class="fin-val">{fmt_money(total_margin)}</div><div class="fin-sub">Net Profit (Gross)</div></div>""", unsafe_allow_html=True)
-            with c4:
-                color_m = "#10B981" if margin_pct > 30 else "#EF4444"
-                st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);"><div class="fin-title">Blended Margin %</div><div class="fin-val">{margin_pct:.1f}%</div><div class="fin-sub">Profitability Ratio</div></div>""", unsafe_allow_html=True)
+            with c1: st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);"><div class="fin-title">Total Revenue</div><div class="fin-val">{format_rupiah(total_rev)}</div><div class="fin-sub">Gross Sales</div></div>""", unsafe_allow_html=True)
+            with c2: st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);"><div class="fin-title">Total COGS (HPP)</div><div class="fin-val">{format_rupiah(total_cogs)}</div><div class="fin-sub">Cost of Goods</div></div>""", unsafe_allow_html=True)
+            with c3: st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);"><div class="fin-title">Gross Margin (Cuan)</div><div class="fin-val">{format_rupiah(total_margin)}</div><div class="fin-sub">Net Profit (Gross)</div></div>""", unsafe_allow_html=True)
+            
+            color_m = "#10B981" if margin_pct > 30 else "#EF4444"
+            with c4: st.markdown(f"""<div class="fin-card" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);"><div class="fin-title">Blended Margin %</div><div class="fin-val">{margin_pct:.1f}%</div><div class="fin-sub">Profitability Ratio</div></div>""", unsafe_allow_html=True)
 
             # ==============================================================================
             # 3. WATERFALL & CHANNEL MIX
@@ -4596,7 +4591,6 @@ with tab7:
             
             with c_water:
                 st.subheader("🌊 Financial Waterfall")
-                # Waterfall Chart
                 fig_water = go.Figure(go.Waterfall(
                     name = "20", orientation = "v",
                     measure = ["relative", "relative", "total"],
@@ -4605,9 +4599,9 @@ with tab7:
                     text = [format_rupiah(total_rev), format_rupiah(-total_cogs), format_rupiah(total_margin)],
                     y = [total_rev, -total_cogs, total_margin],
                     connector = {"line":{"color":"rgb(63, 63, 63)"}},
-                    increasing = {"marker":{"color":"#6366F1"}}, # Revenue
-                    decreasing = {"marker":{"color":"#F59E0B"}}, # Cost
-                    totals = {"marker":{"color":"#10B981"}}      # Margin
+                    increasing = {"marker":{"color":"#6366F1"}},
+                    decreasing = {"marker":{"color":"#F59E0B"}},
+                    totals = {"marker":{"color":"#10B981"}} 
                 ))
                 fig_water.update_layout(height=400, title="Profitability Flow: Revenue to Margin", showlegend=False)
                 st.plotly_chart(fig_water, use_container_width=True)
@@ -4621,27 +4615,19 @@ with tab7:
                 st.plotly_chart(fig_don, use_container_width=True)
 
             # ==============================================================================
-            # 4. PROFITABILITY BY SKU TIER (NEW SECTION)
+            # 4. PROFITABILITY BY SKU TIER
             # ==============================================================================
             if 'SKU_Tier' in df_fin.columns:
                 st.divider()
                 st.subheader("💎 Profitability by SKU Tier")
-                st.caption("Analisis kontribusi profit berdasarkan segmen (Tier). Tier dengan volume besar belum tentu margin % nya besar.")
-
-                # Calculate Tier Metrics
-                tier_fin = df_fin.groupby('SKU_Tier').agg({
-                    'Revenue': 'sum',
-                    'Gross_Margin': 'sum',
-                    'Qty': 'sum'
-                }).reset_index()
                 
+                tier_fin = df_fin.groupby('SKU_Tier').agg({'Revenue': 'sum', 'Gross_Margin': 'sum', 'Qty': 'sum'}).reset_index()
                 tier_fin['Margin_Pct'] = (tier_fin['Gross_Margin'] / tier_fin['Revenue'] * 100).fillna(0)
                 tier_fin = tier_fin.sort_values('Gross_Margin', ascending=False)
 
                 t1, t2 = st.columns(2)
 
                 with t1:
-                    # Bar Chart: Total Gross Margin (Rupiah)
                     fig_tier_val = go.Figure()
                     fig_tier_val.add_trace(go.Bar(
                         y=tier_fin['SKU_Tier'],
@@ -4649,50 +4635,31 @@ with tab7:
                         orientation='h',
                         text=[format_rupiah(x) for x in tier_fin['Gross_Margin']],
                         textposition='auto',
-                        marker_color='#6366F1', # Soft Indigo
+                        marker_color='#6366F1',
                         name='Gross Margin (Rp)'
                     ))
                     fig_tier_val.update_layout(
-                        height=400, 
-                        title="💰 Total Gross Margin Contribution by Tier",
-                        xaxis_title="Gross Margin (Rp)",
-                        yaxis_title="Tier",
-                        plot_bgcolor='white',
-                        yaxis=dict(autorange="reversed") # Tier tertinggi di atas
+                        height=400, title="💰 Total Gross Margin Contribution by Tier",
+                        xaxis_title="Gross Margin (Rp)", yaxis_title="Tier",
+                        plot_bgcolor='white', yaxis=dict(autorange="reversed"),
+                        xaxis=dict(showticklabels=False)
                     )
                     st.plotly_chart(fig_tier_val, use_container_width=True)
 
                 with t2:
-                    # Bar Chart: Margin % (Efisiensi)
-                    # Color logic: Green high margin, Red low margin
-                    colors = []
-                    for val in tier_fin['Margin_Pct']:
-                        if val >= 40: colors.append('#10B981') # Green
-                        elif val >= 20: colors.append('#F59E0B') # Orange
-                        else: colors.append('#EF4444') # Red
-
+                    colors = ['#10B981' if val >= 40 else '#F59E0B' if val >= 20 else '#EF4444' for val in tier_fin['Margin_Pct']]
                     fig_tier_pct = go.Figure()
                     fig_tier_pct.add_trace(go.Bar(
-                        y=tier_fin['SKU_Tier'],
-                        x=tier_fin['Margin_Pct'],
-                        orientation='h',
-                        text=[f"{x:.1f}%" for x in tier_fin['Margin_Pct']],
-                        textposition='auto',
-                        marker_color=colors,
-                        name='Margin %'
+                        y=tier_fin['SKU_Tier'], x=tier_fin['Margin_Pct'],
+                        orientation='h', text=[f"{x:.1f}%" for x in tier_fin['Margin_Pct']],
+                        textposition='auto', marker_color=colors, name='Margin %'
                     ))
-                    
-                    # Add avg line
                     avg_margin_tier = tier_fin['Margin_Pct'].mean()
                     fig_tier_pct.add_vline(x=avg_margin_tier, line_dash="dash", line_color="gray", annotation_text="Avg")
-
                     fig_tier_pct.update_layout(
-                        height=400, 
-                        title="📊 Efficiency: Margin % by Tier",
-                        xaxis_title="Margin %",
-                        yaxis_title="Tier",
-                        plot_bgcolor='white',
-                        yaxis=dict(autorange="reversed")
+                        height=400, title="📊 Efficiency: Margin % by Tier",
+                        xaxis_title="Margin %", yaxis_title="Tier",
+                        plot_bgcolor='white', yaxis=dict(autorange="reversed")
                     )
                     st.plotly_chart(fig_tier_pct, use_container_width=True)
 
@@ -4701,49 +4668,33 @@ with tab7:
             # ==============================================================================
             st.divider()
             st.subheader("🎯 Profitability Matrix (SKU Level)")
-            st.caption("Analisis posisi SKU berdasarkan **Revenue (Volume)** vs **Margin % (Quality)**.")
             
-            # Group by SKU
-            sku_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']).agg({
-                'Revenue': 'sum', 'Gross_Margin': 'sum'
-            }).reset_index()
+            sku_fin = df_fin.groupby(['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']).agg({'Revenue': 'sum', 'Gross_Margin': 'sum'}).reset_index()
             sku_fin['Margin_Pct'] = (sku_fin['Gross_Margin'] / sku_fin['Revenue'] * 100).fillna(0)
             
-            # Scatter Plot
+            # Khusus Scatter, tooltip kita amankan dengan format_rupiah manual
+            sku_fin['Display_Rev'] = sku_fin['Revenue'].apply(format_rupiah)
+            sku_fin['Display_Mar'] = sku_fin['Gross_Margin'].apply(format_rupiah)
+            
             fig_scat = px.scatter(
                 sku_fin, x='Revenue', y='Margin_Pct', size='Gross_Margin', color='Brand',
                 hover_name='Product_Name', 
-                hover_data=['SKU_Tier', 'Gross_Margin'],
-                labels={'Revenue': 'Revenue (Rp)', 'Margin_Pct': 'Margin %'},
-                size_max=50, title="Matrix: Revenue vs Margin % (Size = Total Margin Rp)"
+                hover_data={'Revenue': False, 'Margin_Pct': True, 'Display_Rev': True, 'Display_Mar': True, 'SKU_Tier': True, 'Gross_Margin': False},
+                size_max=50, title="Matrix: Revenue vs Margin %"
             )
             
-            # Add Average Lines
             avg_rev = sku_fin['Revenue'].mean()
             avg_mar = sku_fin['Margin_Pct'].mean()
-            
             fig_scat.add_hline(y=avg_mar, line_dash="dash", line_color="gray", annotation_text="Avg Margin")
             fig_scat.add_vline(x=avg_rev, line_dash="dash", line_color="gray", annotation_text="Avg Revenue")
             
-            # Quadrant Backgrounds
             max_x = sku_fin['Revenue'].max() * 1.1
             max_y = sku_fin['Margin_Pct'].max() * 1.1
-            
-            # High Rev / High Margin (Stars)
             fig_scat.add_shape(type="rect", x0=avg_rev, y0=avg_mar, x1=max_x, y1=max_y, fillcolor="rgba(16, 185, 129, 0.1)", layer="below", line_width=0)
-            # High Rev / Low Margin (Cash Cows)
             fig_scat.add_shape(type="rect", x0=avg_rev, y0=0, x1=max_x, y1=avg_mar, fillcolor="rgba(245, 158, 11, 0.1)", layer="below", line_width=0)
             
-            fig_scat.update_layout(height=500, plot_bgcolor='white', xaxis_type="log") 
+            fig_scat.update_layout(height=500, plot_bgcolor='white', xaxis_type="log", xaxis=dict(showticklabels=not (not st.session_state.unlocked))) 
             st.plotly_chart(fig_scat, use_container_width=True)
-            
-            st.info("""
-            **Cara Baca Matrix:**
-            - 🟩 **Kanan Atas (Stars):** Revenue Tinggi + Margin Tinggi. **Pertahankan Stok!**
-            - 🟨 **Kanan Bawah (Cash Cows):** Revenue Tinggi + Margin Rendah. **Volume Maker**, hati-hati cost.
-            - 🟦 **Kiri Atas (Niche):** Revenue Rendah + Margin Tinggi. **Produk Premium**.
-            - ⬜ **Kiri Bawah (Dogs):** Revenue Rendah + Margin Rendah. **Evaluasi/Discontinue**.
-            """)
 
             # ==============================================================================
             # 6. PARETO CUAN (80/20 RULE)
@@ -4751,24 +4702,21 @@ with tab7:
             st.divider()
             st.subheader("📉 Pareto Cuan: Top Profit Contributors")
             
-            # Sort by Margin desc
             sku_pareto = sku_fin.sort_values('Gross_Margin', ascending=False)
             sku_pareto['Cum_Margin'] = sku_pareto['Gross_Margin'].cumsum()
             sku_pareto['Cum_Pct'] = sku_pareto['Cum_Margin'] / total_margin * 100
             
-            # Visual Pareto
             top_30 = sku_pareto.head(30)
             
             fig_par = go.Figure()
-            fig_par.add_trace(go.Bar(x=top_30['Product_Name'].str[:20], y=top_30['Gross_Margin'], name='Gross Margin', marker_color='#10B981'))
+            fig_par.add_trace(go.Bar(x=top_30['Product_Name'].str[:20], y=top_30['Gross_Margin'], name='Gross Margin', marker_color='#10B981', hovertext=top_30['Display_Mar'], hoverinfo="x+text"))
             fig_par.add_trace(go.Scatter(x=top_30['Product_Name'].str[:20], y=top_30['Cum_Pct'], name='Cumulative %', yaxis='y2', mode='lines+markers', line=dict(color='#F59E0B')))
             
             fig_par.update_layout(
                 height=450, title="Top 30 SKUs by Gross Margin",
-                yaxis=dict(title="Gross Margin (Rp)"),
+                yaxis=dict(title="Gross Margin", showticklabels=not (not st.session_state.unlocked)),
                 yaxis2=dict(title="Cumulative %", overlaying='y', side='right', range=[0, 110], showgrid=False),
-                xaxis=dict(tickangle=-45), hovermode="x unified",
-                plot_bgcolor='white'
+                xaxis=dict(tickangle=-45), hovermode="x unified", plot_bgcolor='white'
             )
             fig_par.add_hline(y=80, line_dash="dash", line_color="gray", annotation_text="80% Threshold", yref="y2")
             st.plotly_chart(fig_par, use_container_width=True)
@@ -4781,7 +4729,7 @@ with tab7:
                 
                 disp_fin['Margin %'] = (disp_fin['Gross_Margin'] / disp_fin['Revenue'] * 100).fillna(0)
                 
-                # Formatting
+                # Gunakan Format Master
                 disp_fin['Revenue'] = disp_fin['Revenue'].apply(format_rupiah)
                 disp_fin['Gross_Margin'] = disp_fin['Gross_Margin'].apply(format_rupiah)
                 disp_fin['Margin %'] = disp_fin['Margin %'].apply(lambda x: f"{x:.1f}%")
@@ -4789,8 +4737,7 @@ with tab7:
                 st.dataframe(disp_fin, use_container_width=True)
 
         else:
-            st.warning("⚠️ Data Harga ('Floor_Price', 'Net_Order_Price') tidak ditemukan di Product Master. Tidak bisa menghitung profitabilitas.")
-            st.info("Pastikan kolom 'Floor_Price' (Harga Jual) dan 'Net_Order_Price' (HPP) ada di file Product Master.")
+            st.warning("⚠️ Data Harga ('Floor_Price', 'Net_Order_Price') tidak ditemukan di Product Master.")
     else:
         st.info("ℹ️ Tidak ada data forecast Ecommerce atau Reseller untuk dianalisis.")
 
