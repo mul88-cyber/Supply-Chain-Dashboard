@@ -2643,11 +2643,11 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📦 Inventory Analysis",
     "🔍 SKU Evaluation",
     "📈 Sales & Forecast Analysis",
-    "📋 Data Explorer",
     "🛒 Ecommerce Forecast",  
     "💰 Profitability Analysis",
     "🤝 Reseller Forecast",
-    "🚚 Fulfillment Cost Analysis" # <-- TAB BARU
+    "🚚 Fulfillment Cost Analysis",
+    "📋 Data Explorer" 
 ])
 
 # --- TAB 1: MONTHLY PERFORMANCE DETAILS (PREMIUM HEATMAP) ---
@@ -4130,66 +4130,9 @@ with tab5:
     else:
         st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
 
-# --- TAB 6: DATA EXPLORER ---
-with tab6:
-    st.subheader("📋 Raw Data Explorer")
-    
-    dataset_options = {
-        "Product Master": df_product,
-        "Active Products": df_product_active,
-        "Sales Data": df_sales,
-        "Forecast Data": df_forecast,
-        "PO Data": df_po,
-        "Stock Data": df_stock,
-        "Financial Data": df_financial,
-        "Inventory Financial": df_inventory_financial
-    }
-    
-    selected_dataset = st.selectbox("Select Dataset", list(dataset_options.keys()))
-    df_selected = dataset_options[selected_dataset]
-    
-    if not df_selected.empty:
-        # Ensure Product_Name is shown alongside SKU_ID if available
-        if 'SKU_ID' in df_selected.columns and 'Product_Name' in df_selected.columns:
-            # Reorder columns to show SKU_ID and Product_Name first
-            cols = list(df_selected.columns)
-            if 'Product_Name' in cols:
-                cols.remove('Product_Name')
-                cols.insert(1, 'Product_Name')
-            df_selected = df_selected[cols]
-        
-        # Data info
-        st.write(f"**Rows:** {df_selected.shape[0]:,} | **Columns:** {df_selected.shape[1]}")
-        
-        # Column selector
-        if st.checkbox("Select Columns", False):
-            all_columns = df_selected.columns.tolist()
-            selected_columns = st.multiselect("Choose columns:", all_columns, default=all_columns[:10])
-            df_display = df_selected[selected_columns]
-        else:
-            df_display = df_selected
-        
-        # Data preview
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            height=500
-        )
-        
-        # Download option
-        csv = df_selected.to_csv(index=False)
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv,
-            file_name=f"{selected_dataset.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    else:
-        st.warning("No data available for selected dataset")
 
 # --- TAB 7: ECOMMERCE FORECAST INTELLIGENCE (COMPLETE WITH QUARTERLY & EXPLORER) ---
-with tab7:
+with tab6:
     st.subheader("🔮 Ecommerce Forecast Intelligence")
     st.caption("Future Planning: Seasonality Analysis, Quarterly Strategy, Scenario Testing & Data Explorer")
 
@@ -4518,7 +4461,7 @@ with tab7:
         st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
 
 # --- TAB 8: PROFITABILITY & MARGIN ANALYSIS (WITH TIER ANALYSIS) ---
-with tab8:
+with tab7:
     st.subheader("💰 Profitability & Margin Intelligence")
     st.caption("Financial Projection 2026: Revenue, Cost of Goods Sold (COGS), and Gross Margin Analysis")
 
@@ -4813,7 +4756,7 @@ with tab8:
         st.info("ℹ️ Tidak ada data forecast Ecommerce atau Reseller untuk dianalisis.")
 
 # --- TAB 9: RESELLER PERFORMANCE DASHBOARD ---
-with tab9:
+with tab8:
     st.subheader("🤝 Reseller Performance Dashboard")
     st.markdown("**Comprehensive Reseller Analytics: Forecast Accuracy, Sales Performance & Inventory Planning**")
     
@@ -5572,7 +5515,7 @@ with tab9:
                 )
 
 # --- TAB 10: FULFILLMENT COST ANALYSIS (UNIT ECONOMICS) ---
-with tab10:
+with tab9:
     st.subheader("🚚 Fulfillment Cost Intelligence")
     st.caption("Operational Efficiency: Cost per Order (CPO), Contribution, and Unit Economics Analysis")
 
@@ -5864,6 +5807,63 @@ with tab10:
 
     else:
         st.warning("⚠️ Data 'BS_Fullfilment_Cost' belum tersedia atau format tidak sesuai.")
+
+# --- TAB 10: DATA EXPLORER (MOVED TO END & SECURED) ---
+with tab10:
+    st.subheader("📋 Raw Data Explorer")
+    st.caption("Akses view-only ke Master Data & Database historis.")
+    
+    dataset_options = {
+        "Product Master": df_product,
+        "Active Products": df_product_active,
+        "Sales Data": df_sales,
+        "Forecast Data": df_forecast,
+        "PO Data": df_po,
+        "Stock Data": df_stock,
+        "Financial Data": df_financial,
+        "Inventory Financial": df_inventory_financial
+    }
+    
+    selected_dataset = st.selectbox("Select Dataset", list(dataset_options.keys()))
+    df_selected = dataset_options[selected_dataset]
+    
+    if not df_selected.empty:
+        # Ensure Product_Name is shown alongside SKU_ID if available
+        if 'SKU_ID' in df_selected.columns and 'Product_Name' in df_selected.columns:
+            # Reorder columns to show SKU_ID and Product_Name first
+            cols = list(df_selected.columns)
+            if 'Product_Name' in cols:
+                cols.remove('Product_Name')
+                cols.insert(1, 'Product_Name')
+            df_selected = df_selected[cols]
+        
+        # Data info
+        st.write(f"**Rows:** {df_selected.shape[0]:,} | **Columns:** {df_selected.shape[1]}")
+        
+        # Column selector
+        if st.checkbox("Select Columns", False):
+            all_columns = df_selected.columns.tolist()
+            selected_columns = st.multiselect("Choose columns:", all_columns, default=all_columns[:10])
+            df_display = df_selected[selected_columns]
+        else:
+            df_display = df_selected
+        
+        # Data preview
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            height=500
+        )
+        
+        # --- DUMMY DOWNLOAD BUTTON (SECURITY LOCK) ---
+        st.divider()
+        if st.button("📥 Download CSV", use_container_width=True, type="secondary"):
+            st.error("🔒 **SECURITY ALERT: RESTRICTED ACCESS**")
+            st.warning("Data extraction & CSV download features are disabled in this environment to protect company confidentiality and raw data integrity. Please request clearance from the S&OP Admin.")
+            st.toast("Access Denied: Enterprise Security Policy.", icon="🚫")
+            
+    else:
+        st.warning("No data available for selected dataset")
 
 # --- FOOTER ---
 st.divider()
