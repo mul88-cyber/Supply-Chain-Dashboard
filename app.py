@@ -3697,74 +3697,110 @@ with tab3:
 # --- TAB 4: SKU EVALUATION (SKU 360 INSIGHT DECK) ---
 with tab4:
     st.subheader("🔍 SKU 360° Deep Dive Analysis")
-    st.caption("Micro-level analysis for individual Product Performance & Health")
+    st.caption("Micro-level analysis for individual Product Performance, Health, and Financials")
 
-    # 1. SKU SELECTOR & DATA PREP
-    if monthly_performance and not df_sales.empty:
-        # Get last month for evaluation
-        last_month = sorted(monthly_performance.keys())[-1]
-        last_month_data = monthly_performance[last_month]['data'].copy()
+    # ==============================================================================
+    # 1. SKU SELECTOR (ALL ACTIVE SKUS) & DATA PREP
+    # ==============================================================================
+    if not df_product_active.empty:
+        # Siapkan list SEMUA SKU Active untuk dropdown
+        available_skus = df_product_active.apply(lambda x: f"{x['SKU_ID']} - {x['Product_Name']}", axis=1).tolist()
         
-        # Prepare list for dropdown
-        available_skus = []
-        if not last_month_data.empty:
-            # Sort by highest forecast volume (Pareto) to show important items first
-            sorted_skus = last_month_data.sort_values('Forecast_Qty', ascending=False)
-            
-            for _, row in sorted_skus.head(200).iterrows(): # Limit 200 for performance
-                sku_label = f"{row['SKU_ID']} - {row.get('Product_Name', 'N/A')}"
-                available_skus.append(sku_label)
-
         # UI Selectbox
         col_sel1, col_sel2 = st.columns([2, 1])
         with col_sel1:
             selected_sku_display = st.selectbox(
-                "📋 Select SKU to Analyze (Top 200 by Volume)", 
-                options=available_skus
+                "📋 Search & Select SKU (All Active Products):", 
+                options=sorted(available_skus)
             )
         
         if selected_sku_display:
             selected_sku = selected_sku_display.split(" - ")[0]
             
-            # Get SKU Details
-            sku_details = last_month_data[last_month_data['SKU_ID'] == selected_sku].iloc[0]
+            # --- GET PRODUCT MASTER INFO ---
+            sku_master = df_product_active[df_product_active['SKU_ID'] == selected_sku].iloc[0]
+            product_name = sku_master.get('Product_Name', 'Unknown')
+            brand = sku_master.get('Brand', 'Unknown')
+            tier = sku_master.get('SKU_Tier', 'Standard')
+            price = sku_master.get('Floor_Price', 0)
             
-            # Add Inventory & Sales Stats
+            # --- GET INVENTORY INFO ---
             stock_qty = 0
             avg_sales_3m = 0
             cover_months = 0
-            
             if 'inventory_df' in inventory_metrics:
                 inv_row = inventory_metrics['inventory_df'][inventory_metrics['inventory_df']['SKU_ID'] == selected_sku]
                 if not inv_row.empty:
                     stock_qty = inv_row.iloc[0]['Stock_Qty']
                     avg_sales_3m = inv_row.iloc[0].get('Avg_Monthly_Sales_3M', 0)
                     cover_months = inv_row.iloc[0].get('Cover_Months', 0)
+            
+            # --- GET LAST MONTH FORECAST INFO ---
+            last_po_vs_rofo = 0
+            last_month_name = "N/A"
+            if monthly_performance:
+                last_month = sorted(monthly_performance.keys())[-1]
+                last_month_name = last_month.strftime('%b %Y')
+                lm_data = monthly_performance[last_month]['data']
+                sku_lm = lm_data[lm_data['SKU_ID'] == selected_sku]
+                
+                if not sku_lm.empty and sku_lm.iloc[0]['Forecast_Qty'] > 0:
+                    last_po_vs_rofo = (sku_lm.iloc[0]['PO_Qty'] / sku_lm.iloc[0]['Forecast_Qty']) * 100
+                    
+            # --- GET FINANCIAL INFO (YTD) ---
+            ytd_revenue = 0
+            ytd_margin_pct = 0
+            if not df_financial.empty:
+                sku_fin = df_financial[df_financial['SKU_ID'] == selected_sku]
+                if not sku_fin.empty:
+                    ytd_revenue = sku_fin['Revenue'].sum()
+                    ytd_gross = sku_fin['Gross_Margin'].sum()
+                    ytd_margin_pct = (ytd_gross / ytd_revenue * 100) if ytd_revenue > 0 else 0
 
             # ==============================================================================
-            # 2. SKU PROFILE HEADER (HTML/CSS)
+            # 2. SKU PROFILE HEADER (PRO LEVEL WITH FINANCIALS)
             # ==============================================================================
             st.markdown("""
             <style>
                 .sku-header {
-                    background-color: white;
-                    border-radius: 12px;
-                    padding: 1.5rem;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-                    border-left: 6px solid #6366F1;
-                    margin-bottom: 1.5rem;
+                    background-color: white; border-radius: 12px; padding: 1.5rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 6px solid #6366F1;
+                    margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
                 }
+                .sku-title-box { flex: 2; min-width: 300px; }
                 .sku-title { font-size: 1.4rem; font-weight: 800; color: #1F2937; margin-bottom: 0.5rem; }
-                .sku-badges { display: flex; gap: 10px; flex-wrap: wrap; }
-                .badge { 
-                    padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; 
-                    display: flex; align-items: center; gap: 5px;
-                }
+                .sku-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+                .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 5px; }
                 .badge-blue { background: #E0E7FF; color: #4338CA; }
                 .badge-purple { background: #F3E8FF; color: #7E22CE; }
                 .badge-gray { background: #F3F4F6; color: #4B5563; }
-                .price-tag { font-size: 1.1rem; font-weight: 700; color: #059669; }
+                .sku-fin-box { flex: 1; text-align: right; min-width: 200px; border-left: 1px solid #E5E7EB; padding-left: 20px; }
+                .fin-label { font-size: 0.8rem; color: #6B7280; font-weight: 600; text-transform: uppercase; }
+                .fin-val-big { font-size: 1.5rem; font-weight: 800; color: #10B981; }
+                .fin-margin { font-size: 0.9rem; font-weight: 700; color: #F59E0B; }
             </style>
+            """, unsafe_allow_html=True)
+            
+            # Smart money formatter
+            rev_display = f"Rp {ytd_revenue/1e6:,.1f} Jt" if ytd_revenue >= 1e6 else f"Rp {ytd_revenue:,.0f}"
+            if ytd_revenue >= 1e9: rev_display = f"Rp {ytd_revenue/1e9:,.2f} M"
+
+            st.markdown(f"""
+            <div class="sku-header">
+                <div class="sku-title-box">
+                    <div class="sku-title">{product_name} <span style="font-weight:400; font-size:1rem; color:#6B7280;">({selected_sku})</span></div>
+                    <div class="sku-badges">
+                        <span class="badge badge-blue">🏷️ {brand}</span>
+                        <span class="badge badge-purple">💎 {tier}</span>
+                        <span class="badge badge-gray">Unit Price: Rp {price:,.0f}</span>
+                    </div>
+                </div>
+                <div class="sku-fin-box">
+                    <div class="fin-label">YTD Revenue Generation</div>
+                    <div class="fin-val-big">{rev_display}</div>
+                    <div class="fin-margin">Avg Margin: {ytd_margin_pct:.1f}%</div>
+                </div>
+            </div>
             """, unsafe_allow_html=True)
 
             product_name = sku_details.get('Product_Name', 'Unknown')
