@@ -1554,6 +1554,41 @@ with st.sidebar:
     st.caption("Tip: Pilih Destination **'Save as PDF'** & centang **'Background graphics'** di settings print.")
     # ----------------------------------
 
+    # --- 🔒 SECURITY (PIN PROTECTION) ---
+    st.markdown("---")
+    st.markdown("### 🔒 Data Security")
+    
+    # Input PIN dengan format password (bintang-bintang)
+    admin_pin = st.text_input("Enter Admin PIN to Unmask:", type="password", help="Hanya untuk presentasi internal.")
+    
+    # Logika Penguncian
+    mask_financials = True # Default SELALU TERSENSOR
+    
+    if admin_pin == "FOOM2026": # <-- BAPAK BISA GANTI PIN INI SESUKANYA
+        mask_financials = False
+        st.success("🔓 Akses Terbuka (Admin Mode)")
+    elif admin_pin != "":
+        st.error("❌ PIN Salah. Akses Ditolak.")
+
+    # FUNGSI MASTER FORMAT RUPIAH
+    def format_rupiah(value):
+        """Format angka menjadi Rupiah. Jika Mask=True, angka akan disensor."""
+        if pd.isna(value) or value == 0: return "Rp 0"
+        
+        abs_val = abs(value)
+        sign = "-" if value < 0 else ""
+        
+        if mask_financials:
+            # MODE SENSOR
+            if abs_val >= 1_000_000_000: return f"{sign}Rp ***.* M"
+            elif abs_val >= 1_000_000: return f"{sign}Rp ***.* Jt"
+            else: return f"{sign}Rp ***,***"
+        else:
+            # MODE TERBUKA
+            if abs_val >= 1_000_000_000: return f"{sign}Rp {abs_val/1e9:,.1f} M"
+            elif abs_val >= 1_000_000: return f"{sign}Rp {abs_val/1e6:,.1f} Jt"
+            else: return f"{sign}Rp {abs_val:,.0f}"
+
     st.markdown("---")
     st.markdown("### 📈 Data Overview")
     
@@ -3391,8 +3426,9 @@ with tab3:
             elif value >= 1_000_000: return f"Rp {value/1e6:,.1f} Jt"
             else: return f"Rp {value:,.0f}"
 
-        val_display = format_currency_smart(total_val)
-        risk_display = format_currency_smart(risk_val)
+        # Gunakan Master Function dari Sidebar
+        val_display = format_rupiah(total_val)
+        risk_display = format_rupiah(risk_val)
 
         # CSS Styles
         st.markdown("""
@@ -3782,8 +3818,7 @@ with tab4:
             """, unsafe_allow_html=True)
             
             # Format Uang Cerdas
-            rev_display = f"Rp {ytd_revenue/1e6:,.1f} Jt" if ytd_revenue >= 1e6 else f"Rp {ytd_revenue:,.0f}"
-            if ytd_revenue >= 1e9: rev_display = f"Rp {ytd_revenue/1e9:,.2f} M"
+            rev_display = format_rupiah(ytd_revenue)
 
             st.markdown(f"""
             <div class="sku-header">
@@ -4082,50 +4117,43 @@ with tab5:
             c_gap1, c_gap2 = st.columns(2)
 
             with c_gap1:
-                st.markdown("##### 🚀 Top Unexpected Demand (Sales > Rofo)")
-                st.caption("Barang ini **LAKU KERAS** melebihi prediksi. Cek stok, awas barang kosong!")
-                
-                fig_spike = go.Figure()
-                fig_spike.add_trace(go.Bar(
-                    y=top_spikes['Product_Name'].str[:20], # Truncate nama biar rapi
-                    x=top_spikes['Gap'],
-                    orientation='h',
-                    marker_color='#66BB6A', # Green
-                    text=[f"+{x:,.0f}" for x in top_spikes['Gap']],
-                    textposition='auto',
-                    name='Extra Sales'
-                ))
-                fig_spike.update_layout(
-                    height=400,
-                    xaxis_title="Extra Units Sold vs Plan",
-                    yaxis=dict(autorange="reversed"), # Urutan dari atas ke bawah
-                    plot_bgcolor='white',
-                    margin=dict(l=10, r=10, t=10, b=10)
-                )
-                st.plotly_chart(fig_spike, use_container_width=True)
-
-            with c_gap2:
-                st.markdown("##### 🐌 Top Slow Moving vs Plan (Sales < Rofo)")
-                st.caption("Barang ini **KURANG LAKU** dibanding prediksi. Cek overstock, perlu promo?")
+                st.markdown("##### 📉 Top Over-Forecasted (Trapped Capital)")
+                st.caption("Barang terjual lebih sedikit dari rencana. Modal tertahan di stok (Dinilai dari COGS/HPP).")
                 
                 fig_drop = go.Figure()
                 fig_drop.add_trace(go.Bar(
-                    y=top_drops['Product_Name'].str[:20],
-                    x=top_drops['Gap'], # Nilai negatif
-                    orientation='h',
-                    marker_color='#EF5350', # Red
-                    text=[f"{x:,.0f}" for x in top_drops['Gap']],
-                    textposition='auto', # inside/outside auto
-                    name='Missed Sales'
+                    y=top_over['Product_Name'].str[:25] + "...", 
+                    x=top_over['Trapped_Capital'], 
+                    orientation='h', marker_color='#EF5350', # Red
+                    text=[format_rupiah(x) for x in top_over['Trapped_Capital']], # <-- UBAH DISINI
+                    textposition='auto', name='Trapped Rp'
                 ))
+                # Hapus format tick eksak di axis agar selaras
                 fig_drop.update_layout(
-                    height=400,
-                    xaxis_title="Missed Units vs Plan",
-                    yaxis=dict(autorange="reversed", side="right"), # Label di kanan biar tidak tabrakan
-                    plot_bgcolor='white',
-                    margin=dict(l=10, r=10, t=10, b=10)
+                    height=400, xaxis_title="Trapped Capital (Rp)",
+                    yaxis=dict(autorange="reversed"), plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(showticklabels=False) # Sembunyikan angka di garis bawah
                 )
                 st.plotly_chart(fig_drop, use_container_width=True)
+
+            with c_gap2:
+                st.markdown("##### 🚀 Top Under-Forecasted (Lost Revenue Risk)")
+                st.caption("Barang laku keras melebihi rencana. Risiko *Stockout* dan potensi *Lost Sales* (Harga Jual).")
+                
+                fig_spike = go.Figure()
+                fig_spike.add_trace(go.Bar(
+                    y=top_under['Product_Name'].str[:25] + "...", 
+                    x=top_under['Lost_Revenue'], 
+                    orientation='h', marker_color='#10B981', # Green
+                    text=[format_rupiah(x) for x in top_under['Lost_Revenue']], # <-- UBAH DISINI
+                    textposition='auto', name='Lost Rev Rp'
+                ))
+                fig_spike.update_layout(
+                    height=400, xaxis_title="Potential Lost Revenue (Rp)",
+                    yaxis=dict(autorange="reversed", side="right"), plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(showticklabels=False) # Sembunyikan angka di garis bawah
+                )
+                st.plotly_chart(fig_spike, use_container_width=True)
 
     else:
         st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
