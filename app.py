@@ -1620,19 +1620,7 @@ with st.sidebar:
         accuracy = monthly_performance[last_month]['accuracy']
         st.metric("Latest Accuracy", f"{accuracy:.1f}%")
     
-    # Financial metrics in sidebar
-    if not df_financial.empty:
-        st.markdown("---")
-        st.markdown("### 💰 Financial Overview")
         
-        total_revenue = df_financial['Revenue'].sum()
-        total_margin = df_financial['Gross_Margin'].sum()
-        avg_margin_pct = (total_margin / total_revenue * 100) if total_revenue > 0 else 0
-        
-        st.metric("Total Revenue", f"Rp {total_revenue:,.0f}")
-        st.metric("Total Margin", f"Rp {total_margin:,.0f}")
-        st.metric("Avg Margin %", f"{avg_margin_pct:.1f}%")
-    
     st.markdown("---")
     
     # Threshold Settings
