@@ -4247,7 +4247,8 @@ with tab6:
             with c1:
                 st.markdown(f"""<div class="fcst-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);"><div class="fcst-title">Total Forecast Volume</div><div class="fcst-val">{total_fcst_qty:,.0f}</div><div class="fcst-sub">Units</div></div>""", unsafe_allow_html=True)
             with c2:
-                val_text = f"Rp {total_fcst_val/1e9:,.1f} M" if has_price else "N/A"
+                # MENGGUNAKAN format_rupiah() dari Sidebar
+                val_text = format_rupiah(total_fcst_val) if has_price else "N/A"
                 st.markdown(f"""<div class="fcst-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);"><div class="fcst-title">Total Forecast Value</div><div class="fcst-val">{val_text}</div><div class="fcst-sub">Gross Revenue</div></div>""", unsafe_allow_html=True)
             with c3:
                 peak_month = df_fcst_active[sorted_fcst_cols].sum().idxmax()
@@ -4591,7 +4592,7 @@ with tab7:
                     measure = ["relative", "relative", "total"],
                     x = ["Total Revenue", "COGS (Cost)", "Gross Margin"],
                     textposition = "outside",
-                    text = [fmt_money(total_rev), fmt_money(-total_cogs), fmt_money(total_margin)],
+                    text = [format_rupiah(total_rev), format_rupiah(-total_cogs), format_rupiah(total_margin)],
                     y = [total_rev, -total_cogs, total_margin],
                     connector = {"line":{"color":"rgb(63, 63, 63)"}},
                     increasing = {"marker":{"color":"#6366F1"}}, # Revenue
@@ -4636,7 +4637,7 @@ with tab7:
                         y=tier_fin['SKU_Tier'],
                         x=tier_fin['Gross_Margin'],
                         orientation='h',
-                        text=[fmt_money(x) for x in tier_fin['Gross_Margin']],
+                        text=[format_rupiah(x) for x in tier_fin['Gross_Margin']],
                         textposition='auto',
                         marker_color='#6366F1', # Soft Indigo
                         name='Gross Margin (Rp)'
@@ -4771,8 +4772,8 @@ with tab7:
                 disp_fin['Margin %'] = (disp_fin['Gross_Margin'] / disp_fin['Revenue'] * 100).fillna(0)
                 
                 # Formatting
-                disp_fin['Revenue'] = disp_fin['Revenue'].apply(lambda x: f"Rp {x:,.0f}")
-                disp_fin['Gross_Margin'] = disp_fin['Gross_Margin'].apply(lambda x: f"Rp {x:,.0f}")
+                disp_fin['Revenue'] = disp_fin['Revenue'].apply(format_rupiah)
+                disp_fin['Gross_Margin'] = disp_fin['Gross_Margin'].apply(format_rupiah)
                 disp_fin['Margin %'] = disp_fin['Margin %'].apply(lambda x: f"{x:.1f}%")
                 
                 st.dataframe(disp_fin, use_container_width=True)
@@ -5202,17 +5203,17 @@ with tab8:
             col_fin1, col_fin2, col_fin3 = st.columns(3)
             
             with col_fin1:
-                st.metric("Total Revenue 2026", f"Rp {total_revenue_2026:,.0f}")
+                st.metric("Total Revenue 2026", format_rupiah(total_revenue_2026))
             
             with col_fin2:
                 avg_monthly_rev = total_revenue_2026 / len(reseller_forecast_cols) if reseller_forecast_cols else 0
-                st.metric("Avg Monthly Revenue", f"Rp {avg_monthly_rev:,.0f}")
+                st.metric("Avg Monthly Revenue", format_rupiah(avg_monthly_rev))
             
             with col_fin3:
                 if monthly_revenue:
                     peak_month = max(monthly_revenue, key=monthly_revenue.get)
                     peak_rev = monthly_revenue.get(peak_month, 0)
-                    st.metric("Peak Revenue Month", f"Rp {peak_rev:,.0f}", delta=peak_month)
+                    st.metric("Peak Revenue Month", format_rupiah(peak_rev), delta=peak_month)
                 else:
                     st.metric("Peak Revenue Month", "Rp 0")
             
@@ -5294,7 +5295,7 @@ with tab8:
                             y=revenue_filtered['Revenue'],
                             name='Projected Revenue',
                             marker_color='#4CAF50',
-                            text=[f"Rp {x:,.0f}" for x in revenue_filtered['Revenue']],
+                            text=[format_rupiah(x) for x in revenue_filtered['Revenue']],
                             textposition='auto'
                         ))
                         
@@ -5372,7 +5373,7 @@ with tab8:
                         y=brand_rev_df['Revenue'],
                         name='Revenue',
                         marker_color='#9C27B0',
-                        text=[f"Rp {x:,.0f}" for x in brand_rev_df['Revenue']],
+                        text=[format_rupiah(x) for x in brand_rev_df['Revenue']],
                         textposition='auto'
                     ))
                     
@@ -5624,16 +5625,14 @@ with tab9:
         c1, c2, c3, c4 = st.columns(4)
 
         with c1:
-            # Cost Per Order (Primary Efficiency Metric)
-            # Hijau kalau turun, Merah kalau naik (karena Cost)
             bg_cpo = "linear-gradient(135deg, #10B981 0%, #059669 100%)" if d_cpo <= 0 else "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"
             icon_cpo = "▼" if d_cpo <= 0 else "▲"
             st.markdown(f"""
             <div class="eff-card" style="background: {bg_cpo};">
                 <div class="eff-title">Cost Per Order (CPO)</div>
-                <div class="eff-val">Rp {last_row['CPO']:,.0f}</div>
+                <div class="eff-val">{format_rupiah(last_row['CPO'])}</div>
                 <div class="eff-sub">
-                    <span class="eff-badge">{icon_cpo} Rp {abs(d_cpo):,.0f}</span> vs Last Mo
+                    <span class="eff-badge">{icon_cpo} {format_rupiah(abs(d_cpo))}</span> vs Last Mo
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -5665,12 +5664,10 @@ with tab9:
             """, unsafe_allow_html=True)
 
         with c4:
-            # Total Cost - Orange/Red
-            # Cost naik wajar kalau order naik, jadi warna netral (Orange)
             st.markdown(f"""
             <div class="eff-card" style="background: linear-gradient(135deg, #F97316 0%, #C2410C 100%);">
                 <div class="eff-title">Total Fulfillment Cost</div>
-                <div class="eff-val">{fmt_kpi(last_row['Total Cost'], True)}</div>
+                <div class="eff-val">{format_rupiah(last_row['Total Cost'])}</div>
                 <div class="eff-sub">Ratio: {last_row['%Cost']:.1f}% of GMV</div>
             </div>
             """, unsafe_allow_html=True)
