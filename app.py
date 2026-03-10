@@ -4090,70 +4090,80 @@ with tab5:
             st.plotly_chart(fig_main, use_container_width=True)
 
             # ==============================================================================
-            # 4. TOP GAP ANALYSIS (PENGGANTI PARETO)
+            # 4. TOP GAP ANALYSIS (VOLUME RISK IMPACT)
             # ==============================================================================
             st.divider()
-            st.subheader("🚨 Top Gap Analysis (SKU Level)")
-            st.caption(f"Daftar barang dengan selisih terbesar antara Forecast vs Realisasi Sales untuk Tahun {', '.join(map(str, selected_years))}.")
+            st.subheader("🚨 Top Gap Analysis (Risk Impact)")
+            st.caption("Mendeteksi SKU dengan selisih unit terbesar: **Risiko Overstock** (Plan terlalu tinggi) dan **Risiko Stockout** (Sales melampaui Plan).")
 
-            # FILTER DATA BERDASARKAN TAHUN YANG DIPILIH AGAR SINKRON DENGAN CHART ATASNYA
+            # Filter data & Aggregate per SKU
             df_f_filtered = df_forecast[df_forecast['Month'].dt.year.isin(selected_years)]
             df_s_filtered = df_sales[df_sales['Month'].dt.year.isin(selected_years)]
 
-            # Data processing untuk Gap per SKU
             df_f_sku = df_f_filtered.groupby(['SKU_ID', 'Product_Name'])['Forecast_Qty'].sum().reset_index()
             df_s_sku = df_s_filtered.groupby(['SKU_ID', 'Product_Name'])['Sales_Qty'].sum().reset_index()
             
             df_gap = pd.merge(df_f_sku, df_s_sku, on=['SKU_ID', 'Product_Name'], how='outer').fillna(0)
-            df_gap['Gap'] = df_gap['Sales_Qty'] - df_gap['Forecast_Qty']
             
-            # Pisahkan menjadi dua kelompok
-            # 1. Demand Spikes (Sales > Forecast) -> Under-forecasted
-            top_spikes = df_gap[df_gap['Gap'] > 0].sort_values('Gap', ascending=False).head(10)
+            # Hitung Gap Aktual (Sales - Rofo)
+            df_gap['Gap_Qty'] = df_gap['Sales_Qty'] - df_gap['Forecast_Qty']
             
-            # 2. Low Performance (Sales < Forecast) -> Over-forecasted
-            top_drops = df_gap[df_gap['Gap'] < 0].sort_values('Gap', ascending=True).head(10)
+            # --- FIX ERROR: Pastikan Product_Name adalah string dan potong dengan aman ---
+            df_gap['Product_Name'] = df_gap['Product_Name'].astype(str)
+            df_gap['Display_Name'] = df_gap['Product_Name'].apply(lambda x: x[:25] + "..." if len(x) > 25 else x)
+            
+            # 1. Over-forecast (Gap Negatif -> Plan lebih besar dari Sales)
+            top_over = df_gap[df_gap['Gap_Qty'] < 0].copy()
+            top_over['Excess_Qty'] = abs(top_over['Gap_Qty']) # Jadikan absolut untuk chart
+            top_over = top_over.sort_values('Excess_Qty', ascending=False).head(10)
+            
+            # 2. Under-forecast (Gap Positif -> Sales lebih besar dari Plan)
+            top_under = df_gap[df_gap['Gap_Qty'] > 0].copy()
+            top_under = top_under.sort_values('Gap_Qty', ascending=False).head(10)
 
             c_gap1, c_gap2 = st.columns(2)
 
             with c_gap1:
-                st.markdown("##### 📉 Top Over-Forecasted (Trapped Capital)")
-                st.caption("Barang terjual lebih sedikit dari rencana. Modal tertahan di stok (Dinilai dari COGS/HPP).")
+                st.markdown("##### 📉 Top Over-Forecasted (Excess Units)")
+                st.caption("Barang terjual lebih sedikit dari rencana. Risiko penumpukan stok (*Overstock*).")
                 
-                fig_drop = go.Figure()
-                fig_drop.add_trace(go.Bar(
-                    y=top_over['Product_Name'].str[:25] + "...", 
-                    x=top_over['Trapped_Capital'], 
-                    orientation='h', marker_color='#EF5350', # Red
-                    text=[format_rupiah(x) for x in top_over['Trapped_Capital']], # <-- UBAH DISINI
-                    textposition='auto', name='Trapped Rp'
-                ))
-                # Hapus format tick eksak di axis agar selaras
-                fig_drop.update_layout(
-                    height=400, xaxis_title="Trapped Capital (Rp)",
-                    yaxis=dict(autorange="reversed"), plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis=dict(showticklabels=False) # Sembunyikan angka di garis bawah
-                )
-                st.plotly_chart(fig_drop, use_container_width=True)
+                if not top_over.empty:
+                    fig_drop = go.Figure()
+                    fig_drop.add_trace(go.Bar(
+                        y=top_over['Display_Name'], 
+                        x=top_over['Excess_Qty'], 
+                        orientation='h', marker_color='#EF5350', # Red
+                        text=[f"{x:,.0f} pcs" for x in top_over['Excess_Qty']],
+                        textposition='auto', name='Excess Qty'
+                    ))
+                    fig_drop.update_layout(
+                        height=400, xaxis_title="Excess Units vs Plan",
+                        yaxis=dict(autorange="reversed"), plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10)
+                    )
+                    st.plotly_chart(fig_drop, use_container_width=True)
+                else:
+                    st.success("✅ Tidak ada barang Over-Forecast di periode ini!")
 
             with c_gap2:
-                st.markdown("##### 🚀 Top Under-Forecasted (Lost Revenue Risk)")
-                st.caption("Barang laku keras melebihi rencana. Risiko *Stockout* dan potensi *Lost Sales* (Harga Jual).")
+                st.markdown("##### 🚀 Top Under-Forecasted (Shortage Risk)")
+                st.caption("Barang laku keras melebihi rencana. Risiko *Stockout* dan potensi *Lost Sales*.")
                 
-                fig_spike = go.Figure()
-                fig_spike.add_trace(go.Bar(
-                    y=top_under['Product_Name'].str[:25] + "...", 
-                    x=top_under['Lost_Revenue'], 
-                    orientation='h', marker_color='#10B981', # Green
-                    text=[format_rupiah(x) for x in top_under['Lost_Revenue']], # <-- UBAH DISINI
-                    textposition='auto', name='Lost Rev Rp'
-                ))
-                fig_spike.update_layout(
-                    height=400, xaxis_title="Potential Lost Revenue (Rp)",
-                    yaxis=dict(autorange="reversed", side="right"), plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis=dict(showticklabels=False) # Sembunyikan angka di garis bawah
-                )
-                st.plotly_chart(fig_spike, use_container_width=True)
+                if not top_under.empty:
+                    fig_spike = go.Figure()
+                    fig_spike.add_trace(go.Bar(
+                        y=top_under['Display_Name'], 
+                        x=top_under['Gap_Qty'], 
+                        orientation='h', marker_color='#10B981', # Green
+                        text=[f"+{x:,.0f} pcs" for x in top_under['Gap_Qty']],
+                        textposition='auto', name='Shortage Qty'
+                    ))
+                    fig_spike.update_layout(
+                        height=400, xaxis_title="Extra Units Sold vs Plan",
+                        yaxis=dict(autorange="reversed", side="right"), plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10)
+                    )
+                    st.plotly_chart(fig_spike, use_container_width=True)
+                else:
+                    st.success("✅ Tidak ada barang Under-Forecast di periode ini!")
 
     else:
         st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
