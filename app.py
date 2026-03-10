@@ -3902,7 +3902,7 @@ with tab4:
     else:
         st.info("👋 Please ensure Sales and Monthly Performance data are loaded to view SKU insights.")
 
-# --- TAB 5: SALES & FORECAST ANALYSIS (VP / C-LEVEL EDITION) ---
+# --- TAB 5: SALES & FORECAST ANALYSIS  ---
 with tab5:
     st.subheader("📈 S&OP Realization & Gap Analysis")
     st.caption("Evaluasi akurasi perencanaan (Demand Plan vs Supply Execution vs Actual Sales) beserta dampak finansialnya.")
