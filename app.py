@@ -3482,12 +3482,21 @@ with tab3:
         # --- BARIS KEDUA: ADVANCED INVENTORY METRICS ---
         st.write("") # Spacer kecil agar tidak terlalu menempel
         
-        # Kalkulasi Metrik Baru
+        # Ekstrak list SKU yang HANYA berstatus 'SKU Regular' DAN 'Active'
+        active_reg_skus = df_batch[
+            (df_batch['Stock_Category'].str.contains('Regular', case=False, na=False)) &
+            (df_batch['Status'].str.upper() == 'ACTIVE')
+        ]['SKU_ID'].unique()
+
+        # Filter df_cover khusus untuk perhitungan KPI
+        df_cover_filtered = df_cover[df_cover['SKU_ID'].isin(active_reg_skus)]
+        
+        # Kalkulasi Metrik Baru (Menggunakan data yang sudah difilter)
         inv_turnover = (12 / global_cover_months) if global_cover_months > 0 else 0
-        stockout_skus = len(df_cover[df_cover['Cover_Months'] < 0.3])
-        total_skus_cover = len(df_cover)
+        stockout_skus = len(df_cover_filtered[df_cover_filtered['Cover_Months'] < 0.3])
+        total_skus_cover = len(df_cover_filtered)
         stockout_rate = (stockout_skus / total_skus_cover * 100) if total_skus_cover > 0 else 0
-        replenish_skus = len(df_cover[df_cover['Cover_Months'] < 0.8])
+        replenish_skus = len(df_cover_filtered[df_cover_filtered['Cover_Months'] < 0.8])
 
         c5, c6, c7 = st.columns(3)
         
