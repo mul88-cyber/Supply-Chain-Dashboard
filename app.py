@@ -3471,7 +3471,7 @@ with tab3:
                 "linear-gradient(135deg, #4db6ac 0%, #26a69a 100%)"), unsafe_allow_html=True)
         with c3:
             # Soft Orange
-            st.markdown(render_inv_card("Global Stock Cover", f"{avg_cover_months:.1f} Mo", "Avg across active SKUs", 
+            st.markdown(render_inv_card("Global Stock Cover", f"{global_cover_months:.1f} Mo", "Total Stock / Total Sales", 
                 "linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)"), unsafe_allow_html=True)
         with c4:
             # Soft Red or Green depending on risk
@@ -3488,13 +3488,13 @@ with tab3:
         col_speed1, col_speed2 = st.columns(2)
         
         with col_speed1:
-            # Gauge: Avg Coverage
+            # Gauge: Global Coverage
             fig_cover = go.Figure(go.Indicator(
                 mode="gauge+number",
-                value=avg_cover_months,
+                value=global_cover_months, # <--- UBAH DI SINI
                 domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Avg Inventory Coverage (Months)", 'font': {'size': 15, 'color': '#4B5563'}},
-                number={'font': {'size': 36, 'color': '#1F2937'}}, # Kunci ukuran font agar tidak overlap
+                title={'text': "Global Inventory Coverage (Months)", 'font': {'size': 15, 'color': '#4B5563'}}, # <--- UBAH JUDULNYA
+                number={'font': {'size': 36, 'color': '#1F2937'}, 'valueformat': '.1f'}, # <--- Format 1 desimal
                 gauge={
                     'axis': {'range': [0, 6], 'tickwidth': 1, 'tickcolor': "darkblue"},
                     'bar': {'color': "#7986cb", 'thickness': 0.3}, # Bar dipertipis sedikit
@@ -3560,9 +3560,9 @@ with tab3:
             df_low = inventory_metrics['low_stock'].copy()
             df_high = inventory_metrics['high_stock'].copy()
             
-            # Terapkan Filter Lapis Ganda
-            df_low = df_low[df_low['SKU_ID'].isin(active_regular_skus)]
-            df_high = df_high[df_high['SKU_ID'].isin(active_regular_skus)]
+            # Terapkan Filter Lapis Ganda & SORTING (Urutkan dari yang terparah)
+            df_low = df_low[df_low['SKU_ID'].isin(active_regular_skus)].sort_values('Cover_Months', ascending=True) # Stock paling kritis (0.0) di atas
+            df_high = df_high[df_high['SKU_ID'].isin(active_regular_skus)].sort_values('Cover_Months', ascending=False) # Dead stock terlama (999) di atas
             
             cols_to_show = ['SKU_ID', 'Product_Name', 'Stock_Qty', 'Avg_Monthly_Sales_3M', 'Cover_Months']
             
