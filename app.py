@@ -5464,42 +5464,6 @@ with tab8:
                 if st.button("📥 Download Past PO", use_container_width=True, key="dl_po_fake"):
                     show_security_alert()
         
-        with col_dl2:
-            if not df_sales_reseller.empty:
-                csv_sales = df_sales_reseller.to_csv(index=False)
-                st.download_button(
-                    label="Download Sales",
-                    data=csv_sales,
-                    file_name="reseller_sales.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="dl_sales"
-                )
-        
-        with col_dl3:
-            if not df_past_rofo_reseller.empty:
-                csv_rofo = df_past_rofo_reseller.to_csv(index=False)
-                st.download_button(
-                    label="Download Past Rofo",
-                    data=csv_rofo,
-                    file_name="reseller_past_rofo.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="dl_rofo"
-                )
-        
-        with col_dl4:
-            if not df_past_po_reseller.empty:
-                csv_po = df_past_po_reseller.to_csv(index=False)
-                st.download_button(
-                    label="Download Past PO",
-                    data=csv_po,
-                    file_name="reseller_past_po.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="dl_po"
-                )
-
 # --- TAB 9: FULFILLMENT COST ANALYSIS (UNIT ECONOMICS) ---
 with tab9:
     st.subheader("🚚 Fulfillment Cost Intelligence")
