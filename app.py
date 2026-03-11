@@ -4490,14 +4490,12 @@ with tab6:
                     }
                 )
                 
-                # Download Button
-                csv = df_exp.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Filtered Data (CSV)",
-                    data=csv,
-                    file_name="forecast_data_filtered.csv",
-                    mime="text/csv"
-                )
+                # --- DUMMY DOWNLOAD BUTTON (SECURITY LOCK) ---
+                st.write("")
+                if st.button("📥 Download Filtered Data (CSV)", use_container_width=True, type="secondary", key="btn_dl_ecomm"):
+                    st.error("🔒 **SECURITY ALERT: RESTRICTED ACCESS**")
+                    st.warning("Data extraction & CSV download features are disabled in this environment to protect company confidentiality and raw data integrity. Please request clearance from the S&OP Admin.")
+                    st.toast("Access Denied: Enterprise Security Policy.", icon="🚫")
 
     else:
         st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
@@ -5434,23 +5432,37 @@ with tab8:
             else:
                 st.info("No past PO data available")
         
-        # Download Options
+        # --- DUMMY DOWNLOAD BUTTONS (SECURITY LOCK) ---
         st.divider()
         st.subheader("📥 Download Data")
         
         col_dl1, col_dl2, col_dl3, col_dl4 = st.columns(4)
         
+        # Fungsi Helper untuk memanggil Alarm
+        def show_security_alert():
+            st.error("🔒 **SECURITY ALERT: RESTRICTED ACCESS**")
+            st.warning("Data extraction & CSV download features are disabled in this environment to protect company confidentiality.")
+            st.toast("Access Denied: Enterprise Security Policy.", icon="🚫")
+        
         with col_dl1:
             if not df_reseller_forecast.empty:
-                csv_fcst = df_reseller_forecast.to_csv(index=False)
-                st.download_button(
-                    label="Download Forecast 2026",
-                    data=csv_fcst,
-                    file_name="reseller_forecast_2026.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="dl_fcst"
-                )
+                if st.button("📥 Download Forecast 2026", use_container_width=True, key="dl_fcst_fake"):
+                    show_security_alert()
+        
+        with col_dl2:
+            if not df_sales_reseller.empty:
+                if st.button("📥 Download Sales", use_container_width=True, key="dl_sales_fake"):
+                    show_security_alert()
+        
+        with col_dl3:
+            if not df_past_rofo_reseller.empty:
+                if st.button("📥 Download Past Rofo", use_container_width=True, key="dl_rofo_fake"):
+                    show_security_alert()
+        
+        with col_dl4:
+            if not df_past_po_reseller.empty:
+                if st.button("📥 Download Past PO", use_container_width=True, key="dl_po_fake"):
+                    show_security_alert()
         
         with col_dl2:
             if not df_sales_reseller.empty:
