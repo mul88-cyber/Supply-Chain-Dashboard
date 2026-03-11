@@ -3542,8 +3542,8 @@ with tab3:
                 }
             ))
             fig_cover.update_layout(
-                height=320, # Kanvas ditinggikan agar punya ruang saat di-zoom
-                margin=dict(t=50, b=20, l=40, r=40),
+                height=280, # Tinggi diturunkan sedikit agar presisi
+                margin=dict(t=40, b=10, l=0, r=0), # KUNCI FIX: Margin Kiri (l) dan Kanan (r) dibuat 0
                 autosize=True
             )
             st.plotly_chart(fig_cover, use_container_width=True)
@@ -3571,8 +3571,8 @@ with tab3:
                 }
             ))
             fig_occ.update_layout(
-                height=320, # Kanvas ditinggikan
-                margin=dict(t=50, b=20, l=40, r=40),
+                height=280, # Tinggi diturunkan sedikit agar presisi
+                margin=dict(t=40, b=10, l=0, r=0), # KUNCI FIX: Margin Kiri (l) dan Kanan (r) dibuat 0
                 autosize=True
             )
             st.plotly_chart(fig_occ, use_container_width=True)
