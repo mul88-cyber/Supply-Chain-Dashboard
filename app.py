@@ -5855,8 +5855,8 @@ st.divider()
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.9rem; padding: 1rem;">
     <p>🚀 <strong>Inventory Intelligence Dashboard v6.0</strong> | Professional Inventory Control & Financial Analytics</p>
-    <p>✅ Product Name Auto-Lookup | ✅ Financial Analysis with Price Data | ✅ Inventory Value Analysis</p>
+    <p>✅ Product Auto-Lookup | ✅ Financial Analysis | ✅ Inventory Analysis</p>
     <p>💰 Profitability Dashboard | 📊 Seasonality Analysis | 🎯 Margin Segmentation</p>
-    <p>📈 Data since January 2024 | 🔄 Real-time Google Sheets Integration</p>
+    <p>📈 Data since January 2025 | 🔄 Real-time Google Sheets Integration</p>
 </div>
 """, unsafe_allow_html=True)
