@@ -3492,7 +3492,10 @@ with tab3:
         
         # Kalkulasi Metrik Baru
         inv_turnover = (12 / global_cover_months) if global_cover_months > 0 else 0
-        stockout_skus = len(df_cover_filtered[df_cover_filtered['Cover_Months'] < 0.3])
+        
+        # 🔥 UBAH ANGKA 0.3 DI SINI MENJADI 0.1
+        stockout_skus = len(df_cover_filtered[df_cover_filtered['Cover_Months'] < 0.2]) 
+        
         total_skus_cover = len(df_cover_filtered)
         stockout_rate = (stockout_skus / total_skus_cover * 100) if total_skus_cover > 0 else 0
         replenish_skus = len(df_cover_filtered[df_cover_filtered['Cover_Months'] < 0.8])
@@ -3506,7 +3509,7 @@ with tab3:
         with c6:
             # Merah Tua jika Stockout Rate > 5%, Hijau jika aman
             so_bg = "linear-gradient(135deg, #e53935 0%, #c62828 100%)" if stockout_rate > 5 else "linear-gradient(135deg, #43a047 0%, #2e7d32 100%)"
-            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.1 Mo)", 
+            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.2 Mo)", 
                 so_bg), unsafe_allow_html=True)
         with c7:
             # Amber/Orange Tua untuk Need Replenishment
