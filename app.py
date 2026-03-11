@@ -3407,8 +3407,10 @@ with tab3:
             999
         )
         
-        avg_cover_months = df_cover[df_cover['Avg_Sales'] > 0]['Cover_Months'].mean()
-        if pd.isna(avg_cover_months): avg_cover_months = 0
+        total_global_stock = df_cover['Stock_Qty'].sum()
+        total_global_avg_sales = df_cover['Avg_Sales'].sum()
+        
+        global_cover_months = (total_global_stock / total_global_avg_sales) if total_global_avg_sales > 0 else 0
         
         current_occupancy = df_batch['Stock_Qty'].sum()
         occupancy_pct = (current_occupancy / WH_CAPACITY * 100)
