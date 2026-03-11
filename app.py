@@ -3507,7 +3507,7 @@ with tab3:
         with c6:
             # Merah Tua jika Stockout Rate > 5%, Hijau jika aman
             so_bg = "linear-gradient(135deg, #e53935 0%, #c62828 100%)" if stockout_rate > 5 else "linear-gradient(135deg, #43a047 0%, #2e7d32 100%)"
-            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.3 Mo)", 
+            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.2 Mo)", 
                 so_bg), unsafe_allow_html=True)
         with c7:
             # Amber/Orange Tua untuk Need Replenishment
