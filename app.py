@@ -3482,16 +3482,15 @@ with tab3:
         # --- BARIS KEDUA: ADVANCED INVENTORY METRICS ---
         st.write("") # Spacer kecil agar tidak terlalu menempel
         
-        # Ekstrak list SKU yang HANYA berstatus 'SKU Regular' DAN 'Active'
-        active_reg_skus = df_batch[
-            (df_batch['Stock_Category'].str.contains('Regular', case=False, na=False)) &
-            (df_batch['Status'].str.upper() == 'ACTIVE')
+        # Ekstrak list SKU yang HANYA berstatus 'SKU Regular' (TANPA FILTER ACTIVE)
+        regular_skus_only = df_batch[
+            df_batch['Stock_Category'].str.contains('Regular', case=False, na=False)
         ]['SKU_ID'].unique()
 
         # Filter df_cover khusus untuk perhitungan KPI
-        df_cover_filtered = df_cover[df_cover['SKU_ID'].isin(active_reg_skus)]
+        df_cover_filtered = df_cover[df_cover['SKU_ID'].isin(regular_skus_only)]
         
-        # Kalkulasi Metrik Baru (Menggunakan data yang sudah difilter)
+        # Kalkulasi Metrik Baru
         inv_turnover = (12 / global_cover_months) if global_cover_months > 0 else 0
         stockout_skus = len(df_cover_filtered[df_cover_filtered['Cover_Months'] < 0.3])
         total_skus_cover = len(df_cover_filtered)
@@ -3507,7 +3506,7 @@ with tab3:
         with c6:
             # Merah Tua jika Stockout Rate > 5%, Hijau jika aman
             so_bg = "linear-gradient(135deg, #e53935 0%, #c62828 100%)" if stockout_rate > 5 else "linear-gradient(135deg, #43a047 0%, #2e7d32 100%)"
-            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.5 Mo)", 
+            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.3 Mo)", 
                 so_bg), unsafe_allow_html=True)
         with c7:
             # Amber/Orange Tua untuk Need Replenishment
