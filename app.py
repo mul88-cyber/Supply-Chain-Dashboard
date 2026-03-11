@@ -3479,6 +3479,32 @@ with tab3:
             st.markdown(render_inv_card("Expiry Risk Value", risk_display, f"{risk_pct:.1f}% of Total", 
                 risk_bg), unsafe_allow_html=True)
 
+        # --- BARIS KEDUA: ADVANCED INVENTORY METRICS ---
+        st.write("") # Spacer kecil agar tidak terlalu menempel
+        
+        # Kalkulasi Metrik Baru
+        inv_turnover = (12 / global_cover_months) if global_cover_months > 0 else 0
+        stockout_skus = len(df_cover[df_cover['Cover_Months'] < 0.3])
+        total_skus_cover = len(df_cover)
+        stockout_rate = (stockout_skus / total_skus_cover * 100) if total_skus_cover > 0 else 0
+        replenish_skus = len(df_cover[df_cover['Cover_Months'] < 0.8])
+
+        c5, c6, c7 = st.columns(3)
+        
+        with c5:
+            # Soft Purple untuk Turnover
+            st.markdown(render_inv_card("Inventory Turnover", f"{inv_turnover:.1f}x", "Annualized Ratio", 
+                "linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%)"), unsafe_allow_html=True)
+        with c6:
+            # Merah Tua jika Stockout Rate > 5%, Hijau jika aman
+            so_bg = "linear-gradient(135deg, #e53935 0%, #c62828 100%)" if stockout_rate > 5 else "linear-gradient(135deg, #43a047 0%, #2e7d32 100%)"
+            st.markdown(render_inv_card("Stock Out Rate", f"{stockout_rate:.1f}%", f"{stockout_skus} SKUs (< 0.3 Mo)", 
+                so_bg), unsafe_allow_html=True)
+        with c7:
+            # Amber/Orange Tua untuk Need Replenishment
+            st.markdown(render_inv_card("Need Replenishment", f"{replenish_skus} SKUs", "SKUs (< 0.8 Mo Cover)", 
+                "linear-gradient(135deg, #fb8c00 0%, #ef6c00 100%)"), unsafe_allow_html=True)
+
         # ==============================================================================
         # 3. STOCK COVER & OCCUPANCY DASHBOARD (FIXED RESPONSIVE GAUGE)
         # ==============================================================================
