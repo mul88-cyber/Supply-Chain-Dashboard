@@ -4861,7 +4861,7 @@ with tab6:
 
                             # Vertical separator
                             fig_fc.add_vline(
-                                x=ts.index[-1],
+                                x=ts.index[-1].strftime('%Y-%m-%d'),
                                 line_dash="dot", line_color="gray",
                                 annotation_text="Forecast Start",
                                 annotation_position="top right"
