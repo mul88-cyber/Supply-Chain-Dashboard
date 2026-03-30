@@ -8,3 +8,5 @@ google-auth
 tenacity
 python-dateutil
 matplotlib
+statsmodels
+prophet
