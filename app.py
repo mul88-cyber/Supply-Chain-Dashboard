@@ -4938,24 +4938,24 @@ with tab6:
                             st.error("❌ Forecasting gagal. Coba method lain atau cek ketersediaan data.")
                         else:
                         # Anomaly warnings — tampil sebelum chart
-                        if method_key == "rolling_mtm" and rolling_warnings:
-                            st.markdown("#### ⚠️ Baseline Anomaly Detected")
-                            for w_item in rolling_warnings:
-                                icon = "🚨" if w_item['type'] == 'spike' else "📉"
-                                msg = (
-                                    f"{icon} **{w_item['month']}**: "
-                                    f"Sales = **{w_item['value']:,.0f}** "
-                                    f"({'%.1fx' % w_item['ratio']} {'di atas' if w_item['type'] == 'spike' else 'di bawah'} "
-                                    f"historical avg {w_item['avg']:,.0f}). "
-                                    f"Baseline mungkin {'over-estimated' if w_item['type'] == 'spike' else 'under-estimated'}. "
-                                    f"**Validasi manual disarankan.**"
-                                )
-                                if w_item['type'] == 'spike':
-                                    st.warning(msg)
-                                else:
-                                    st.info(msg)
-                            # Backtest
-                            mape, backtest_df = ai_backtest(ts, method_key, params, holdout=3)
+                            if method_key == "rolling_mtm" and rolling_warnings:
+                                st.markdown("#### ⚠️ Baseline Anomaly Detected")
+                                for w_item in rolling_warnings:
+                                    icon = "🚨" if w_item['type'] == 'spike' else "📉"
+                                    msg = (
+                                        f"{icon} **{w_item['month']}**: "
+                                        f"Sales = **{w_item['value']:,.0f}** "
+                                        f"({'%.1fx' % w_item['ratio']} {'di atas' if w_item['type'] == 'spike' else 'di bawah'} "
+                                        f"historical avg {w_item['avg']:,.0f}). "
+                                        f"Baseline mungkin {'over-estimated' if w_item['type'] == 'spike' else 'under-estimated'}. "
+                                        f"**Validasi manual disarankan.**"
+                                    )
+                                    if w_item['type'] == 'spike':
+                                        st.warning(msg)
+                                    else:
+                                        st.info(msg)
+                                # Backtest
+                                mape, backtest_df = ai_backtest(ts, method_key, params, holdout=3)
 
                             # =====================================================
                             # RESULT METRICS ROW
