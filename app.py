@@ -4860,11 +4860,26 @@ with tab6:
                             ))
 
                             # Vertical separator
-                            fig_fc.add_vline(
-                                x=ts.index[-1].strftime('%Y-%m-%d'),
-                                line_dash="dot", line_color="gray",
-                                annotation_text="Forecast Start",
-                                annotation_position="top right"
+                            vline_x = ts.index[-1].strftime('%Y-%m-%d')
+                            
+                            fig_fc.add_shape(
+                                type="line",
+                                x0=vline_x, x1=vline_x,
+                                y0=0, y1=1,
+                                xref="x", yref="paper",
+                                line=dict(dash="dot", color="gray", width=1.5)
+                            )
+                            
+                            fig_fc.add_annotation(
+                                x=vline_x,
+                                y=1,
+                                xref="x", yref="paper",
+                                text="Forecast Start",
+                                showarrow=False,
+                                xanchor="left",
+                                yanchor="top",
+                                font=dict(size=11, color="gray"),
+                                bgcolor="rgba(255,255,255,0.7)"
                             )
 
                             fig_fc.update_layout(
