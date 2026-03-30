@@ -1625,6 +1625,128 @@ def ai_forecast_prophet(ts, n=12):
     except Exception:
         return None, None, None
 
+def ai_forecast_rolling_baseline_mtm(ts, n=12, baseline_window=3, min_history_for_mtm=6):
+    """
+    Rolling Baseline × MtM Seasonal Method
+    =========================================
+    Metode S&OP Praktisi:
+    - Baseline  = rata-rata actual N bulan terakhir (default 3)
+    - Seasonal  = rata-rata MtM growth ratio dari semua history tersedia
+    - Flag      = deteksi anomali pada baseline (spike/drop > 2x avg)
+    - Output    = 12 bulan forecast + anomaly warnings
+    """
+    vals = ts.values.astype(float)
+    months = ts.index.month  # array of month numbers
+
+    warnings_list = []
+
+    # ----------------------------------------------------------------
+    # STEP 1: BUILD BASELINE
+    # ----------------------------------------------------------------
+    w = min(baseline_window, len(vals))
+    baseline_vals = vals[-w:]
+    baseline = float(np.mean(baseline_vals))
+
+    # Anomaly check: apakah salah satu bulan di baseline > 2x overall avg?
+    overall_avg = float(np.mean(vals)) if len(vals) > 0 else baseline
+    if overall_avg > 0:
+        for i, v in enumerate(baseline_vals):
+            month_label = ts.index[-(w - i)].strftime('%b-%Y')
+            if v > 2.0 * overall_avg:
+                warnings_list.append({
+                    'type': 'spike',
+                    'month': month_label,
+                    'value': v,
+                    'avg': overall_avg,
+                    'ratio': v / overall_avg
+                })
+            elif v < 0.3 * overall_avg and overall_avg > 5:
+                warnings_list.append({
+                    'type': 'drop',
+                    'month': month_label,
+                    'value': v,
+                    'avg': overall_avg,
+                    'ratio': v / overall_avg
+                })
+
+    # ----------------------------------------------------------------
+    # STEP 2: BUILD MtM GROWTH RATIO TABLE
+    # Per transition: Jan→Feb, Feb→Mar, ..., Dec→Jan
+    # Ambil rata-rata dari semua pasangan bulan di history
+    # ----------------------------------------------------------------
+    # Dict: key = (from_month, to_month), value = list of ratios
+    mtm_ratios = {}
+    for i in range(1, len(vals)):
+        from_m = ts.index[i - 1].month
+        to_m = ts.index[i].month
+        key = (from_m, to_m)
+        if vals[i - 1] > 0:
+            ratio = vals[i] / vals[i - 1]
+            # Cap extreme ratios (>5x atau <0.1x) agar tidak meledak
+            ratio = np.clip(ratio, 0.1, 5.0)
+            mtm_ratios.setdefault(key, []).append(ratio)
+
+    # Hitung rata-rata ratio per transisi bulan
+    avg_mtm = {}
+    for key, ratio_list in mtm_ratios.items():
+        avg_mtm[key] = float(np.median(ratio_list))  # median lebih robust vs mean
+
+    # ----------------------------------------------------------------
+    # STEP 3: GENERATE 12-MONTH FORECAST
+    # ----------------------------------------------------------------
+    preds = []
+    current_val = baseline
+    last_month_num = ts.index[-1].month
+    future_dates = pd.date_range(
+        ts.index[-1] + pd.DateOffset(months=1),
+        periods=n, freq='MS'
+    )
+
+    for i, d in enumerate(future_dates):
+        from_m = last_month_num if i == 0 else future_dates[i - 1].month
+        to_m = d.month
+        key = (from_m, to_m)
+
+        if key in avg_mtm:
+            ratio = avg_mtm[key]
+        else:
+            # Fallback: gunakan overall average ratio
+            all_ratios = [r for rlist in mtm_ratios.values() for r in rlist]
+            ratio = float(np.median(all_ratios)) if all_ratios else 1.0
+
+        current_val = max(0.0, current_val * ratio)
+        preds.append(current_val)
+
+    # ----------------------------------------------------------------
+    # STEP 4: CONFIDENCE INTERVAL
+    # Gunakan std dev dari semua historical MtM ratios sebagai proxy volatilitas
+    # ----------------------------------------------------------------
+    all_ratios_flat = [r for rlist in mtm_ratios.values() for r in rlist]
+    ratio_std = float(np.std(all_ratios_flat)) if len(all_ratios_flat) > 1 else 0.2
+
+    ci_lo = np.array(preds) * max(0, 1 - 1.5 * ratio_std)
+    ci_hi = np.array(preds) * (1 + 1.5 * ratio_std)
+    ci_lo = np.maximum(0, ci_lo)
+
+    fc_series = pd.Series(preds, index=future_dates)
+
+    # Attach warnings ke dalam fc_series sebagai attribute (via custom dict return)
+    return fc_series, ci_lo, ci_hi, warnings_list, avg_mtm
+
+
+def ai_build_mtm_heatmap_data(avg_mtm):
+    """
+    Build MtM ratio matrix untuk visualisasi heatmap
+    Rows = from_month, Cols = to_month
+    """
+    month_names = ['Jan','Feb','Mar','Apr','May','Jun',
+                   'Jul','Aug','Sep','Oct','Nov','Dec']
+    matrix = np.full((12, 12), np.nan)
+
+    for (from_m, to_m), ratio in avg_mtm.items():
+        matrix[from_m - 1][to_m - 1] = ratio
+
+    return pd.DataFrame(matrix, index=month_names, columns=month_names)
 
 def ai_backtest(ts, method, params, holdout=3):
     """Backtest: hold out last N months, measure MAPE"""
@@ -4691,6 +4813,13 @@ with tab6:
 
             # Method selection with description
             METHOD_INFO = {
+                # Tambahkan sebelum penutup } dari METHOD_INFO:
+                "Rolling Baseline × MtM Seasonal ⭐ (Your S&OP Method)": {
+                    "key": "rolling_mtm",
+                    "desc": "Baseline 3 bulan terakhir × historical MtM growth ratio. "
+                            "Metode S&OP praktisi — adaptif, interpretable, proven.",
+                    "icon": "🎯"
+                },
                 "Moving Average (Simple)": {
                     "key": "ma_simple",
                     "desc": "Rata-rata N bulan terakhir + trend adjustment. Cocok untuk data stabil.",
@@ -4743,6 +4872,19 @@ with tab6:
                     help="Jumlah bulan historis sebagai dasar kalkulasi",
                     key="ai_window"
                 )
+            # Tambah setelah blok params MA:
+            elif method_key == "rolling_mtm":
+                params['baseline_window'] = st.slider(
+                    "📅 Baseline Window (months):", 2, 6, 3,
+                    help="Jumlah bulan terakhir sebagai baseline. "
+                         "Default 3 = rata-rata 3 bulan terakhir actual.",
+                    key="ai_baseline_window"
+                )
+                st.info(
+                    "ℹ️ Method ini mereplikasi workflow S&OP Bapak: "
+                    "Baseline rolling × MtM seasonal ratio dari semua history. "
+                    "Anomaly detection aktif otomatis."
+                )
 
             # Forecast horizon
             n_forecast = 12
@@ -4782,10 +4924,36 @@ with tab6:
                             fc, ci_lo, ci_hi = ai_forecast_linear_seasonal(ts, n_forecast)
                         elif method_key == "prophet":
                             fc, ci_lo, ci_hi = ai_forecast_prophet(ts, n_forecast)
+                        # Tambah di bagian ini, setelah elif method_key == "prophet":
+                        elif method_key == "rolling_mtm":
+                            result = ai_forecast_rolling_baseline_mtm(
+                                ts, n_forecast,
+                                baseline_window=params.get('baseline_window', 3)
+                            )
+                            fc, ci_lo, ci_hi = result[0], result[1], result[2]
+                            rolling_warnings = result[3]
+                            rolling_avg_mtm = result[4]
 
                         if fc is None:
                             st.error("❌ Forecasting gagal. Coba method lain atau cek ketersediaan data.")
                         else:
+                        # Anomaly warnings — tampil sebelum chart
+                        if method_key == "rolling_mtm" and rolling_warnings:
+                            st.markdown("#### ⚠️ Baseline Anomaly Detected")
+                            for w_item in rolling_warnings:
+                                icon = "🚨" if w_item['type'] == 'spike' else "📉"
+                                msg = (
+                                    f"{icon} **{w_item['month']}**: "
+                                    f"Sales = **{w_item['value']:,.0f}** "
+                                    f"({'%.1fx' % w_item['ratio']} {'di atas' if w_item['type'] == 'spike' else 'di bawah'} "
+                                    f"historical avg {w_item['avg']:,.0f}). "
+                                    f"Baseline mungkin {'over-estimated' if w_item['type'] == 'spike' else 'under-estimated'}. "
+                                    f"**Validasi manual disarankan.**"
+                                )
+                                if w_item['type'] == 'spike':
+                                    st.warning(msg)
+                                else:
+                                    st.info(msg)
                             # Backtest
                             mape, backtest_df = ai_backtest(ts, method_key, params, holdout=3)
 
@@ -4981,6 +5149,70 @@ with tab6:
                             # =====================================================
                             # OUTPUT TABLE + DOWNLOAD
                             # =====================================================
+                            # MtM Heatmap — khusus rolling_mtm method
+                            if method_key == "rolling_mtm" and rolling_avg_mtm:
+                                st.divider()
+                                st.markdown("### 🗓️ MtM Seasonal Ratio Heatmap")
+                                st.caption(
+                                    "Rata-rata rasio pertumbuhan month-to-month dari seluruh data historis. "
+                                    "Nilai > 1.0 = bulan tersebut historically tumbuh vs bulan sebelumnya."
+                                )
+                            
+                                mtm_df = ai_build_mtm_heatmap_data(rolling_avg_mtm)
+                            
+                                fig_mtm = go.Figure(data=go.Heatmap(
+                                    z=mtm_df.values,
+                                    x=mtm_df.columns.tolist(),
+                                    y=mtm_df.index.tolist(),
+                                    colorscale=[
+                                        [0.0,  '#ef4444'],   # Merah  = decline (< 0.8)
+                                        [0.35, '#fef3c7'],   # Kuning = flat (~1.0)
+                                        [0.5,  '#ffffff'],
+                                        [0.65, '#d1fae5'],   # Hijau muda = growth
+                                        [1.0,  '#10b981']    # Hijau tua = strong growth
+                                    ],
+                                    zmid=1.0,
+                                    text=np.where(
+                                        np.isnan(mtm_df.values),
+                                        '',
+                                        np.round(mtm_df.values, 2).astype(str)
+                                    ),
+                                    texttemplate="%{text}x",
+                                    hovertemplate=(
+                                        "From: <b>%{y}</b> → To: <b>%{x}</b><br>"
+                                        "Avg Ratio: <b>%{z:.2f}x</b><br>"
+                                        "<extra></extra>"
+                                    )
+                                ))
+                            
+                                fig_mtm.update_layout(
+                                    height=420,
+                                    title="Historical MtM Growth Ratio Matrix (Median across all years)",
+                                    xaxis_title="To Month",
+                                    yaxis_title="From Month",
+                                    margin=dict(t=50, b=20, l=20, r=20)
+                                )
+                            
+                                st.plotly_chart(fig_mtm, use_container_width=True)
+                            
+                                # Highlight top seasonal transitions
+                                st.markdown("**📊 Top Seasonal Transitions:**")
+                                top_cols = st.columns(3)
+                            
+                                flat_ratios = [
+                                    {'transition': f"{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][k[0]-1]} → {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][k[1]-1]}",
+                                     'ratio': v}
+                                    for k, v in rolling_avg_mtm.items()
+                                ]
+                                flat_ratios_sorted = sorted(flat_ratios, key=lambda x: x['ratio'], reverse=True)
+                            
+                                for i, item in enumerate(flat_ratios_sorted[:3]):
+                                    with top_cols[i]:
+                                        st.metric(
+                                            f"#{i+1} Peak Growth",
+                                            item['transition'],
+                                            delta=f"+{(item['ratio']-1)*100:.1f}%"
+                                        )
                             st.divider()
                             st.markdown("### 📥 Forecast Output")
 
