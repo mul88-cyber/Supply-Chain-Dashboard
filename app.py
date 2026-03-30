@@ -13,6 +13,22 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 import math
 warnings.filterwarnings('ignore')
 
+# --- AI FORECASTING IMPORTS ---
+try:
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    STATSMODELS_AVAILABLE = True
+except ImportError:
+    STATSMODELS_AVAILABLE = False
+
+try:
+    from prophet import Prophet
+    import logging
+    logging.getLogger('prophet').setLevel(logging.ERROR)
+    logging.getLogger('cmdstanpy').setLevel(logging.ERROR)
+    PROPHET_AVAILABLE = True
+except ImportError:
+    PROPHET_AVAILABLE = False
+    
 # --- Konfigurasi Halaman ---
 st.set_page_config(
     page_title="Inventory Intelligence Pro",
@@ -1455,6 +1471,242 @@ def validate_data_quality(df, df_name):
             pass
     
     return checks
+
+# =============================================================================
+# AI FORECASTING ENGINE - HELPER FUNCTIONS
+# =============================================================================
+
+def ai_prepare_ts(df_sales, entity_type, entity_value):
+    """Prepare monthly time series for a SKU or Brand"""
+    if df_sales.empty:
+        return pd.Series(dtype=float)
+    
+    if entity_type == 'SKU':
+        df_filt = df_sales[df_sales['SKU_ID'] == entity_value]
+    else:
+        df_filt = df_sales[df_sales['Brand'] == entity_value]
+    
+    ts = df_filt.groupby('Month')['Sales_Qty'].sum().sort_index()
+    
+    if len(ts) >= 2:
+        full_idx = pd.date_range(ts.index.min(), ts.index.max(), freq='MS')
+        ts = ts.reindex(full_idx, fill_value=0)
+    
+    return ts
+
+
+def ai_forecast_ma(ts, n=12, window=3, weighted=False):
+    """Moving Average Forecast (Simple or Weighted) with trend adjustment"""
+    vals = ts.values.astype(float)
+    w = min(window, len(vals))
+    if w == 0:
+        return None, None, None
+
+    if weighted:
+        wts = np.arange(1, w + 1, dtype=float)
+        wts /= wts.sum()
+        base = float(np.dot(vals[-w:], wts))
+    else:
+        base = float(np.mean(vals[-w:]))
+
+    # Trend from last 6 months (or available)
+    n_trend = min(6, len(vals))
+    trend = float(np.polyfit(range(n_trend), vals[-n_trend:], 1)[0]) if n_trend >= 2 else 0.0
+
+    preds = [max(0.0, base + trend * (i + 1)) for i in range(n)]
+    hist_std = float(np.std(vals)) if len(vals) > 1 else base * 0.2
+    ci_lo = np.maximum(0, np.array(preds) - 1.5 * hist_std)
+    ci_hi = np.array(preds) + 1.5 * hist_std
+
+    future = pd.date_range(ts.index[-1] + pd.DateOffset(months=1), periods=n, freq='MS')
+    return pd.Series(preds, index=future), ci_lo, ci_hi
+
+
+def ai_forecast_holt_winters(ts, n=12):
+    """Holt-Winters Exponential Smoothing"""
+    if not STATSMODELS_AVAILABLE:
+        return None, None, None
+
+    vals = ts.values.astype(float)
+    if np.all(vals == 0) or len(vals) < 3:
+        future = pd.date_range(ts.index[-1] + pd.DateOffset(months=1), periods=n, freq='MS')
+        return pd.Series([0.0] * n, index=future), np.zeros(n), np.zeros(n)
+
+    try:
+        if len(vals) >= 24:
+            model = ExponentialSmoothing(vals, trend='add', seasonal='add',
+                                         seasonal_periods=12, damped_trend=True)
+        elif len(vals) >= 12:
+            model = ExponentialSmoothing(vals, trend='add', seasonal='add',
+                                         seasonal_periods=12)
+        elif len(vals) >= 4:
+            model = ExponentialSmoothing(vals, trend='add', seasonal=None)
+        else:
+            model = ExponentialSmoothing(vals, trend=None, seasonal=None)
+
+        fit = model.fit(optimized=True, remove_bias=True)
+        preds = np.maximum(0, fit.forecast(n))
+
+        resid_std = float(np.std(fit.resid)) if len(fit.resid) > 0 else float(np.std(vals)) * 0.3
+        ci_lo = np.maximum(0, preds - 1.96 * resid_std)
+        ci_hi = preds + 1.96 * resid_std
+
+        future = pd.date_range(ts.index[-1] + pd.DateOffset(months=1), periods=n, freq='MS')
+        return pd.Series(preds, index=future), ci_lo, ci_hi
+    except Exception:
+        return None, None, None
+
+
+def ai_forecast_linear_seasonal(ts, n=12):
+    """Linear Trend + Monthly Seasonal Factors"""
+    vals = ts.values.astype(float)
+    months_arr = ts.index.month
+    x = np.arange(len(vals))
+
+    if len(vals) < 2:
+        return None, None, None
+
+    slope, intercept = np.polyfit(x, vals, 1)
+    trend_vals = slope * x + intercept
+    detrended = vals - trend_vals
+
+    # Seasonal factors per month
+    sf = {}
+    for m in range(1, 13):
+        idx = np.where(months_arr == m)[0]
+        sf[m] = float(np.mean(detrended[idx])) if len(idx) > 0 else 0.0
+
+    future = pd.date_range(ts.index[-1] + pd.DateOffset(months=1), periods=n, freq='MS')
+    preds = []
+    for i, d in enumerate(future):
+        val = max(0.0, slope * (len(vals) + i) + intercept + sf.get(d.month, 0.0))
+        preds.append(val)
+
+    residuals = vals - (trend_vals + np.array([sf.get(m, 0.0) for m in months_arr]))
+    resid_std = float(np.std(residuals)) if len(residuals) > 1 else 0.0
+    ci_lo = np.maximum(0, np.array(preds) - 1.96 * resid_std)
+    ci_hi = np.array(preds) + 1.96 * resid_std
+
+    return pd.Series(preds, index=future), ci_lo, ci_hi
+
+
+def ai_forecast_prophet(ts, n=12):
+    """Meta Prophet Forecasting"""
+    if not PROPHET_AVAILABLE:
+        return None, None, None
+
+    df_p = pd.DataFrame({'ds': ts.index, 'y': ts.values.astype(float)})
+    df_p = df_p[df_p['y'] >= 0].copy()
+
+    if len(df_p) < 4:
+        return None, None, None
+
+    try:
+        mode = 'multiplicative' if df_p['y'].mean() > 5 and df_p['y'].min() > 0 else 'additive'
+        m = Prophet(
+            seasonality_mode=mode,
+            yearly_seasonality=(len(ts) >= 12),
+            weekly_seasonality=False,
+            daily_seasonality=False,
+            changepoint_prior_scale=0.1
+        )
+        m.fit(df_p)
+
+        future = m.make_future_dataframe(periods=n, freq='MS')
+        fc = m.predict(future)
+        fc_future = fc[fc['ds'] > ts.index[-1]].head(n)
+
+        preds = np.maximum(0, fc_future['yhat'].values)
+        ci_lo = np.maximum(0, fc_future['yhat_lower'].values)
+        ci_hi = fc_future['yhat_upper'].values
+
+        future_idx = pd.date_range(ts.index[-1] + pd.DateOffset(months=1), periods=n, freq='MS')
+        return pd.Series(preds, index=future_idx), ci_lo, ci_hi
+    except Exception:
+        return None, None, None
+
+
+def ai_backtest(ts, method, params, holdout=3):
+    """Backtest: hold out last N months, measure MAPE"""
+    if len(ts) <= holdout + 2:
+        return None, None
+
+    train = ts.iloc[:-holdout]
+    actual = ts.iloc[-holdout:]
+
+    try:
+        if method == 'ma_simple':
+            fc, _, _ = ai_forecast_ma(train, holdout, params.get('window', 3), False)
+        elif method == 'ma_weighted':
+            fc, _, _ = ai_forecast_ma(train, holdout, params.get('window', 3), True)
+        elif method == 'holt_winters':
+            fc, _, _ = ai_forecast_holt_winters(train, holdout)
+        elif method == 'linear_seasonal':
+            fc, _, _ = ai_forecast_linear_seasonal(train, holdout)
+        elif method == 'prophet':
+            fc, _, _ = ai_forecast_prophet(train, holdout)
+        else:
+            return None, None
+
+        if fc is None:
+            return None, None
+
+        fc_vals = fc.values[:holdout]
+        act_vals = actual.values
+        mask = act_vals > 0
+
+        mape = float(np.mean(np.abs(
+            (act_vals[mask] - fc_vals[mask]) / act_vals[mask]
+        )) * 100) if mask.sum() > 0 else None
+
+        comp_df = pd.DataFrame({
+            'Month': actual.index.strftime('%b-%y'),
+            'Actual': act_vals.astype(int),
+            'Predicted': fc_vals.round().astype(int),
+            'Error': (fc_vals - act_vals).round(1),
+            'APE (%)': np.where(act_vals > 0,
+                                np.abs((fc_vals - act_vals) / act_vals) * 100, 0).round(1)
+        })
+
+        return mape, comp_df
+    except Exception:
+        return None, None
+
+
+def ai_get_existing_plan(df_ecomm_forecast, entity_type, entity_value, month_cols):
+    """Extract existing plan from ecomm forecast for comparison"""
+    if df_ecomm_forecast.empty or not month_cols:
+        return pd.Series(dtype=float)
+
+    if entity_type == 'SKU':
+        mask = df_ecomm_forecast['SKU_ID'] == entity_value
+    else:
+        mask = df_ecomm_forecast['Brand'] == entity_value
+
+    subset = df_ecomm_forecast[mask]
+    if subset.empty:
+        return pd.Series(dtype=float)
+
+    plan_vals = {}
+    for col in month_cols:
+        try:
+            dt = None
+            for fmt in ['%b-%y', '%b %y', '%b_%y', '%B %Y']:
+                try:
+                    dt = datetime.strptime(str(col).strip(), fmt)
+                    break
+                except:
+                    continue
+            if dt:
+                plan_vals[dt] = float(subset[col].sum())
+        except:
+            continue
+
+    if not plan_vals:
+        return pd.Series(dtype=float)
+
+    return pd.Series(plan_vals).sort_index()
+    
 
 # --- ====================================================== ---
 # ---                DASHBOARD INITIALIZATION               ---
@@ -4211,333 +4463,572 @@ with tab5:
         st.info("ℹ️ Membutuhkan data Sales dan Forecast untuk menampilkan analisis.")
 
 
-# --- TAB 6: ECOMMERCE FORECAST INTELLIGENCE (COMPLETE WITH QUARTERLY & EXPLORER) ---
+# --- TAB 6: ECOMMERCE FORECAST INTELLIGENCE (REVAMPED WITH AI ENGINE) ---
 with tab6:
     st.subheader("🔮 Ecommerce Forecast Intelligence")
-    st.caption("Future Planning: Seasonality Analysis, Quarterly Strategy, Scenario Testing & Data Explorer")
 
-    # ==============================================================================
-    # 1. DATA PREPARATION (ROBUST MONTH PARSING)
-    # ==============================================================================
-    if not df_ecomm_forecast.empty:
-        # Coba deteksi kolom bulan forecast
-        id_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Status', 'Floor_Price', 'Net_Order_Price']
-        forecast_cols = [c for c in df_ecomm_forecast.columns if c not in id_cols]
-        
-        # Validasi: Kolom harus mengandung angka
-        valid_fcst_cols = []
-        for c in forecast_cols:
-            try:
-                if df_ecomm_forecast[c].dtype == object:
-                    sample = df_ecomm_forecast[c].iloc[0]
-                    if isinstance(sample, str) and any(i.isdigit() for i in sample):
+    viewer_tab, ai_tab = st.tabs([
+        "📊 Existing Forecast Viewer",
+        "🤖 AI Demand Forecasting Engine"
+    ])
+
+    # =========================================================================
+    # SUB-TAB 1: EXISTING FORECAST VIEWER (unchanged from original)
+    # =========================================================================
+    with viewer_tab:
+        if not df_ecomm_forecast.empty:
+            id_cols = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier', 'Status',
+                       'Floor_Price', 'Net_Order_Price']
+            forecast_cols = [c for c in df_ecomm_forecast.columns if c not in id_cols]
+
+            valid_fcst_cols = []
+            for c in forecast_cols:
+                try:
+                    if df_ecomm_forecast[c].dtype == object:
+                        sample = df_ecomm_forecast[c].iloc[0]
+                        if isinstance(sample, str) and any(i.isdigit() for i in sample):
+                            valid_fcst_cols.append(c)
+                    elif np.issubdtype(df_ecomm_forecast[c].dtype, np.number):
                         valid_fcst_cols.append(c)
-                elif np.issubdtype(df_ecomm_forecast[c].dtype, np.number):
-                    valid_fcst_cols.append(c)
-            except:
-                pass
-        
-        # Mapping tanggal
-        col_date_map = []
-        if valid_fcst_cols:
-            for c in valid_fcst_cols:
-                clean_c = str(c).strip()
-                for fmt in ['%b-%y', '%b %y', '%b-%Y', '%B %Y', '%Y-%m', '%b_%y']:
-                    try:
-                        dt = datetime.strptime(clean_c, fmt)
-                        col_date_map.append({'col': c, 'date': dt})
-                        break
-                    except:
-                        continue
-        
-        if not col_date_map:
-            st.warning("⚠️ Tidak dapat membaca kolom bulan secara otomatis.")
-            st.stop()
-        else:
-            # Sort kolom secara kronologis
-            col_date_map.sort(key=lambda x: x['date'])
-            sorted_fcst_cols = [x['col'] for x in col_date_map]
-            
-            # Update dataframe active
-            df_fcst_active = df_ecomm_forecast.copy()
-            for c in sorted_fcst_cols:
-                df_fcst_active[c] = pd.to_numeric(df_fcst_active[c], errors='coerce').fillna(0)
+                except:
+                    pass
 
-            # Merge product info if missing
-            if 'Floor_Price' not in df_fcst_active.columns:
-                df_fcst_active = add_product_info_to_data(df_fcst_active, df_product)
+            col_date_map = []
+            if valid_fcst_cols:
+                for c in valid_fcst_cols:
+                    clean_c = str(c).strip()
+                    for fmt in ['%b-%y', '%b %y', '%b-%Y', '%B %Y', '%Y-%m', '%b_%y']:
+                        try:
+                            dt = datetime.strptime(clean_c, fmt)
+                            col_date_map.append({'col': c, 'date': dt})
+                            break
+                        except:
+                            continue
 
-            # ==============================================================================
-            # 2. FORECAST HEALTH KPI
-            # ==============================================================================
-            total_fcst_qty = df_fcst_active[sorted_fcst_cols].sum().sum()
-            
-            # Value Calculation
-            total_fcst_val = 0
-            has_price = False
-            if 'Floor_Price' in df_fcst_active.columns:
-                df_fcst_active['Floor_Price'] = pd.to_numeric(df_fcst_active['Floor_Price'], errors='coerce').fillna(0)
-                row_sums = df_fcst_active[sorted_fcst_cols].sum(axis=1)
-                total_fcst_val = (row_sums * df_fcst_active['Floor_Price']).sum()
-                has_price = True
+            if not col_date_map:
+                st.warning("⚠️ Tidak dapat membaca kolom bulan secara otomatis.")
+            else:
+                col_date_map.sort(key=lambda x: x['date'])
+                sorted_fcst_cols = [x['col'] for x in col_date_map]
 
-            # CSS
-            st.markdown("""
-            <style>
-                .fcst-card {
-                    border-radius: 12px; padding: 1.2rem; color: white;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s;
-                }
-                .fcst-card:hover { transform: translateY(-3px); }
-                .fcst-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; opacity: 0.9; margin-bottom: 5px; }
-                .fcst-val { font-size: 1.8rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-                .fcst-sub { font-size: 0.85rem; font-weight: 500; opacity: 0.95; }
-            </style>
-            """, unsafe_allow_html=True)
+                df_fcst_active = df_ecomm_forecast.copy()
+                for c in sorted_fcst_cols:
+                    df_fcst_active[c] = pd.to_numeric(df_fcst_active[c], errors='coerce').fillna(0)
 
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.markdown(f"""<div class="fcst-card" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);"><div class="fcst-title">Total Forecast Volume</div><div class="fcst-val">{total_fcst_qty:,.0f}</div><div class="fcst-sub">Units</div></div>""", unsafe_allow_html=True)
-            with c2:
-                # MENGGUNAKAN format_rupiah() dari Sidebar
-                val_text = format_rupiah(total_fcst_val) if has_price else "N/A"
-                st.markdown(f"""<div class="fcst-card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);"><div class="fcst-title">Total Forecast Value</div><div class="fcst-val">{val_text}</div><div class="fcst-sub">Gross Revenue</div></div>""", unsafe_allow_html=True)
-            with c3:
-                peak_month = df_fcst_active[sorted_fcst_cols].sum().idxmax()
-                st.markdown(f"""<div class="fcst-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);"><div class="fcst-title">Peak Season</div><div class="fcst-val">{str(peak_month).split('.')[0]}</div><div class="fcst-sub">Highest Volume Month</div></div>""", unsafe_allow_html=True)
+                if 'Floor_Price' not in df_fcst_active.columns:
+                    df_fcst_active = add_product_info_to_data(df_fcst_active, df_product)
 
-            # ==============================================================================
-            # 3. SEASONALITY CHART
-            # ==============================================================================
-            st.divider()
-            st.subheader("📈 Monthly Forecast Trend")
-            monthly_agg = df_fcst_active[sorted_fcst_cols].sum().reset_index()
-            monthly_agg.columns = ['Month', 'Qty']
-            
-            fig_trend = go.Figure()
-            fig_trend.add_trace(go.Bar(x=monthly_agg['Month'], y=monthly_agg['Qty'], name='Monthly Forecast', marker_color='#818CF8'))
-            fig_trend.add_trace(go.Scatter(x=monthly_agg['Month'], y=[monthly_agg['Qty'].mean()]*len(monthly_agg), name='Average', mode='lines', line=dict(color='#F59E0B', width=2, dash='dash')))
-            fig_trend.update_layout(height=350, hovermode="x unified", plot_bgcolor='white', margin=dict(t=20, b=20))
-            st.plotly_chart(fig_trend, use_container_width=True)
+                total_fcst_qty = df_fcst_active[sorted_fcst_cols].sum().sum()
 
-            # ==============================================================================
-            # 4. QUARTERLY BRAND ANALYSIS (NEW FEATURE)
-            # ==============================================================================
-            st.divider()
-            st.subheader("📅 Quarterly Brand Analysis")
-            st.caption("Aggregated performance by Quarter (Q1-Q4) to identify strategic periods.")
+                total_fcst_val = 0
+                has_price = False
+                if 'Floor_Price' in df_fcst_active.columns:
+                    df_fcst_active['Floor_Price'] = pd.to_numeric(df_fcst_active['Floor_Price'], errors='coerce').fillna(0)
+                    row_sums = df_fcst_active[sorted_fcst_cols].sum(axis=1)
+                    total_fcst_val = (row_sums * df_fcst_active['Floor_Price']).sum()
+                    has_price = True
 
-            # Logic Quarter
-            q_map = {'Q1': ['jan', 'feb', 'mar'], 'Q2': ['apr', 'may', 'jun'], 
-                     'Q3': ['jul', 'aug', 'sep'], 'Q4': ['oct', 'nov', 'dec']}
-            
-            quarter_cols_map = {'Q1': [], 'Q2': [], 'Q3': [], 'Q4': []}
-            
-            for col in sorted_fcst_cols:
-                m_str = str(col).lower()[:3]
-                for q, months in q_map.items():
-                    if m_str in months:
-                        quarter_cols_map[q].append(col)
-            
-            active_quarters = [q for q, cols in quarter_cols_map.items() if len(cols) > 0]
+                st.markdown("""
+                <style>
+                    .fcst-card { border-radius:12px; padding:1.2rem; color:white; box-shadow:0 4px 10px rgba(0,0,0,0.05); transition:transform 0.3s; }
+                    .fcst-card:hover { transform:translateY(-3px); }
+                    .fcst-title { font-size:0.8rem; font-weight:700; text-transform:uppercase; opacity:0.9; margin-bottom:5px; }
+                    .fcst-val { font-size:1.8rem; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.1); }
+                    .fcst-sub { font-size:0.85rem; font-weight:500; opacity:0.95; }
+                </style>
+                """, unsafe_allow_html=True)
 
-            if active_quarters and 'Brand' in df_fcst_active.columns:
-                q_tab1, q_tab2 = st.tabs(["📦 By Quantity (Heatmap)", "💰 By Value (Heatmap)"])
-                
-                # --- QTY HEATMAP ---
-                with q_tab1:
-                    q_brand_qty = []
-                    for brand in df_fcst_active['Brand'].unique():
-                        brand_data = df_fcst_active[df_fcst_active['Brand'] == brand]
-                        row = {'Brand': brand}
-                        total_row = 0
-                        for q in active_quarters:
-                            q_val = brand_data[quarter_cols_map[q]].sum().sum()
-                            row[q] = q_val
-                            total_row += q_val
-                        row['Total'] = total_row
-                        q_brand_qty.append(row)
-                    
-                    df_all_qty = pd.DataFrame(q_brand_qty)
-                    df_q_qty = df_all_qty.sort_values('Total', ascending=False).head(15) # Top 15 Brands
-                    
-                    # Hitung Grand Total (dari SEMUA brand, bukan hanya top 15)
-                    grand_total_qty = {'Brand': 'TOTAL (ALL BRANDS)'}
-                    for col in active_quarters + ['Total']:
-                        grand_total_qty[col] = df_all_qty[col].sum()
-                    
-                    # Gabungkan baris Total ke dalam dataframe display
-                    df_q_qty = pd.concat([df_q_qty, pd.DataFrame([grand_total_qty])], ignore_index=True)
-                    
-                    # Tambahkan 'Total' ke kolom yang akan didisplay di Heatmap
-                    display_cols = active_quarters + ['Total']
-                    
-                    fig_heat_qty = go.Figure(data=go.Heatmap(
-                        z=df_q_qty[display_cols].values,
-                        x=display_cols,
-                        y=df_q_qty['Brand'],
-                        colorscale='Blues',
-                        text=df_q_qty[display_cols].values,
-                        texttemplate="%{text:,.0f}"
-                    ))
-                    
-                    fig_heat_qty.update_layout(
-                        height=550, 
-                        title="Top 15 Brands - Quarterly Volume",
-                        yaxis=dict(autorange="reversed") # Balik Y-axis agar Top 1 di atas & Total di bawah
-                    )
-                    st.plotly_chart(fig_heat_qty, use_container_width=True)
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.markdown(f"""<div class="fcst-card" style="background:linear-gradient(135deg,#6366F1 0%,#4338CA 100%);"><div class="fcst-title">Total Forecast Volume</div><div class="fcst-val">{total_fcst_qty:,.0f}</div><div class="fcst-sub">Units</div></div>""", unsafe_allow_html=True)
+                with c2:
+                    val_text = format_rupiah(total_fcst_val) if has_price else "N/A"
+                    st.markdown(f"""<div class="fcst-card" style="background:linear-gradient(135deg,#10B981 0%,#059669 100%);"><div class="fcst-title">Total Forecast Value</div><div class="fcst-val">{val_text}</div><div class="fcst-sub">Gross Revenue</div></div>""", unsafe_allow_html=True)
+                with c3:
+                    peak_month = df_fcst_active[sorted_fcst_cols].sum().idxmax()
+                    st.markdown(f"""<div class="fcst-card" style="background:linear-gradient(135deg,#F59E0B 0%,#D97706 100%);"><div class="fcst-title">Peak Season</div><div class="fcst-val">{str(peak_month).split('.')[0]}</div><div class="fcst-sub">Highest Volume Month</div></div>""", unsafe_allow_html=True)
 
-                # --- VALUE HEATMAP ---
-                with q_tab2:
-                    if has_price:
-                        q_brand_val = []
-                        # Pre-calc temp price column
-                        df_fcst_active['Temp_Price'] = df_fcst_active['Floor_Price'].fillna(0)
-                        
+                st.divider()
+                st.subheader("📈 Monthly Forecast Trend")
+                monthly_agg = df_fcst_active[sorted_fcst_cols].sum().reset_index()
+                monthly_agg.columns = ['Month', 'Qty']
+
+                fig_trend = go.Figure()
+                fig_trend.add_trace(go.Bar(x=monthly_agg['Month'], y=monthly_agg['Qty'], name='Monthly Forecast', marker_color='#818CF8'))
+                fig_trend.add_trace(go.Scatter(x=monthly_agg['Month'], y=[monthly_agg['Qty'].mean()] * len(monthly_agg), name='Average', mode='lines', line=dict(color='#F59E0B', width=2, dash='dash')))
+                fig_trend.update_layout(height=350, hovermode="x unified", plot_bgcolor='white', margin=dict(t=20, b=20))
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+                st.divider()
+                st.subheader("📅 Quarterly Brand Analysis")
+                q_map = {'Q1': ['jan','feb','mar'], 'Q2': ['apr','may','jun'],
+                         'Q3': ['jul','aug','sep'], 'Q4': ['oct','nov','dec']}
+                quarter_cols_map = {'Q1': [], 'Q2': [], 'Q3': [], 'Q4': []}
+                for col in sorted_fcst_cols:
+                    m_str = str(col).lower()[:3]
+                    for q, months in q_map.items():
+                        if m_str in months:
+                            quarter_cols_map[q].append(col)
+                active_quarters = [q for q, cols in quarter_cols_map.items() if len(cols) > 0]
+
+                if active_quarters and 'Brand' in df_fcst_active.columns:
+                    q_tab1, q_tab2 = st.tabs(["📦 By Quantity (Heatmap)", "💰 By Value (Heatmap)"])
+                    with q_tab1:
+                        q_brand_qty = []
                         for brand in df_fcst_active['Brand'].unique():
                             brand_data = df_fcst_active[df_fcst_active['Brand'] == brand]
                             row = {'Brand': brand}
                             total_row = 0
                             for q in active_quarters:
-                                cols = quarter_cols_map[q]
-                                # Vectorized multiplication
-                                q_val = 0
-                                for c in cols:
-                                    q_val += (brand_data[c] * brand_data['Temp_Price']).sum()
-                                row[q] = q_val
-                                total_row += q_val
+                                q_val = brand_data[quarter_cols_map[q]].sum().sum()
+                                row[q] = q_val; total_row += q_val
                             row['Total'] = total_row
-                            q_brand_val.append(row)
-                        
-                        df_all_val = pd.DataFrame(q_brand_val)
-                        df_q_val = df_all_val.sort_values('Total', ascending=False).head(15)
-                        
-                        # Hitung Grand Total Value (dari SEMUA brand)
-                        grand_total_val = {'Brand': 'TOTAL (ALL BRANDS)'}
+                            q_brand_qty.append(row)
+                        df_all_qty = pd.DataFrame(q_brand_qty)
+                        df_q_qty = df_all_qty.sort_values('Total', ascending=False).head(15)
+                        grand_total_qty = {'Brand': 'TOTAL (ALL BRANDS)'}
                         for col in active_quarters + ['Total']:
-                            grand_total_val[col] = df_all_val[col].sum()
-                            
-                        # Gabungkan baris Total ke dalam dataframe display
-                        df_q_val = pd.concat([df_q_val, pd.DataFrame([grand_total_val])], ignore_index=True)
-                        
-                        # Tambahkan 'Total' ke kolom yang akan didisplay di Heatmap
+                            grand_total_qty[col] = df_all_qty[col].sum()
+                        df_q_qty = pd.concat([df_q_qty, pd.DataFrame([grand_total_qty])], ignore_index=True)
                         display_cols = active_quarters + ['Total']
-                        
-                        fig_heat_val = go.Figure(data=go.Heatmap(
-                            z=df_q_val[display_cols].values,
-                            x=display_cols,
-                            y=df_q_val['Brand'],
-                            colorscale='Greens',
-                            text=df_q_val[display_cols].values,
-                            texttemplate="Rp %{text:,.0f}" # Full number format
+                        fig_heat_qty = go.Figure(data=go.Heatmap(
+                            z=df_q_qty[display_cols].values, x=display_cols, y=df_q_qty['Brand'],
+                            colorscale='Blues', text=df_q_qty[display_cols].values, texttemplate="%{text:,.0f}"
                         ))
-                        
-                        fig_heat_val.update_layout(
-                            height=550, 
-                            title="Top 15 Brands - Quarterly Revenue Projection",
-                            yaxis=dict(autorange="reversed") # Balik Y-axis agar Top 1 di atas & Total di bawah
-                        )
-                        st.plotly_chart(fig_heat_val, use_container_width=True)
-                    else:
-                        st.warning("⚠️ Data Harga (Floor_Price) tidak ditemukan.")
+                        fig_heat_qty.update_layout(height=550, title="Top 15 Brands - Quarterly Volume", yaxis=dict(autorange="reversed"))
+                        st.plotly_chart(fig_heat_qty, use_container_width=True)
 
-            # ==============================================================================
-            # 5. SCENARIO PLANNER & ANOMALY (KEPT FROM PREV)
-            # ==============================================================================
-            st.divider()
-            c_scen, c_anom = st.columns(2)
-            
-            with c_scen:
-                st.subheader("🎮 Quick Scenario")
-                growth_pct = st.slider("Growth Adjustment (%)", -50, 50, 0, 5)
-                
-                # Simple Scenario Calc
-                monthly_base = df_fcst_active[sorted_fcst_cols].sum()
-                monthly_scen = monthly_base * (1 + growth_pct/100)
-                
-                fig_s = go.Figure()
-                fig_s.add_trace(go.Scatter(x=sorted_fcst_cols, y=monthly_base, name="Baseline", fill='tozeroy'))
-                fig_s.add_trace(go.Scatter(x=sorted_fcst_cols, y=monthly_scen, name=f"Scenario {growth_pct:+}%", line=dict(dash='dot')))
-                fig_s.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
-                st.plotly_chart(fig_s, use_container_width=True)
-            
-            with c_anom:
-                st.subheader("🚨 Spike Detection")
-                # Top 5 Extreme Spikes
-                anomalies = []
-                for idx, row in df_fcst_active.sort_values(sorted_fcst_cols[-1], ascending=False).head(200).iterrows():
-                    vals = row[sorted_fcst_cols].values
-                    if np.mean(vals) > 10 and np.max(vals) > 3 * np.mean(vals):
-                        anomalies.append({
-                            'Product': row.get('Product_Name', row['SKU_ID']),
-                            'Spike_Month': sorted_fcst_cols[np.argmax(vals)],
-                            'Spike_Qty': np.max(vals)
-                        })
-                if anomalies:
-                    st.dataframe(pd.DataFrame(anomalies).head(5), height=300, use_container_width=True)
-                else:
-                    st.success("✅ No extreme spikes detected.")
+                    with q_tab2:
+                        if has_price:
+                            q_brand_val = []
+                            df_fcst_active['Temp_Price'] = df_fcst_active['Floor_Price'].fillna(0)
+                            for brand in df_fcst_active['Brand'].unique():
+                                brand_data = df_fcst_active[df_fcst_active['Brand'] == brand]
+                                row = {'Brand': brand}; total_row = 0
+                                for q in active_quarters:
+                                    q_val = sum((brand_data[c] * brand_data['Temp_Price']).sum() for c in quarter_cols_map[q])
+                                    row[q] = q_val; total_row += q_val
+                                row['Total'] = total_row
+                                q_brand_val.append(row)
+                            df_all_val = pd.DataFrame(q_brand_val)
+                            df_q_val = df_all_val.sort_values('Total', ascending=False).head(15)
+                            grand_total_val = {'Brand': 'TOTAL (ALL BRANDS)'}
+                            for col in active_quarters + ['Total']:
+                                grand_total_val[col] = df_all_val[col].sum()
+                            df_q_val = pd.concat([df_q_val, pd.DataFrame([grand_total_val])], ignore_index=True)
+                            display_cols = active_quarters + ['Total']
+                            fig_heat_val = go.Figure(data=go.Heatmap(
+                                z=df_q_val[display_cols].values, x=display_cols, y=df_q_val['Brand'],
+                                colorscale='Greens', text=df_q_val[display_cols].values, texttemplate="Rp %{text:,.0f}"
+                            ))
+                            fig_heat_val.update_layout(height=550, title="Top 15 Brands - Quarterly Revenue Projection", yaxis=dict(autorange="reversed"))
+                            st.plotly_chart(fig_heat_val, use_container_width=True)
+                        else:
+                            st.warning("⚠️ Data Harga (Floor_Price) tidak ditemukan.")
 
-            # ==============================================================================
-            # 6. DATA EXPLORER (NEW FEATURE)
-            # ==============================================================================
-            st.divider()
-            st.subheader("📋 Forecast Data Explorer")
-            st.caption("Drill-down ke level SKU per bulan.")
+        else:
+            st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
 
-            with st.container():
-                # Filter UI
-                col_f1, col_f2 = st.columns([1, 2])
-                
-                with col_f1:
-                    # Filter Brand
-                    all_brands = df_fcst_active['Brand'].unique().tolist() if 'Brand' in df_fcst_active.columns else []
-                    sel_brands = st.multiselect("Filter Brands:", options=all_brands, default=[])
-                    
-                    # Filter Months to Show
-                    months_to_show = st.slider("Jumlah Bulan Ditampilkan:", min_value=3, max_value=len(sorted_fcst_cols), value=6)
-                
-                with col_f2:
-                    # Search SKU
-                    search_txt = st.text_input("Search SKU Name / ID:", placeholder="Ketik nama produk...")
+    # =========================================================================
+    # SUB-TAB 2: AI DEMAND FORECASTING ENGINE
+    # =========================================================================
+    with ai_tab:
+        st.subheader("🤖 AI Demand Forecasting Engine")
+        st.caption("Machine Learning-powered demand planning | Training data: historical ecomm sales | Horizon: 12 months")
 
-                # Apply Filter
-                df_exp = df_fcst_active.copy()
-                if sel_brands:
-                    df_exp = df_exp[df_exp['Brand'].isin(sel_brands)]
-                if search_txt:
-                    df_exp = df_exp[
-                        df_exp['SKU_ID'].astype(str).str.contains(search_txt, case=False) | 
-                        df_exp['Product_Name'].astype(str).str.contains(search_txt, case=False)
-                    ]
-                
-                # Column Selection
-                # Basic info cols + selected months
-                cols_display = ['SKU_ID', 'Product_Name', 'Brand', 'SKU_Tier']
-                month_cols_display = sorted_fcst_cols[:months_to_show] # Show first X months or last? Usually first few months are priority.
-                
-                final_cols = [c for c in cols_display if c in df_exp.columns] + month_cols_display
-                
-                # Display Dataframe
-                st.dataframe(
-                    df_exp[final_cols], 
-                    use_container_width=True, 
-                    height=500,
-                    column_config={
-                        c: st.column_config.NumberColumn(format="%.0f") for c in month_cols_display
-                    }
+        # --- STATUS BADGES (Library availability) ---
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            st.success("✅ NumPy / Pandas (Moving Average + Linear)")
+        with col_b2:
+            if STATSMODELS_AVAILABLE:
+                st.success("✅ Statsmodels (Holt-Winters)")
+            else:
+                st.error("❌ Statsmodels not installed")
+        with col_b3:
+            if PROPHET_AVAILABLE:
+                st.success("✅ Prophet (Meta) — Available")
+            else:
+                st.warning("⚠️ Prophet not installed — pip install prophet")
+
+        st.divider()
+
+        if df_sales.empty:
+            st.warning("⚠️ Tidak ada data Sales historis. Upload data ke sheet 'Sales' terlebih dahulu.")
+        else:
+            # =================================================================
+            # SECTION 1: CONFIGURATION PANEL
+            # =================================================================
+            st.markdown("### ⚙️ Forecast Configuration")
+            cfg1, cfg2 = st.columns([1, 2])
+
+            with cfg1:
+                granularity = st.radio(
+                    "📊 Analysis Level:",
+                    ["Per SKU", "Per Brand"],
+                    horizontal=True,
+                    key="ai_granularity"
                 )
-                
-                # --- DUMMY DOWNLOAD BUTTON (SECURITY LOCK) ---
-                st.write("")
-                if st.button("📥 Download Filtered Data (CSV)", use_container_width=True, type="secondary", key="btn_dl_ecomm"):
-                    st.error("🔒 **SECURITY ALERT: RESTRICTED ACCESS**")
-                    st.warning("Data extraction & CSV download features are disabled in this environment to protect company confidentiality and raw data integrity. Please request clearance from the S&OP Admin.")
-                    st.toast("Access Denied: Enterprise Security Policy.", icon="🚫")
 
-    else:
-        st.info("ℹ️ Silakan upload data forecast di sheet 'Forecast_2026_Ecomm' terlebih dahulu.")
+            with cfg2:
+                if granularity == "Per SKU":
+                    # Build SKU options with product name
+                    if not df_product_active.empty:
+                        sku_opts = df_product_active.apply(
+                            lambda r: f"{r['SKU_ID']} — {r.get('Product_Name', '')}", axis=1
+                        ).tolist()
+                    else:
+                        sku_opts = df_sales['SKU_ID'].unique().tolist()
+                    selected_entity_display = st.selectbox(
+                        "🔍 Select SKU:", sorted(sku_opts), key="ai_sku_sel"
+                    )
+                    entity_value = selected_entity_display.split(" — ")[0].strip()
+                    entity_label = selected_entity_display
+                else:
+                    brand_opts = sorted(df_sales['Brand'].dropna().unique().tolist()) if 'Brand' in df_sales.columns else []
+                    entity_value = st.selectbox("🏷️ Select Brand:", brand_opts, key="ai_brand_sel")
+                    entity_label = entity_value
+
+            # Method selection with description
+            METHOD_INFO = {
+                "Moving Average (Simple)": {
+                    "key": "ma_simple",
+                    "desc": "Rata-rata N bulan terakhir + trend adjustment. Cocok untuk data stabil.",
+                    "icon": "📊"
+                },
+                "Moving Average (Weighted)": {
+                    "key": "ma_weighted",
+                    "desc": "Bulan terbaru diberi bobot lebih besar. Cocok untuk data dengan momentum.",
+                    "icon": "⚖️"
+                },
+                "Holt-Winters (Exponential Smoothing)": {
+                    "key": "holt_winters",
+                    "desc": "Model statistik yang memperhitungkan trend + seasonalitas. Akurat untuk data bulanan.",
+                    "icon": "📈"
+                },
+                "Linear Trend + Seasonality": {
+                    "key": "linear_seasonal",
+                    "desc": "Regresi linear + faktor musiman per bulan. Transparan dan interpretable.",
+                    "icon": "📐"
+                },
+                "Prophet (Meta)": {
+                    "key": "prophet",
+                    "desc": "Model ML Facebook/Meta. Terbaik untuk deteksi trend & holiday effect.",
+                    "icon": "🔮"
+                }
+            }
+
+            m_opts = list(METHOD_INFO.keys())
+            if not STATSMODELS_AVAILABLE:
+                m_opts = [m for m in m_opts if "Holt-Winters" not in m]
+            if not PROPHET_AVAILABLE:
+                m_opts = [m for m in m_opts if "Prophet" not in m]
+
+            p1, p2 = st.columns([2, 1])
+            with p1:
+                selected_method_name = st.selectbox(
+                    "📐 Forecast Method:", m_opts, key="ai_method_sel"
+                )
+            with p2:
+                method_info = METHOD_INFO[selected_method_name]
+                st.info(f"{method_info['icon']} {method_info['desc']}")
+
+            method_key = method_info["key"]
+
+            # Method parameters
+            params = {}
+            if method_key in ("ma_simple", "ma_weighted"):
+                params['window'] = st.slider(
+                    "📅 Lookback Window (months):", 2, 12, 3,
+                    help="Jumlah bulan historis sebagai dasar kalkulasi",
+                    key="ai_window"
+                )
+
+            # Forecast horizon
+            n_forecast = 12
+            st.caption(f"📆 Forecast Horizon: **12 months forward** dari bulan terakhir data historis")
+
+            # Generate button
+            st.write("")
+            generate_btn = st.button(
+                "🚀 Generate AI Forecast",
+                type="primary",
+                use_container_width=True,
+                key="ai_gen_btn"
+            )
+
+            # =================================================================
+            # SECTION 2: GENERATE & DISPLAY RESULTS
+            # =================================================================
+            if generate_btn:
+                with st.spinner(f"🔄 Running {selected_method_name} for {entity_label}..."):
+
+                    # Prepare time series
+                    ts = ai_prepare_ts(df_sales, granularity.split(" ")[1], entity_value)
+
+                    if len(ts) < 3:
+                        st.error(f"❌ Data historis terlalu sedikit ({len(ts)} bulan). Minimal 3 bulan data diperlukan.")
+                    else:
+                        # Run forecast
+                        fc, ci_lo, ci_hi = None, None, None
+
+                        if method_key == "ma_simple":
+                            fc, ci_lo, ci_hi = ai_forecast_ma(ts, n_forecast, params.get('window', 3), False)
+                        elif method_key == "ma_weighted":
+                            fc, ci_lo, ci_hi = ai_forecast_ma(ts, n_forecast, params.get('window', 3), True)
+                        elif method_key == "holt_winters":
+                            fc, ci_lo, ci_hi = ai_forecast_holt_winters(ts, n_forecast)
+                        elif method_key == "linear_seasonal":
+                            fc, ci_lo, ci_hi = ai_forecast_linear_seasonal(ts, n_forecast)
+                        elif method_key == "prophet":
+                            fc, ci_lo, ci_hi = ai_forecast_prophet(ts, n_forecast)
+
+                        if fc is None:
+                            st.error("❌ Forecasting gagal. Coba method lain atau cek ketersediaan data.")
+                        else:
+                            # Backtest
+                            mape, backtest_df = ai_backtest(ts, method_key, params, holdout=3)
+
+                            # =====================================================
+                            # RESULT METRICS ROW
+                            # =====================================================
+                            st.divider()
+                            st.markdown("### 📊 Forecast Results")
+
+                            rm1, rm2, rm3, rm4 = st.columns(4)
+                            total_fcst_12m = fc.sum()
+                            avg_monthly = fc.mean()
+                            peak_m = fc.idxmax().strftime('%b-%y')
+                            peak_v = fc.max()
+
+                            with rm1:
+                                st.metric("Total 12M Forecast", f"{total_fcst_12m:,.0f} units")
+                            with rm2:
+                                st.metric("Avg Monthly", f"{avg_monthly:,.0f} units")
+                            with rm3:
+                                st.metric("Peak Month", peak_m, delta=f"{peak_v:,.0f} units")
+                            with rm4:
+                                if mape is not None:
+                                    mape_color = "normal" if mape < 20 else "off"
+                                    st.metric(
+                                        "Backtest MAPE",
+                                        f"{mape:.1f}%",
+                                        delta=f"{'Good' if mape < 20 else 'Review'}",
+                                        delta_color=mape_color
+                                    )
+                                else:
+                                    st.metric("Backtest MAPE", "N/A", delta="Insufficient data")
+
+                            # =====================================================
+                            # MAIN FORECAST CHART
+                            # =====================================================
+                            fig_fc = go.Figure()
+
+                            # Historical — solid area
+                            fig_fc.add_trace(go.Scatter(
+                                x=ts.index, y=ts.values,
+                                name='Historical Sales',
+                                mode='lines+markers',
+                                line=dict(color='#6366F1', width=2.5),
+                                marker=dict(size=5, color='#6366F1'),
+                                fill='tozeroy',
+                                fillcolor='rgba(99,102,241,0.08)'
+                            ))
+
+                            # Confidence interval — shaded band
+                            if ci_lo is not None and ci_hi is not None:
+                                fig_fc.add_trace(go.Scatter(
+                                    x=list(fc.index) + list(fc.index[::-1]),
+                                    y=list(ci_hi) + list(ci_lo[::-1]),
+                                    fill='toself',
+                                    fillcolor='rgba(245,158,11,0.12)',
+                                    line=dict(color='rgba(0,0,0,0)'),
+                                    name='Confidence Interval',
+                                    showlegend=True
+                                ))
+
+                            # Forecast line — dashed
+                            fig_fc.add_trace(go.Scatter(
+                                x=fc.index, y=fc.values,
+                                name=f'AI Forecast ({selected_method_name})',
+                                mode='lines+markers',
+                                line=dict(color='#F59E0B', width=3, dash='dash'),
+                                marker=dict(size=7, color='#F59E0B',
+                                            line=dict(width=2, color='white')),
+                                text=[f"{v:,.0f}" for v in fc.values],
+                                textposition='top center'
+                            ))
+
+                            # Vertical separator
+                            fig_fc.add_vline(
+                                x=ts.index[-1],
+                                line_dash="dot", line_color="gray",
+                                annotation_text="Forecast Start",
+                                annotation_position="top right"
+                            )
+
+                            fig_fc.update_layout(
+                                height=480,
+                                title=dict(
+                                    text=f"<b>📈 Demand Forecast: {entity_label}</b><br>"
+                                         f"<sup>Method: {selected_method_name} | Horizon: 12 Months</sup>",
+                                    font=dict(size=15)
+                                ),
+                                xaxis_title="Month",
+                                yaxis_title="Quantity (Units)",
+                                hovermode="x unified",
+                                plot_bgcolor='white',
+                                legend=dict(orientation="h", y=1.12, x=0.5, xanchor='center'),
+                                margin=dict(t=80, b=20, l=20, r=20)
+                            )
+                            st.plotly_chart(fig_fc, use_container_width=True)
+
+                            # =====================================================
+                            # BACKTEST + COMPARISON SIDE BY SIDE
+                            # =====================================================
+                            bc1, bc2 = st.columns(2)
+
+                            with bc1:
+                                st.markdown("#### 🧪 Backtest Accuracy (Last 3 Months)")
+                                if backtest_df is not None:
+                                    # Color APE column
+                                    def color_ape(val):
+                                        if val < 10: return 'background-color:#d1fae5'
+                                        elif val < 25: return 'background-color:#fef3c7'
+                                        else: return 'background-color:#fee2e2'
+
+                                    styled = backtest_df.style.applymap(
+                                        color_ape, subset=['APE (%)']
+                                    ).format({'APE (%)': '{:.1f}%'})
+
+                                    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+                                    if mape is not None:
+                                        if mape < 15:
+                                            st.success(f"🎯 MAPE {mape:.1f}% — Excellent accuracy")
+                                        elif mape < 25:
+                                            st.warning(f"⚠️ MAPE {mape:.1f}% — Acceptable, monitor closely")
+                                        else:
+                                            st.error(f"🚨 MAPE {mape:.1f}% — High error, consider other methods")
+                                else:
+                                    st.info("ℹ️ Insufficient data for backtest (need >6 months).")
+
+                            with bc2:
+                                st.markdown("#### 📋 AI Forecast vs Existing Plan")
+                                existing_plan = ai_get_existing_plan(
+                                    df_ecomm_forecast,
+                                    granularity.split(" ")[1],
+                                    entity_value,
+                                    ecomm_forecast_month_cols
+                                )
+
+                                if not existing_plan.empty:
+                                    # Align plan with AI forecast dates
+                                    plan_aligned = existing_plan.reindex(fc.index, fill_value=0)
+
+                                    fig_comp = go.Figure()
+                                    fig_comp.add_trace(go.Bar(
+                                        x=fc.index.strftime('%b-%y'),
+                                        y=plan_aligned.values,
+                                        name='Existing Plan',
+                                        marker_color='rgba(99,102,241,0.5)',
+                                        marker_line_color='#6366F1',
+                                        marker_line_width=1.5
+                                    ))
+                                    fig_comp.add_trace(go.Bar(
+                                        x=fc.index.strftime('%b-%y'),
+                                        y=fc.values,
+                                        name='AI Suggestion',
+                                        marker_color='rgba(245,158,11,0.7)',
+                                        marker_line_color='#F59E0B',
+                                        marker_line_width=1.5
+                                    ))
+                                    fig_comp.update_layout(
+                                        height=300,
+                                        barmode='group',
+                                        plot_bgcolor='white',
+                                        legend=dict(orientation="h", y=1.1),
+                                        margin=dict(t=40, b=10, l=10, r=10)
+                                    )
+                                    st.plotly_chart(fig_comp, use_container_width=True)
+
+                                    # Gap analysis
+                                    gap_total = fc.sum() - plan_aligned.sum()
+                                    gap_pct = (gap_total / plan_aligned.sum() * 100) if plan_aligned.sum() > 0 else 0
+                                    if abs(gap_pct) > 10:
+                                        icon = "📈" if gap_pct > 0 else "📉"
+                                        st.info(f"{icon} AI suggests **{abs(gap_pct):.1f}% {'higher' if gap_pct > 0 else 'lower'}** vs existing plan ({gap_total:+,.0f} units)")
+                                    else:
+                                        st.success("✅ AI forecast closely aligned with existing plan (±10%)")
+                                else:
+                                    st.info("ℹ️ No existing plan found for this entity in Forecast_2026_Ecomm.")
+
+                            # =====================================================
+                            # OUTPUT TABLE + DOWNLOAD
+                            # =====================================================
+                            st.divider()
+                            st.markdown("### 📥 Forecast Output")
+
+                            # Build output dataframe
+                            output_rows = []
+                            for date, qty in fc.items():
+                                existing_qty = 0
+                                if not existing_plan.empty and date in existing_plan.index:
+                                    existing_qty = existing_plan[date]
+
+                                output_rows.append({
+                                    'Entity': entity_value,
+                                    'Entity_Type': granularity.split(" ")[1],
+                                    'Month': date.strftime('%b-%y'),
+                                    'AI_Forecast_Qty': round(qty),
+                                    'CI_Lower': round(ci_lo[list(fc.index).index(date)]) if ci_lo is not None else None,
+                                    'CI_Upper': round(ci_hi[list(fc.index).index(date)]) if ci_hi is not None else None,
+                                    'Existing_Plan_Qty': round(existing_qty),
+                                    'Gap_vs_Plan': round(qty - existing_qty),
+                                    'Method': selected_method_name,
+                                    'Backtest_MAPE_Pct': round(mape, 1) if mape is not None else None
+                                })
+
+                            output_df = pd.DataFrame(output_rows)
+
+                            # Display styled table
+                            def highlight_gap(val):
+                                if isinstance(val, (int, float)):
+                                    if val > 0: return 'color: #16a34a; font-weight: bold'
+                                    elif val < 0: return 'color: #dc2626; font-weight: bold'
+                                return ''
+
+                            st.dataframe(
+                                output_df.style.applymap(highlight_gap, subset=['Gap_vs_Plan']),
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    'AI_Forecast_Qty': st.column_config.NumberColumn('AI Forecast', format='%d'),
+                                    'CI_Lower': st.column_config.NumberColumn('CI Lower', format='%d'),
+                                    'CI_Upper': st.column_config.NumberColumn('CI Upper', format='%d'),
+                                    'Existing_Plan_Qty': st.column_config.NumberColumn('Existing Plan', format='%d'),
+                                    'Gap_vs_Plan': st.column_config.NumberColumn('Gap vs Plan', format='%+d'),
+                                }
+                            )
+
+                            # Real CSV Download
+                            csv_bytes = output_df.to_csv(index=False).encode('utf-8')
+                            filename = f"AI_Forecast_{entity_value.replace(' ', '_')}_{method_key}_{datetime.now().strftime('%Y%m%d')}.csv"
+
+                            st.download_button(
+                                label="📥 Download Forecast as CSV",
+                                data=csv_bytes,
+                                file_name=filename,
+                                mime='text/csv',
+                                type='primary',
+                                use_container_width=True
+                            )
+
+                            st.caption(
+                                f"💡 **Tips penggunaan:** Bandingkan kolom *AI_Forecast_Qty* dengan *Existing_Plan_Qty*. "
+                                f"Jika MAPE backtest < 20%, AI suggestion layak dijadikan referensi revisi plan. "
+                                f"Selalu validasi dengan knowledge lokal (promo, listing baru, dll)."
+                            )
 
 # --- TAB 7: PROFITABILITY & MARGIN ANALYSIS (WITH TIER ANALYSIS) ---
 with tab7:
