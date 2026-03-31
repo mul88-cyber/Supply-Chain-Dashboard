@@ -2707,7 +2707,7 @@ if monthly_performance:
         last_month_name = selected_month_str
         # --- AKHIR SCRIPT FILTER BULAN ---
         
-        # Create tabs for Under and Over SKUs (Script Bapak di bawah ini tetap sama)
+        # Create tabs for Under and Over SKUs (Script di bawah ini tetap sama)
         eval_tab1, eval_tab2 = st.tabs([f"📉 UNDER Forecast ({last_month_name})", f"📈 OVER Forecast ({last_month_name})"])
         
         with eval_tab1:
@@ -4814,7 +4814,7 @@ with tab6:
             # Method selection with description
             METHOD_INFO = {
                 # Tambahkan sebelum penutup } dari METHOD_INFO:
-                "Rolling Baseline × MtM Seasonal ⭐ (Your S&OP Method)": {
+                "Rolling Baseline × MtM Seasonal ⭐": {
                     "key": "rolling_mtm",
                     "desc": "Baseline 3 bulan terakhir × historical MtM growth ratio. "
                             "Metode S&OP praktisi — adaptif, interpretable, proven.",
@@ -4881,7 +4881,7 @@ with tab6:
                     key="ai_baseline_window"
                 )
                 st.info(
-                    "ℹ️ Method ini mereplikasi workflow S&OP Bapak: "
+                    "ℹ️ Method ini mereplikasi workflow S&OP Existing: "
                     "Baseline rolling × MtM seasonal ratio dari semua history. "
                     "Anomaly detection aktif otomatis."
                 )
