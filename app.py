@@ -4972,10 +4972,10 @@ with tab6:
                                 mape, backtest_df = ai_backtest(ts, method_key, params, holdout=3)
 
                             # =====================================================
-                            # RESULT METRICS ROW
+                            # RESULT METRICS ROW (IMPROVED WITH FINANCIAL IMPACT)
                             # =====================================================
                             st.divider()
-                            st.markdown("### 📊 Forecast Results")
+                            st.markdown("### 📊 AI Forecast Results & Financial Impact")
 
                             rm1, rm2, rm3, rm4 = st.columns(4)
                             total_fcst_12m = fc.sum()
@@ -4991,15 +4991,79 @@ with tab6:
                                 st.metric("Peak Month", peak_m, delta=f"{peak_v:,.0f} units")
                             with rm4:
                                 if mape is not None:
-                                    mape_color = "normal" if mape < 20 else "off"
+                                    # Ubah MAPE menjadi Confidence Level bahasa Bisnis
+                                    if mape < 15:
+                                        conf_level = "High Confidence 🟢"
+                                        mape_color = "normal"
+                                    elif mape <= 25:
+                                        conf_level = "Moderate 🟡"
+                                        mape_color = "off"
+                                    else:
+                                        conf_level = "Low Confidence 🔴"
+                                        mape_color = "inverse"
+                                        
                                     st.metric(
-                                        "Backtest MAPE",
-                                        f"{mape:.1f}%",
-                                        delta=f"{'Good' if mape < 20 else 'Review'}",
+                                        "AI Confidence Level",
+                                        conf_level,
+                                        delta=f"Error (MAPE): {mape:.1f}%",
                                         delta_color=mape_color
                                     )
                                 else:
-                                    st.metric("Backtest MAPE", "N/A", delta="Insufficient data")
+                                    st.metric("AI Confidence Level", "N/A", delta="Need >6mo history")
+
+                            # --- FINANCIAL IMPACT CALCULATION ---
+                            existing_plan = ai_get_existing_plan(
+                                df_ecomm_forecast,
+                                granularity.split(" ")[1],
+                                entity_value,
+                                ecomm_forecast_month_cols
+                            )
+
+                            if not existing_plan.empty:
+                                plan_aligned = existing_plan.reindex(fc.index, fill_value=0)
+                                gap_qty = total_fcst_12m - plan_aligned.sum()
+                                
+                                # Dapatkan Harga (Floor Price) untuk menghitung dampak Finansial
+                                est_price = 0
+                                if granularity == "Per SKU":
+                                    price_df = df_product_active[df_product_active['SKU_ID'].astype(str) == str(entity_value)]
+                                    if not price_df.empty:
+                                        est_price = price_df.iloc[0].get('Floor_Price', 0)
+                                else: # Jika per Brand, ambil rata-rata harga brand tersebut
+                                    price_df = df_product_active[df_product_active['Brand'] == entity_value]
+                                    if not price_df.empty:
+                                        est_price = price_df['Floor_Price'].mean()
+                                
+                                financial_gap = gap_qty * est_price
+                                
+                                # Tampilkan Insight Box Khusus Finansial
+                                if gap_qty > 0:
+                                    fin_bg = "#F0FDF4"
+                                    fin_border = "#22C55E"
+                                    fin_icon = "💰"
+                                    fin_title = "Potential Lost Revenue Identified!"
+                                    fin_desc = f"AI memprediksi demand **{gap_qty:,.0f} unit lebih tinggi** dari rencana manual. Jika akurasi AI ini benar, kita berisiko kehabisan barang (stockout) dan kehilangan potensi Gross Revenue sebesar **Rp {financial_gap/1e6:,.1f} Juta**."
+                                elif gap_qty < 0:
+                                    fin_bg = "#FEF2F2"
+                                    fin_border = "#EF4444"
+                                    fin_icon = "⚠️"
+                                    fin_title = "Overstock Risk Identified!"
+                                    fin_desc = f"AI memprediksi demand **{abs(gap_qty):,.0f} unit lebih rendah** dari rencana manual. Menahan laju PO sangat disarankan untuk mencegah modal mati (*Trapped Capital*) sebesar **Rp {abs(financial_gap)/1e6:,.1f} Juta**."
+                                else:
+                                    fin_bg = "#F8FAFC"
+                                    fin_border = "#94A3B8"
+                                    fin_icon = "⚖️"
+                                    fin_title = "Plan Aligned with AI"
+                                    fin_desc = "Forecast manual sudah sejalan dengan proyeksi AI. Lanjutkan eksekusi sesuai rencana."
+
+                                st.markdown(f"""
+                                <div style="background:{fin_bg}; border-left:5px solid {fin_border}; padding:15px; border-radius:8px; margin: 15px 0;">
+                                    <div style="font-weight:800; font-size:1.1rem; color:#1E293B; margin-bottom:5px;">{fin_icon} {fin_title}</div>
+                                    <div style="font-size:0.95rem; color:#475569;">{fin_desc}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                plan_aligned = pd.Series([0]*len(fc), index=fc.index)
 
                             # =====================================================
                             # MAIN FORECAST CHART
