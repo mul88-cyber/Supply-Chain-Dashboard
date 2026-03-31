@@ -1767,10 +1767,14 @@ def ai_backtest(ts, method, params, holdout=3):
             fc, _, _ = ai_forecast_linear_seasonal(train, holdout)
         elif method == 'prophet':
             fc, _, _ = ai_forecast_prophet(train, holdout)
+        elif method == 'rolling_mtm':
+            # Backtest untuk rolling_mtm — ambil fc saja, abaikan warnings & avg_mtm
+            result = ai_forecast_rolling_baseline_mtm(
+                train, holdout,
+                baseline_window=params.get('baseline_window', 3)
+            )
+            fc = result[0]  # fc series saja
         else:
-            return None, None
-
-        if fc is None:
             return None, None
 
         fc_vals = fc.values[:holdout]
