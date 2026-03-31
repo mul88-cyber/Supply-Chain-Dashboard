@@ -4892,6 +4892,16 @@ with tab6:
 
             # Generate button
             st.write("")
+
+            fc = None
+            ci_lo = None
+            ci_hi = None
+            mape = None
+            backtest_df = None
+            existing_plan = pd.Series(dtype=float)
+            rolling_warnings = []
+            rolling_avg_mtm = {}
+
             generate_btn = st.button(
                 "🚀 Generate AI Forecast",
                 type="primary",
