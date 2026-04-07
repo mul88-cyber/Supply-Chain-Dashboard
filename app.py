@@ -1139,7 +1139,7 @@ def calculate_inventory_metrics_with_3month_avg(df_stock, df_sales, df_product):
         # Categorize inventory status
         conditions = [
             df_inventory['Cover_Months'] < 0.8,
-            (df_inventory['Cover_Months'] >= 0.8) & (df_inventory['Cover_Months'] <= 1.5),
+            (df_inventory['Cover_Months'] >= 0.8) & (df_inventory['Cover_Months'] <= 2),
             df_inventory['Cover_Months'] > 1.5
         ]
         choices = ['Need Replenishment', 'Ideal/Healthy', 'High Stock']
@@ -2002,7 +2002,7 @@ with st.sidebar:
     # Inventory Thresholds
     st.markdown("### 📦 Inventory Thresholds")
     low_stock_threshold = st.slider("Low Stock (months)", 0.0, 2.0, 0.8, 0.1)
-    high_stock_threshold = st.slider("High Stock (months)", 1.0, 6.0, 1.5, 0.1)
+    high_stock_threshold = st.slider("High Stock (months)", 1.0, 6.0, 2.0, 0.1)
     
     # Financial Thresholds
     st.markdown("---")
@@ -3996,7 +3996,7 @@ with tab3:
                     st.success("✅ Tidak ada SKU kritis. Semua aman!")
                     
             with col_alert2:
-                st.markdown(f"**📦 Overstock / Dead Stock Alert (> 1.5 Bulan): <span style='color:#F59E0B;'>{len(df_high)} SKUs</span>**", unsafe_allow_html=True)
+                st.markdown(f"**📦 Overstock / Dead Stock Alert (> 2 Bulan): <span style='color:#F59E0B;'>{len(df_high)} SKUs</span>**", unsafe_allow_html=True)
                 if not df_high.empty:
                     disp_high = df_high[cols_to_show].rename(columns={'Avg_Monthly_Sales_3M':'Sales/Mo', 'Cover_Months':'Cover'})
                     disp_high['Stock_Qty'] = disp_high['Stock_Qty'].apply(lambda x: f"{x:,.0f}")
@@ -4262,9 +4262,10 @@ with tab4:
             # ==============================================================================
             # 6. KEY METRICS GRID (Pastel Gradient Cards)
             # ==============================================================================
-            cover_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)"
-            if cover_months < 0.8: cover_color = "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)"
-            elif cover_months > 1.5: cover_color = "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)"
+            # Prepare Colors based on Logic
+            cover_color = "linear-gradient(135deg, #10B981 0%, #059669 100%)" # Green (Ideal)
+            if cover_months < 0.8: cover_color = "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)" # Red
+            elif cover_months > 2.0: cover_color = "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" 
 
             def render_sku_card(label, val, sub, bg):
                 return f"""
