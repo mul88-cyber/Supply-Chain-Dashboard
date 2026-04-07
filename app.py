@@ -3353,27 +3353,37 @@ with tab2:
         sku_count = df_f_filtered.groupby('Brand')['SKU_ID'].nunique().reset_index(name='SKU_Count')
         merged = pd.merge(merged, sku_count, on='Brand', how='left').fillna(0)
         
-        # Hitung Accuracy Aggregate
-        # Rumus: 1 - abs(PO - Rofo)/Rofo (Weighted by volume implicitly by summing first)
-        # Atau rata-rata akurasi SKU? Untuk level strategic, Weighted Accuracy lebih baik.
-        # Tapi biar konsisten dengan SKU level, kita pakai rata-rata akurasi SKU per Brand.
-        
-        # Hitung akurasi per SKU dulu baru di-average per Brand
-        # (Ini lebih fair untuk melihat performa planning team)
+        # ---------------------------------------------------------
+        # PERBAIKAN LOGIKA AKURASI: HANYA HITUNG JIKA ROFO > 0
+        # ---------------------------------------------------------
         sku_level = pd.merge(
             df_f_filtered.groupby(['Brand', 'SKU_ID'])['Forecast_Qty'].sum().reset_index(),
             df_p_filtered.groupby(['Brand', 'SKU_ID'])['PO_Qty'].sum().reset_index(),
             on=['Brand', 'SKU_ID'], how='outer'
         ).fillna(0)
         
-        sku_level['Accuracy'] = sku_level.apply(
-            lambda x: 100 - abs((x['PO_Qty']/x['Forecast_Qty']*100)-100) if x['Forecast_Qty'] > 0 else 0, axis=1
-        )
-        # Cap accuracy 0-100 for logic check (optional, but raw calculation usually ok)
+        # FILTER: Buang SKU yang Rofo-nya 0 dari perhitungan akurasi
+        valid_sku_level = sku_level[sku_level['Forecast_Qty'] > 0].copy()
         
-        brand_acc = sku_level.groupby('Brand')['Accuracy'].mean().reset_index()
+        if not valid_sku_level.empty:
+            # Hitung akurasi
+            valid_sku_level['Accuracy'] = valid_sku_level.apply(
+                lambda x: 100 - abs((x['PO_Qty']/x['Forecast_Qty']*100)-100), axis=1
+            )
+            # Opsional: Jika PO over sangat jauh (misal 300%), akurasi bisa minus. Kita batasi minimal 0%.
+            valid_sku_level['Accuracy'] = valid_sku_level['Accuracy'].clip(lower=0)
+            
+            # Rata-rata akurasi per Brand (hanya dari SKU yang valid)
+            brand_acc = valid_sku_level.groupby('Brand')['Accuracy'].mean().reset_index()
+        else:
+            brand_acc = pd.DataFrame(columns=['Brand', 'Accuracy'])
         
+        # Gabungkan hasil akurasi ke dataframe utama
         final_df = pd.merge(merged, brand_acc, on='Brand', how='left')
+        
+        # Jika ada brand yang isinya Rofo 0 semua, akurasinya di-set 0 (atau bisa di-set None)
+        final_df['Accuracy'] = final_df['Accuracy'].fillna(0)
+        
         return final_df
 
     # C. UI Selector Period
