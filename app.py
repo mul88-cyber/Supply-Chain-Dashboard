@@ -967,7 +967,7 @@ def calculate_forecast_bias(df_forecast, df_po):
 # --- ====================================================== ---
 
 def calculate_monthly_performance(df_forecast, df_po, df_product):
-    """Calculate performance for each month separately - HANYA SKU dengan Forecast_Qty > 0"""
+    """Calculate performance using Hit Rate for Accuracy and WMAPE for Error Rate"""
     
     monthly_performance = {}
     
@@ -985,7 +985,7 @@ def calculate_monthly_performance(df_forecast, df_po, df_product):
         all_months = sorted(set(list(forecast_months) + list(po_months)))
         
         for month in all_months:
-            # Get data for this month - FILTER HANYA Forecast_Qty > 0
+            # Get data for this month - FILTER HANYA Forecast_Qty > 0 (Abaikan Unplanned)
             df_forecast_month = df_forecast[
                 (df_forecast['Month'] == month) & 
                 (df_forecast['Forecast_Qty'] > 0)
@@ -998,11 +998,8 @@ def calculate_monthly_performance(df_forecast, df_po, df_product):
             
             # Merge forecast and PO for this month
             df_merged = pd.merge(
-                df_forecast_month,
-                df_po_month,
-                on=['SKU_ID'],
-                how='inner',
-                suffixes=('_forecast', '_po')
+                df_forecast_month, df_po_month,
+                on=['SKU_ID'], how='inner', suffixes=('_forecast', '_po')
             )
             
             if not df_merged.empty:
@@ -1010,14 +1007,10 @@ def calculate_monthly_performance(df_forecast, df_po, df_product):
                 if 'Product_Name' not in df_merged.columns or 'Brand' not in df_merged.columns:
                     df_merged = add_product_info_to_data(df_merged, df_product)
                 
-                # Calculate ratio - Pastikan Forecast_Qty > 0
-                df_merged['PO_Rofo_Ratio'] = np.where(
-                    df_merged['Forecast_Qty'] > 0,
-                    (df_merged['PO_Qty'] / df_merged['Forecast_Qty']) * 100,
-                    0
-                )
+                # 1. PERHITUNGAN UNTUK HIT RATE (SKU LEVEL)
+                df_merged['PO_Rofo_Ratio'] = (df_merged['PO_Qty'] / df_merged['Forecast_Qty']) * 100
                 
-                # Categorize
+                # Categorize Status
                 conditions = [
                     df_merged['PO_Rofo_Ratio'] < 80,
                     (df_merged['PO_Rofo_Ratio'] >= 80) & (df_merged['PO_Rofo_Ratio'] <= 120),
@@ -1026,30 +1019,28 @@ def calculate_monthly_performance(df_forecast, df_po, df_product):
                 choices = ['Under', 'Accurate', 'Over']
                 df_merged['Accuracy_Status'] = np.select(conditions, choices, default='Unknown')
                 
-                # Calculate metrics
-                df_merged['Absolute_Percentage_Error'] = abs(df_merged['PO_Rofo_Ratio'] - 100)
-                
-                # Hanya hitung MAPE untuk SKU dengan Forecast_Qty > 0 (Tetap disimpan untuk data tabel)
-                valid_skus = df_merged[df_merged['Forecast_Qty'] > 0]
-                if not valid_skus.empty:
-                    mape = valid_skus['Absolute_Percentage_Error'].mean()
-                else:
-                    mape = 0
-                    
-                # Status counts dihitung lebih dulu
                 status_counts = df_merged['Accuracy_Status'].value_counts().to_dict()
                 total_records = len(df_merged)
                 status_percentages = {k: (v/total_records*100) for k, v in status_counts.items()}
                 
-                # ---> FIX LOGIC ACCURACY <---
-                # Menghitung persentase dari: (Jumlah SKU Accurate / Total SKU) * 100
+                # >>> ACCURACY = HIT RATE (SKU yang Accurate / Total SKU) <<<
                 accurate_count = status_counts.get('Accurate', 0)
                 monthly_accuracy = (accurate_count / total_records * 100) if total_records > 0 else 0
                 
+                # 2. PERHITUNGAN UNTUK MAPE (MENGGUNAKAN WMAPE AGAR AMAN)
+                total_rofo = df_merged['Forecast_Qty'].sum()
+                total_abs_error = abs(df_merged['PO_Qty'] - df_merged['Forecast_Qty']).sum()
+                
+                # >>> WMAPE = Total Selisih Absolut / Total Rofo <<<
+                if total_rofo > 0:
+                    wmape = (total_abs_error / total_rofo) * 100
+                else:
+                    wmape = 0
+                
                 # Store results
                 monthly_performance[month] = {
-                    'accuracy': monthly_accuracy,
-                    'mape': mape,
+                    'accuracy': monthly_accuracy, # Hit Rate (Sesuai strategi Bapak)
+                    'mape': wmape,                # WMAPE (Aman dari outlier)
                     'status_counts': status_counts,
                     'status_percentages': status_percentages,
                     'total_records': total_records,
