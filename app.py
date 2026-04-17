@@ -4122,11 +4122,19 @@ with tab3:
                 # Format value dengan 1 desimal
                 cover_value = round(global_cover_months, 1)
                 
+                # Dynamic Color Logic untuk Stock Coverage
+                if cover_value < 0.8:
+                    c_color = '#EF4444' # Merah (Need Replenishment)
+                elif cover_value <= 2.0:
+                    c_color = '#10B981' # Hijau (Ideal/Aman)
+                else:
+                    c_color = '#F59E0B' # Kuning/Orange (Overstock)
+                
                 option_cover = {
                     "series": [{
                         "type": 'gauge',
-                        "center": ['50%', '60%'],
-                        "radius": '80%',
+                        "center": ['50%', '50%'], 
+                        "radius": '85%',
                         "startAngle": 210,
                         "endAngle": -30,
                         "min": 0,
@@ -4136,54 +4144,48 @@ with tab3:
                             "show": True,
                             "width": 18,
                             "roundCap": True,
-                            "itemStyle": {
-                                "color": {
-                                    "type": 'linear',
-                                    "x": 0, "y": 0, "x2": 1, "y2": 0,
-                                    "colorStops": [
-                                        {"offset": 0, "color": '#EF4444'},
-                                        {"offset": 0.3, "color": '#F59E0B'},
-                                        {"offset": 0.6, "color": '#10B981'},
-                                        {"offset": 1, "color": '#3B82F6'}
-                                    ]
-                                }
-                            }
+                            "itemStyle": {"color": c_color} # Warna dinamis
                         },
                         "axisLine": {
                             "lineStyle": {
-                                "width": 18, 
+                                "width": 18,
+                                # Proporsi warna background gauge (max 6):
+                                # < 0.8 (0.133) Merah | 0.8 - 2.0 (0.333) Hijau | > 2.0 Kuning
                                 "color": [
-                                    [0.3, '#EF4444'], 
-                                    [0.6, '#F59E0B'], 
-                                    [1, '#10B981']
+                                    [0.133, 'rgba(239,68,68,0.2)'],
+                                    [0.333, 'rgba(16,185,129,0.2)'],
+                                    [1, 'rgba(245,158,11,0.2)']
                                 ]
                             }
+                        },
+                        "pointer": {
+                            "itemStyle": {"color": 'auto'} # Jarum otomatis mengikuti warna progress
                         },
                         "axisTick": {"show": False},
                         "splitLine": {"show": False},
                         "axisLabel": {
                             "show": True, 
-                            "fontSize": 12, 
+                            "distance": -30, # Angka ditarik ke dalam agar lebih rapi
+                            "fontSize": 11, 
                             "fontWeight": 'bold', 
-                            "color": '#4B5563',
-                            "formatter": '{value}'  # Angka bulat di label
+                            "color": '#6B7280',
+                            "formatter": '{value}'  
                         },
-                        "anchor": {"show": True, "size": 20},
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '25%'],
+                            "offsetCenter": [0, '80%'], # Judul ditarik ke paling bawah
                             "fontSize": 14,
                             "fontWeight": 'bold',
-                            "color": '#4B5563'
+                            "color": '#6B7280'
                         },
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
                             "fontSize": 36,
-                            "fontWeight": 'bold',
-                            "offsetCenter": [0, 0],
+                            "fontWeight": '900',
+                            "offsetCenter": [0, '40%'], # Angka utama diturunkan agar tidak tertutup jarum
                             "color": '#1F2937',
-                            "formatter": '{value} Mo'  # Format dengan 1 desimal
+                            "formatter": '{value} Mo'
                         },
                         "data": [{
                             "value": cover_value,
@@ -4193,11 +4195,7 @@ with tab3:
                 }
                 
                 try:
-                    st_echarts(
-                        options=option_cover, 
-                        height="350px",
-                        key="gauge_cover_tab3"
-                    )
+                    st_echarts(options=option_cover, height="350px", key="gauge_cover_tab3")
                 except Exception as e:
                     st.warning(f"⚠️ Gagal render gauge: {str(e)}")
                     st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo")
@@ -4209,16 +4207,16 @@ with tab3:
         with col_speed2:
             # Gauge: WH Occupancy
             if ECHARTS_AVAILABLE:
-                # Format value dengan 1 desimal
                 occ_value = round(occupancy_pct, 1)
                 
+                # Logic warna: <80% Hijau, 80-90% Kuning, >90% Merah
                 occ_color = "#10B981" if occ_value < 80 else "#F59E0B" if occ_value < 90 else "#EF4444"
                 
                 option_occ = {
                     "series": [{
                         "type": 'gauge',
-                        "center": ['50%', '60%'],
-                        "radius": '80%',
+                        "center": ['50%', '50%'],
+                        "radius": '85%',
                         "startAngle": 210,
                         "endAngle": -30,
                         "min": 0,
@@ -4234,35 +4232,38 @@ with tab3:
                             "lineStyle": {
                                 "width": 18,
                                 "color": [
-                                    [0.6, '#10B981'], 
-                                    [0.85, '#F59E0B'], 
-                                    [1, '#EF4444']
+                                    [0.8, 'rgba(16,185,129,0.2)'], 
+                                    [0.9, 'rgba(245,158,11,0.2)'], 
+                                    [1, 'rgba(239,68,68,0.2)']
                                 ]
                             }
+                        },
+                        "pointer": {
+                            "itemStyle": {"color": 'auto'}
                         },
                         "axisTick": {"show": False},
                         "splitLine": {"show": False},
                         "axisLabel": {
                             "show": True, 
-                            "fontSize": 12, 
+                            "distance": -30,
+                            "fontSize": 11, 
                             "fontWeight": 'bold', 
-                            "color": '#4B5563',
+                            "color": '#6B7280',
                             "formatter": '{value}%'
                         },
-                        "anchor": {"show": True, "size": 20},
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '25%'],
+                            "offsetCenter": [0, '80%'], # Ditarik ke bawah
                             "fontSize": 14,
                             "fontWeight": 'bold',
-                            "color": '#4B5563'
+                            "color": '#6B7280'
                         },
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
                             "fontSize": 36,
-                            "fontWeight": 'bold',
-                            "offsetCenter": [0, 0],
+                            "fontWeight": '900',
+                            "offsetCenter": [0, '40%'], # Diturunkan agar bersih dari jarum
                             "color": '#1F2937',
                             "formatter": '{value}%'
                         },
@@ -4274,11 +4275,7 @@ with tab3:
                 }
                 
                 try:
-                    st_echarts(
-                        options=option_occ, 
-                        height="350px",
-                        key="gauge_occ_tab3"
-                    )
+                    st_echarts(options=option_occ, height="350px", key="gauge_occ_tab3")
                 except Exception as e:
                     st.warning(f"⚠️ Gagal render gauge: {str(e)}")
                     st.metric("Warehouse Occupancy", f"{occupancy_pct:.1f}%")
