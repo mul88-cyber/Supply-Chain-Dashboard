@@ -43,7 +43,11 @@ try:
     ECHARTS_AVAILABLE = True
 except ImportError:
     ECHARTS_AVAILABLE = False
-    st_echarts = None  # Placeholder
+    # Buat dummy function untuk mencegah error
+    def st_echarts(options=None, height="400px", width="100%", key=None, **kwargs):
+        import streamlit as st
+        st.warning("⚠️ streamlit-echarts tidak terinstall. Jalankan: pip install streamlit-echarts")
+        return None
     
 # --- Konfigurasi Halaman ---
 st.set_page_config(
@@ -4092,7 +4096,7 @@ with tab3:
                 "linear-gradient(135deg, #fb8c00 0%, #ef6c00 100%)"), unsafe_allow_html=True)
 
         # ==============================================================================
-        # 3. STOCK COVER & OCCUPANCY DASHBOARD (FIXED RESPONSIVE GAUGE)
+        # 3. STOCK COVER & OCCUPANCY DASHBOARD (GAUGE DENGAN 1 DESIMAL)
         # ==============================================================================
         st.write("")
         st.subheader("⚡ Inventory Health & Warehouse Utilization")
@@ -4102,6 +4106,9 @@ with tab3:
         with col_speed1:
             # Gauge: Global Coverage menggunakan ECharts
             if ECHARTS_AVAILABLE:
+                # Format value dengan 1 desimal
+                cover_value = round(global_cover_months, 1)
+                
                 option_cover = {
                     "series": [{
                         "type": 'gauge',
@@ -4129,10 +4136,25 @@ with tab3:
                                 }
                             }
                         },
-                        "axisLine": {"lineStyle": {"width": 18, "color": [[0.3, '#EF4444'], [0.6, '#F59E0B'], [1, '#10B981']]}},
+                        "axisLine": {
+                            "lineStyle": {
+                                "width": 18, 
+                                "color": [
+                                    [0.3, '#EF4444'], 
+                                    [0.6, '#F59E0B'], 
+                                    [1, '#10B981']
+                                ]
+                            }
+                        },
                         "axisTick": {"show": False},
                         "splitLine": {"show": False},
-                        "axisLabel": {"show": True, "fontSize": 12, "fontWeight": 'bold', "color": '#4B5563'},
+                        "axisLabel": {
+                            "show": True, 
+                            "fontSize": 12, 
+                            "fontWeight": 'bold', 
+                            "color": '#4B5563',
+                            "formatter": '{value}'  # Angka bulat di label
+                        },
                         "anchor": {"show": True, "size": 20},
                         "title": {
                             "show": True,
@@ -4144,13 +4166,14 @@ with tab3:
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 32,
+                            "fontSize": 36,
                             "fontWeight": 'bold',
                             "offsetCenter": [0, 0],
-                            "color": '#1F2937'
+                            "color": '#1F2937',
+                            "formatter": '{value} Mo'  # Format dengan 1 desimal
                         },
                         "data": [{
-                            "value": global_cover_months,
+                            "value": cover_value,
                             "name": "Stock Coverage"
                         }]
                     }]
@@ -4160,20 +4183,23 @@ with tab3:
                     st_echarts(
                         options=option_cover, 
                         height="350px",
-                        key="gauge_cover"
+                        key="gauge_cover_tab3"
                     )
                 except Exception as e:
                     st.warning(f"⚠️ Gagal render gauge: {str(e)}")
                     st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo")
             else:
-                st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo", help="Total Stock / Total Sales")
+                st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo")
             
-            st.caption("Target: **0.8 - 2.0 Bulan**")
+            st.caption(f"📊 Current: **{global_cover_months:.1f} Bulan** | Target: **0.8 - 2.0 Bulan**")
         
         with col_speed2:
             # Gauge: WH Occupancy
             if ECHARTS_AVAILABLE:
-                occ_color = "#10B981" if occupancy_pct < 80 else "#F59E0B" if occupancy_pct < 90 else "#EF4444"
+                # Format value dengan 1 desimal
+                occ_value = round(occupancy_pct, 1)
+                
+                occ_color = "#10B981" if occ_value < 80 else "#F59E0B" if occ_value < 90 else "#EF4444"
                 
                 option_occ = {
                     "series": [{
@@ -4194,12 +4220,22 @@ with tab3:
                         "axisLine": {
                             "lineStyle": {
                                 "width": 18,
-                                "color": [[0.6, '#10B981'], [0.85, '#F59E0B'], [1, '#EF4444']]
+                                "color": [
+                                    [0.6, '#10B981'], 
+                                    [0.85, '#F59E0B'], 
+                                    [1, '#EF4444']
+                                ]
                             }
                         },
                         "axisTick": {"show": False},
                         "splitLine": {"show": False},
-                        "axisLabel": {"show": True, "fontSize": 12, "fontWeight": 'bold', "color": '#4B5563'},
+                        "axisLabel": {
+                            "show": True, 
+                            "fontSize": 12, 
+                            "fontWeight": 'bold', 
+                            "color": '#4B5563',
+                            "formatter": '{value}%'
+                        },
                         "anchor": {"show": True, "size": 20},
                         "title": {
                             "show": True,
@@ -4211,14 +4247,14 @@ with tab3:
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 32,
+                            "fontSize": 36,
                             "fontWeight": 'bold',
                             "offsetCenter": [0, 0],
                             "color": '#1F2937',
                             "formatter": '{value}%'
                         },
                         "data": [{
-                            "value": occupancy_pct,
+                            "value": occ_value,
                             "name": "Occupancy"
                         }]
                     }]
@@ -4228,7 +4264,7 @@ with tab3:
                     st_echarts(
                         options=option_occ, 
                         height="350px",
-                        key="gauge_occ"
+                        key="gauge_occ_tab3"
                     )
                 except Exception as e:
                     st.warning(f"⚠️ Gagal render gauge: {str(e)}")
@@ -4236,7 +4272,7 @@ with tab3:
             else:
                 st.metric("Warehouse Occupancy", f"{occupancy_pct:.1f}%")
             
-            st.caption(f"Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs")
+            st.caption(f"📦 Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs ({occ_value:.1f}%)")
 
         # ==============================================================================
         # 3.5 ACTIONABLE INVENTORY ALERTS (ACTIVE & REGULAR SKU ONLY)
