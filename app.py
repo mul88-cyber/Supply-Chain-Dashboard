@@ -3917,64 +3917,85 @@ with tab3:
         with col_speed1:
             # Gauge: Global Coverage menggunakan ECharts
             if ECHARTS_AVAILABLE:
+                # Format value dengan 1 desimal
                 cover_value = round(global_cover_months, 1)
                 
                 option_cover = {
                     "series": [{
                         "type": 'gauge',
-                        "startAngle": 180,
-                        "endAngle": 0,
-                        "center": ['50%', '65%'], # Poros dinaikkan
-                        "radius": '90%',
+                        "center": ['50%', '60%'],
+                        "radius": '80%',
+                        "startAngle": 210,
+                        "endAngle": -30,
                         "min": 0,
                         "max": 6,
                         "splitNumber": 6,
+                        "progress": {
+                            "show": True,
+                            "width": 18,
+                            "roundCap": True,
+                            "itemStyle": {
+                                "color": {
+                                    "type": 'linear',
+                                    "x": 0, "y": 0, "x2": 1, "y2": 0,
+                                    "colorStops": [
+                                        {"offset": 0, "color": '#EF4444'},
+                                        {"offset": 0.3, "color": '#F59E0B'},
+                                        {"offset": 0.6, "color": '#10B981'},
+                                        {"offset": 1, "color": '#3B82F6'}
+                                    ]
+                                }
+                            }
+                        },
                         "axisLine": {
                             "lineStyle": {
-                                "width": 20,
+                                "width": 18, 
                                 "color": [
-                                    [0.133, '#EF4444'], 
-                                    [0.333, '#10B981'], 
-                                    [1, '#F59E0B']      
+                                    [0.3, '#EF4444'], 
+                                    [0.6, '#F59E0B'], 
+                                    [1, '#10B981']
                                 ]
                             }
                         },
-                        "progress": {"show": False},
-                        "pointer": {
-                            "length": '65%',
-                            "width": 6,
-                            "itemStyle": {"color": '#4B5563'}
-                        },
                         "axisTick": {"show": False},
-                        "splitLine": {"length": 20, "lineStyle": {"color": 'white', "width": 3}},
+                        "splitLine": {"show": False},
                         "axisLabel": {
-                            "distance": 15, # Dijauhkan agar tidak dempet
-                            "color": '#6B7280',
-                            "fontSize": 12,
-                            "fontWeight": 'bold'
+                            "show": True, 
+                            "fontSize": 12, 
+                            "fontWeight": 'bold', 
+                            "color": '#4B5563',
+                            "formatter": '{value}'  # Angka bulat di label
                         },
+                        "anchor": {"show": True, "size": 20},
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '45%'], # Pindah ke paling bawah
+                            "offsetCenter": [0, '25%'],
                             "fontSize": 14,
                             "fontWeight": 'bold',
-                            "color": '#6B7280'
+                            "color": '#4B5563'
                         },
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 34,
-                            "fontWeight": '900',
-                            "offsetCenter": [0, '15%'], # ANGKA PINDAH KE BAWAH JARUM
+                            "fontSize": 36,
+                            "fontWeight": 'bold',
+                            "offsetCenter": [0, 0],
                             "color": '#1F2937',
-                            "formatter": '{value} Mo'
+                            "formatter": '{value} Mo'  # Format dengan 1 desimal
                         },
-                        "data": [{"value": cover_value, "name": "Stock Coverage"}]
+                        "data": [{
+                            "value": cover_value,
+                            "name": "Stock Coverage"
+                        }]
                     }]
                 }
                 
                 try:
-                    st_echarts(options=option_cover, height="280px", key="gauge_cover_tab3")
+                    st_echarts(
+                        options=option_cover, 
+                        height="350px",
+                        key="gauge_cover_tab3"
+                    )
                 except Exception as e:
                     st.warning(f"⚠️ Gagal render gauge: {str(e)}")
                     st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo")
@@ -3986,64 +4007,76 @@ with tab3:
         with col_speed2:
             # Gauge: WH Occupancy
             if ECHARTS_AVAILABLE:
+                # Format value dengan 1 desimal
                 occ_value = round(occupancy_pct, 1)
+                
+                occ_color = "#10B981" if occ_value < 80 else "#F59E0B" if occ_value < 90 else "#EF4444"
                 
                 option_occ = {
                     "series": [{
                         "type": 'gauge',
-                        "startAngle": 180,
-                        "endAngle": 0,
-                        "center": ['50%', '65%'],
-                        "radius": '90%',
+                        "center": ['50%', '60%'],
+                        "radius": '80%',
+                        "startAngle": 210,
+                        "endAngle": -30,
                         "min": 0,
                         "max": 100,
                         "splitNumber": 5,
+                        "progress": {
+                            "show": True,
+                            "width": 18,
+                            "roundCap": True,
+                            "itemStyle": {"color": occ_color}
+                        },
                         "axisLine": {
                             "lineStyle": {
-                                "width": 20,
+                                "width": 18,
                                 "color": [
-                                    [0.8, '#10B981'],  
-                                    [0.9, '#F59E0B'],  
-                                    [1, '#EF4444']     
+                                    [0.6, '#10B981'], 
+                                    [0.85, '#F59E0B'], 
+                                    [1, '#EF4444']
                                 ]
                             }
                         },
-                        "progress": {"show": False},
-                        "pointer": {
-                            "length": '65%',
-                            "width": 6,
-                            "itemStyle": {"color": '#4B5563'}
-                        },
                         "axisTick": {"show": False},
-                        "splitLine": {"length": 20, "lineStyle": {"color": 'white', "width": 3}},
+                        "splitLine": {"show": False},
                         "axisLabel": {
-                            "distance": 15,
-                            "color": '#6B7280',
-                            "fontSize": 12,
-                            "fontWeight": 'bold'
+                            "show": True, 
+                            "fontSize": 12, 
+                            "fontWeight": 'bold', 
+                            "color": '#4B5563',
+                            "formatter": '{value}%'
                         },
+                        "anchor": {"show": True, "size": 20},
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '45%'],
+                            "offsetCenter": [0, '25%'],
                             "fontSize": 14,
                             "fontWeight": 'bold',
-                            "color": '#6B7280'
+                            "color": '#4B5563'
                         },
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 34,
-                            "fontWeight": '900',
-                            "offsetCenter": [0, '15%'], # ANGKA PINDAH KE BAWAH JARUM
+                            "fontSize": 36,
+                            "fontWeight": 'bold',
+                            "offsetCenter": [0, 0],
                             "color": '#1F2937',
                             "formatter": '{value}%'
                         },
-                        "data": [{"value": occ_value, "name": "Occupancy"}]
+                        "data": [{
+                            "value": occ_value,
+                            "name": "Occupancy"
+                        }]
                     }]
                 }
                 
                 try:
-                    st_echarts(options=option_occ, height="280px", key="gauge_occ_tab3")
+                    st_echarts(
+                        options=option_occ, 
+                        height="350px",
+                        key="gauge_occ_tab3"
+                    )
                 except Exception as e:
                     st.warning(f"⚠️ Gagal render gauge: {str(e)}")
                     st.metric("Warehouse Occupancy", f"{occupancy_pct:.1f}%")
@@ -4051,7 +4084,6 @@ with tab3:
                 st.metric("Warehouse Occupancy", f"{occupancy_pct:.1f}%")
             
             st.caption(f"📦 Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs ({occ_value:.1f}%)")
-
 
         # ==============================================================================
         # 3.5 ACTIONABLE INVENTORY ALERTS (ACTIVE & REGULAR SKU ONLY)
