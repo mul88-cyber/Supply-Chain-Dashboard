@@ -3188,7 +3188,7 @@ with tab1:
             }
             
             try:
-                st_echarts.st_echarts(options=options, height="450px", key="calendar_heatmap")
+                st_echarts(options=options, height="450px", key="calendar_heatmap")
             except Exception as e:
                 st.warning(f"⚠️ Gagal render ECharts: {e}. Pastikan library terinstall.")
         else:
