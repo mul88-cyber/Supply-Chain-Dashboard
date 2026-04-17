@@ -3114,34 +3114,42 @@ with tab1:
         summary_df = pd.DataFrame(summary_data)
 
         # ============================================================
-        # ENHANCEMENT 1: ECHARTS CALENDAR HEATMAP
+        # ENHANCEMENT 1: ECHARTS CARTESIAN HEATMAP (MONTHLY)
         # ============================================================
         if ECHARTS_AVAILABLE:
             st.markdown("### 📆 Monthly Performance Heatmap (ECharts)")
             st.caption("Semakin hijau, semakin baik akurasi. Merah menunjukkan bulan dengan performa buruk.")
 
-            # Siapkan data untuk ECharts Calendar
-            # Format: [ [tanggal, nilai], ... ]
-            calendar_data = []
-            for _, row in summary_df.iterrows():
-                # Ambil hari pertama bulan itu
-                date_str = row['Month_Raw'].strftime('%Y-%m-%d')
-                calendar_data.append([date_str, round(row['Accuracy'], 1)])
-
-            # Hitung range untuk visual map
-            max_acc = max(summary_df['Accuracy']) if not summary_df.empty else 100
-            min_acc = min(summary_df['Accuracy']) if not summary_df.empty else 0
+            # 1. Siapkan Label X-Axis (Bulan)
+            months_label = summary_df['Month_Raw'].dt.strftime('%b %Y').tolist()
+            
+            # 2. Siapkan Data Heatmap [x_index, y_index, value]
+            heatmap_data = []
+            for i, acc_val in enumerate(summary_df['Accuracy']):
+                heatmap_data.append([i, 0, round(acc_val, 1)])
 
             options = {
-                "title": {
-                    "top": 30,
-                    "left": 'center',
-                    "text": 'Monthly Forecast Accuracy Calendar',
-                    "textStyle": {"fontSize": 16, "fontWeight": "bold"}
-                },
                 "tooltip": {
-                    "trigger": 'item',
-                    "formatter": '{b}: <b>{c}%</b>'
+                    "position": 'top',
+                    "formatter": '{c}%'
+                },
+                "grid": {
+                    "height": '40%',
+                    "top": '15%',
+                    "left": '10%',
+                    "right": '5%'
+                },
+                "xAxis": {
+                    "type": 'category',
+                    "data": months_label,
+                    "splitArea": {"show": True},
+                    "axisLabel": {"fontWeight": "bold", "color": "#4B5563"}
+                },
+                "yAxis": {
+                    "type": 'category',
+                    "data": ['Accuracy'],
+                    "splitArea": {"show": True},
+                    "axisLabel": {"fontWeight": "bold", "color": "#1F2937"}
                 },
                 "visualMap": {
                     "min": 0,
@@ -3149,46 +3157,39 @@ with tab1:
                     "calculable": True,
                     "orient": 'horizontal',
                     "left": 'center',
-                    "bottom": 20,
-                    "inRange": {"color": ['#EF4444', '#F59E0B', '#10B981']},  # Merah -> Kuning -> Hijau
-                    "seriesIndex": [0],
-                },
-                "calendar": {
-                    "top": 80,
-                    "left": 30,
-                    "right": 30,
-                    "cellSize": ['auto', 20],
-                    "range": [
-                        summary_df['Month_Raw'].min().strftime('%Y-%m'),
-                        summary_df['Month_Raw'].max().strftime('%Y-%m')
-                    ],
-                    "itemStyle": {"borderWidth": 2, "borderColor": '#fff'},
-                    "yearLabel": {"show": True},
-                    "monthLabel": {"show": True, "nameMap": "en"},
-                    "splitLine": {"show": True, "lineStyle": {"color": '#ccc', "width": 1, "type": 'dashed'}}
+                    "bottom": '0%',
+                    "inRange": {
+                        "color": ['#EF4444', '#F59E0B', '#10B981'] # Merah -> Kuning -> Hijau
+                    }
                 },
                 "series": [{
+                    "name": 'Accuracy',
                     "type": 'heatmap',
-                    "coordinateSystem": 'calendar',
-                    "data": calendar_data,
+                    "data": heatmap_data,
                     "label": {
                         "show": True,
                         "formatter": '{c}%',
-                        "fontSize": 11,
-                        "fontWeight": 'bold'
+                        "color": '#1F2937',
+                        "fontWeight": 'bold',
+                        "fontSize": 16
+                    },
+                    "itemStyle": {
+                        "borderColor": '#ffffff',
+                        "borderWidth": 4,
+                        "borderRadius": 8
                     },
                     "emphasis": {
                         "itemStyle": {
                             "shadowBlur": 10,
-                            "shadowOffsetX": 0,
                             "shadowColor": 'rgba(0, 0, 0, 0.5)'
                         }
                     }
-                }],
+                }]
             }
             
             try:
-                st_echarts(options=options, height="450px", key="calendar_heatmap")
+                # Height diperkecil jadi 250px karena sekarang bentuknya baris horizontal
+                st_echarts(options=options, height="250px", key="cartesian_heatmap")
             except Exception as e:
                 st.warning(f"⚠️ Gagal render ECharts: {e}. Pastikan library terinstall.")
         else:
