@@ -4133,7 +4133,7 @@ with tab3:
                 option_cover = {
                     "series": [{
                         "type": 'gauge',
-                        "center": ['50%', '50%'], 
+                        "center": ['50%', '55%'], # Digeser sedikit agar proporsional
                         "radius": '85%',
                         "startAngle": 210,
                         "endAngle": -30,
@@ -4144,13 +4144,11 @@ with tab3:
                             "show": True,
                             "width": 18,
                             "roundCap": True,
-                            "itemStyle": {"color": c_color} # Warna dinamis
+                            "itemStyle": {"color": c_color}
                         },
                         "axisLine": {
                             "lineStyle": {
                                 "width": 18,
-                                # Proporsi warna background gauge (max 6):
-                                # < 0.8 (0.133) Merah | 0.8 - 2.0 (0.333) Hijau | > 2.0 Kuning
                                 "color": [
                                     [0.133, 'rgba(239,68,68,0.2)'],
                                     [0.333, 'rgba(16,185,129,0.2)'],
@@ -4159,13 +4157,13 @@ with tab3:
                             }
                         },
                         "pointer": {
-                            "itemStyle": {"color": 'auto'} # Jarum otomatis mengikuti warna progress
+                            "itemStyle": {"color": c_color} # FIX: Warna jarum solid mengikuti status
                         },
                         "axisTick": {"show": False},
                         "splitLine": {"show": False},
                         "axisLabel": {
                             "show": True, 
-                            "distance": -30, # Angka ditarik ke dalam agar lebih rapi
+                            "distance": -35,
                             "fontSize": 11, 
                             "fontWeight": 'bold', 
                             "color": '#6B7280',
@@ -4173,17 +4171,17 @@ with tab3:
                         },
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '80%'], # Judul ditarik ke paling bawah
-                            "fontSize": 14,
+                            "offsetCenter": [0, '50%'], # Judul masuk ke dalam lingkaran
+                            "fontSize": 13,
                             "fontWeight": 'bold',
                             "color": '#6B7280'
                         },
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 36,
+                            "fontSize": 38,
                             "fontWeight": '900',
-                            "offsetCenter": [0, '40%'], # Angka utama diturunkan agar tidak tertutup jarum
+                            "offsetCenter": [0, '15%'], # Angka masuk ke dalam, pas di bawah jarum
                             "color": '#1F2937',
                             "formatter": '{value} Mo'
                         },
@@ -4215,7 +4213,7 @@ with tab3:
                 option_occ = {
                     "series": [{
                         "type": 'gauge',
-                        "center": ['50%', '50%'],
+                        "center": ['50%', '55%'],
                         "radius": '85%',
                         "startAngle": 210,
                         "endAngle": -30,
@@ -4239,13 +4237,13 @@ with tab3:
                             }
                         },
                         "pointer": {
-                            "itemStyle": {"color": 'auto'}
+                            "itemStyle": {"color": occ_color} # FIX: Warna jarum solid mengikuti status
                         },
                         "axisTick": {"show": False},
                         "splitLine": {"show": False},
                         "axisLabel": {
                             "show": True, 
-                            "distance": -30,
+                            "distance": -35,
                             "fontSize": 11, 
                             "fontWeight": 'bold', 
                             "color": '#6B7280',
@@ -4253,17 +4251,17 @@ with tab3:
                         },
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '80%'], # Ditarik ke bawah
-                            "fontSize": 14,
+                            "offsetCenter": [0, '50%'], # Judul masuk ke dalam lingkaran
+                            "fontSize": 13,
                             "fontWeight": 'bold',
                             "color": '#6B7280'
                         },
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 36,
+                            "fontSize": 38,
                             "fontWeight": '900',
-                            "offsetCenter": [0, '40%'], # Diturunkan agar bersih dari jarum
+                            "offsetCenter": [0, '15%'], # Angka masuk ke dalam, pas di bawah jarum
                             "color": '#1F2937',
                             "formatter": '{value}%'
                         },
