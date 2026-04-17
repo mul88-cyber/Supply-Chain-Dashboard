@@ -3922,44 +3922,40 @@ with tab3:
                 option_cover = {
                     "series": [{
                         "type": 'gauge',
-                        "startAngle": 180, # Setengah lingkaran presisi
+                        "startAngle": 180,
                         "endAngle": 0,
-                        "center": ['50%', '70%'], # Agak ke bawah agar muat
-                        "radius": '100%',
+                        "center": ['50%', '65%'], # Poros dinaikkan
+                        "radius": '90%',
                         "min": 0,
                         "max": 6,
                         "splitNumber": 6,
                         "axisLine": {
                             "lineStyle": {
-                                "width": 25, # Lebar rel
+                                "width": 20,
                                 "color": [
-                                    [0.133, '#EF4444'], # 0 - 0.8 Bulan (Red/Under)
-                                    [0.333, '#10B981'], # 0.8 - 2.0 Bulan (Green/Ideal)
-                                    [1, '#F59E0B']      # > 2.0 Bulan (Orange/Over)
+                                    [0.133, '#EF4444'], 
+                                    [0.333, '#10B981'], 
+                                    [1, '#F59E0B']      
                                 ]
                             }
                         },
-                        "progress": {"show": False}, # Matikan progress agar tidak meluber
+                        "progress": {"show": False},
                         "pointer": {
-                            "length": '60%',
+                            "length": '65%',
                             "width": 6,
-                            "itemStyle": {"color": '#4B5563'} # Jarum abu-abu elegan
+                            "itemStyle": {"color": '#4B5563'}
                         },
                         "axisTick": {"show": False},
-                        "splitLine": {
-                            "length": 25,
-                            "lineStyle": {"color": 'white', "width": 3} # Pemisah putih
-                        },
+                        "splitLine": {"length": 20, "lineStyle": {"color": 'white', "width": 3}},
                         "axisLabel": {
-                            "distance": 30,
+                            "distance": 15, # Dijauhkan agar tidak dempet
                             "color": '#6B7280',
                             "fontSize": 12,
-                            "fontWeight": 'bold',
-                            "formatter": '{value}'
+                            "fontWeight": 'bold'
                         },
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '35%'], # Posisi judul "Stock Coverage"
+                            "offsetCenter": [0, '45%'], # Pindah ke paling bawah
                             "fontSize": 14,
                             "fontWeight": 'bold',
                             "color": '#6B7280'
@@ -3967,9 +3963,9 @@ with tab3:
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 35,
+                            "fontSize": 34,
                             "fontWeight": '900',
-                            "offsetCenter": [0, '-15%'], # Posisi angka
+                            "offsetCenter": [0, '15%'], # ANGKA PINDAH KE BAWAH JARUM
                             "color": '#1F2937',
                             "formatter": '{value} Mo'
                         },
@@ -3997,42 +3993,38 @@ with tab3:
                         "type": 'gauge',
                         "startAngle": 180,
                         "endAngle": 0,
-                        "center": ['50%', '70%'],
-                        "radius": '100%',
+                        "center": ['50%', '65%'],
+                        "radius": '90%',
                         "min": 0,
                         "max": 100,
                         "splitNumber": 5,
                         "axisLine": {
                             "lineStyle": {
-                                "width": 25,
+                                "width": 20,
                                 "color": [
-                                    [0.8, '#10B981'],  # 0-80% (Green/Aman)
-                                    [0.9, '#F59E0B'],  # 80-90% (Orange/Warning)
-                                    [1, '#EF4444']     # 90-100% (Red/Critical)
+                                    [0.8, '#10B981'],  
+                                    [0.9, '#F59E0B'],  
+                                    [1, '#EF4444']     
                                 ]
                             }
                         },
                         "progress": {"show": False},
                         "pointer": {
-                            "length": '60%',
+                            "length": '65%',
                             "width": 6,
                             "itemStyle": {"color": '#4B5563'}
                         },
                         "axisTick": {"show": False},
-                        "splitLine": {
-                            "length": 25,
-                            "lineStyle": {"color": 'white', "width": 3}
-                        },
+                        "splitLine": {"length": 20, "lineStyle": {"color": 'white', "width": 3}},
                         "axisLabel": {
-                            "distance": 30,
+                            "distance": 15,
                             "color": '#6B7280',
                             "fontSize": 12,
-                            "fontWeight": 'bold',
-                            "formatter": '{value}%'
+                            "fontWeight": 'bold'
                         },
                         "title": {
                             "show": True,
-                            "offsetCenter": [0, '35%'],
+                            "offsetCenter": [0, '45%'],
                             "fontSize": 14,
                             "fontWeight": 'bold',
                             "color": '#6B7280'
@@ -4040,9 +4032,9 @@ with tab3:
                         "detail": {
                             "show": True,
                             "valueAnimation": True,
-                            "fontSize": 35,
+                            "fontSize": 34,
                             "fontWeight": '900',
-                            "offsetCenter": [0, '-15%'],
+                            "offsetCenter": [0, '15%'], # ANGKA PINDAH KE BAWAH JARUM
                             "color": '#1F2937',
                             "formatter": '{value}%'
                         },
