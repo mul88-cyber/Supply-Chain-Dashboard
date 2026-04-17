@@ -10,3 +10,5 @@ python-dateutil
 matplotlib
 statsmodels
 prophet
+streamlit-echarts
+streamlit-vizzu
