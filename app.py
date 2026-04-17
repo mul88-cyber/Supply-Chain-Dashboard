@@ -3077,23 +3077,28 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📋 Data Explorer" 
 ])
 
-# --- TAB 1: MONTHLY PERFORMANCE DETAILS (PREMIUM HEATMAP + STORYTELLING) ---
+# --- TAB 1: MONTHLY PERFORMANCE DETAILS (PREMIUM HEATMAP) ---
 with tab1:
-    st.subheader("📅 Monthly Performance Heatmap & Storytelling")
-    st.caption("Visualisasi interaktif: Heatmap Kalender & Animasi Storytelling untuk presentasi eksekutif.")
-
+    st.subheader("📅 Monthly Performance Details")
+    
     if monthly_performance:
-        # 1. Prepare Data (sama seperti sebelumnya)
+        # 1. Prepare Data
         summary_data = []
         prev_accuracy = 0
-
+        
         for i, (month, data) in enumerate(sorted(monthly_performance.items())):
+            # Tentukan Status & Icon
             acc = data['accuracy']
-            if acc >= 90: status_icon = "🌟 Excellent"
-            elif acc >= 80: status_icon = "✅ Good"
-            elif acc >= 70: status_icon = "⚠️ Fair"
-            else: status_icon = "🛑 Poor"
-
+            if acc >= 90:
+                status_icon = "🌟 Excellent"
+            elif acc >= 80:
+                status_icon = "✅ Good"
+            elif acc >= 70:
+                status_icon = "⚠️ Fair"
+            else:
+                status_icon = "🛑 Poor"
+            
+            # Hitung MoM Change (Delta)
             delta = acc - prev_accuracy if i > 0 else 0
             delta_str = f"{delta:+.1f}%" if i > 0 else "-"
             prev_accuracy = acc
@@ -3103,298 +3108,72 @@ with tab1:
                 'Month': month.strftime('%b %Y'),
                 'Status': status_icon,
                 'Accuracy': acc,
-                'MoM': delta_str,
+                'MoM': delta_str, # Month over Month Change
                 'Under': data['status_counts'].get('Under', 0),
                 'Accurate': data['status_counts'].get('Accurate', 0),
                 'Over': data['status_counts'].get('Over', 0),
                 'Total SKUs': data['total_records'],
                 'MAPE': data['mape']
             })
-
+        
         summary_df = pd.DataFrame(summary_data)
+        
+        # 2. Styling dengan Pandas Styler (Soft Pastel Heatmap)
+        def highlight_accuracy(val):
+            color = '#d1fae5' if val >= 80 else '#fef3c7' if val >= 70 else '#fee2e2'
+            return f'background-color: {color}; color: #374151; font-weight: bold;'
 
-        # ============================================================
-        # ENHANCEMENT 1: ECHARTS CARTESIAN HEATMAP (MONTHLY)
-        # ============================================================
-        if ECHARTS_AVAILABLE:
-            st.markdown("### 📆 Monthly Performance Heatmap (ECharts)")
-            st.caption("Semakin hijau, semakin baik akurasi. Merah menunjukkan bulan dengan performa buruk.")
+        # Create Styler Object (MENGGUNAKAN .map() BUKAN .applymap() AGAR TIDAK ERROR)
+        styler = summary_df.style\
+            .background_gradient(subset=['Under'], cmap='Reds', vmin=0, vmax=summary_df['Under'].max()*1.5)\
+            .background_gradient(subset=['Accurate'], cmap='Greens', vmin=0, vmax=summary_df['Accurate'].max())\
+            .background_gradient(subset=['Over'], cmap='Oranges', vmin=0, vmax=summary_df['Over'].max()*1.5)\
+            .map(highlight_accuracy, subset=['Accuracy'])\
+            .format({
+                'Accuracy': '{:.1f}%',
+                'MAPE': '{:.1f}%',
+                'Under': '{:,}',
+                'Accurate': '{:,}',
+                'Over': '{:,}',
+                'Total SKUs': '{:,}'
+            })
 
-            # 1. Siapkan Label X-Axis (Bulan)
-            months_label = summary_df['Month_Raw'].dt.strftime('%b %Y').tolist()
-            
-            # 2. Siapkan Data Heatmap [x_index, y_index, value]
-            heatmap_data = []
-            for i, acc_val in enumerate(summary_df['Accuracy']):
-                heatmap_data.append([i, 0, round(acc_val, 1)])
-
-            options = {
-                "tooltip": {
-                    "position": 'top',
-                    "formatter": '{c}%'
-                },
-                "grid": {
-                    "height": '40%',
-                    "top": '15%',
-                    "left": '10%',
-                    "right": '5%'
-                },
-                "xAxis": {
-                    "type": 'category',
-                    "data": months_label,
-                    "splitArea": {"show": True},
-                    "axisLabel": {"fontWeight": "bold", "color": "#4B5563"}
-                },
-                "yAxis": {
-                    "type": 'category',
-                    "data": ['Accuracy'],
-                    "splitArea": {"show": True},
-                    "axisLabel": {"fontWeight": "bold", "color": "#1F2937"}
-                },
-                "visualMap": {
-                    "min": 0,
-                    "max": 100,
-                    "calculable": True,
-                    "orient": 'horizontal',
-                    "left": 'center',
-                    "bottom": '0%',
-                    "inRange": {
-                        "color": ['#EF4444', '#F59E0B', '#10B981'] # Merah -> Kuning -> Hijau
-                    }
-                },
-                "series": [{
-                    "name": 'Accuracy',
-                    "type": 'heatmap',
-                    "data": heatmap_data,
-                    "label": {
-                        "show": True,
-                        "formatter": '{c}%',
-                        "color": '#1F2937',
-                        "fontWeight": 'bold',
-                        "fontSize": 16
-                    },
-                    "itemStyle": {
-                        "borderColor": '#ffffff',
-                        "borderWidth": 4,
-                        "borderRadius": 8
-                    },
-                    "emphasis": {
-                        "itemStyle": {
-                            "shadowBlur": 10,
-                            "shadowColor": 'rgba(0, 0, 0, 0.5)'
-                        }
-                    }
-                }]
-            }
-            
-            try:
-                # Height diperkecil jadi 250px karena sekarang bentuknya baris horizontal
-                st_echarts(options=options, height="250px", key="cartesian_heatmap")
-            except Exception as e:
-                st.warning(f"⚠️ Gagal render ECharts: {e}. Pastikan library terinstall.")
-        else:
-            st.info("ℹ️ Install `streamlit-echarts` untuk visualisasi heatmap interaktif: `pip install streamlit-echarts`")
-
-        # ============================================================
-        # ENHANCEMENT 2: ST-VIZZU ANIMATED STORY (STORYTELLING)
-        # ============================================================
-        if VIZZU_AVAILABLE:
-            st.markdown("---")
-            st.markdown("### 🎬 Animated Performance Story (st-vizzu)")
-            st.caption("Saksikan perubahan performa akurasi, under, dan over forecast dari waktu ke waktu. Gunakan tombol di bawah animasi untuk navigasi.")
-
-            # Siapkan data untuk Vizzu (harus dalam format long)
-            df_vizzu = summary_df[['Month', 'Under', 'Accurate', 'Over']].copy()
-            df_vizzu = df_vizzu.melt(id_vars=['Month'], var_name='Category', value_name='Count')
-
-            # Buat Data object
-            vizzu_data = Data()
-            vizzu_data.add_data_frame(df_vizzu)
-
-            # Buat Story
-            story = Story(data=vizzu_data)
-
-            # Slide 1: Stacked Bar Chart - Volume Absolut
-            slide1 = Slide(
-                Step(
-                    Config({
-                        "x": "Month",
-                        "y": "Count",
-                        "color": "Category",
-                        "label": "Count",
-                        "title": "Evolusi Komposisi Forecast (Under / Accurate / Over) - Volume"
-                    }),
-                    Style({
-                        "plot": {
-                            "xAxis": {
-                                "label": {
-                                    "angle": "315",
-                                    "fontSize": 10,
-                                    "fontWeight": "bold"
-                                },
-                                "title": {"color": "#666666"}
-                            },
-                            "yAxis": {
-                                "title": {"color": "#666666"}
-                            },
-                            "marker": {
-                                "colorPalette": "#F44336 #4CAF50 #FF9800"  # Merah, Hijau, Oranye
-                            }
-                        },
-                        "title": {
-                            "fontSize": 18,
-                            "fontWeight": "bold",
-                            "color": "#333333"
-                        }
-                    })
-                )
-            )
-            story.add_slide(slide1)
-
-            # Slide 2: 100% Stacked Bar - Proporsi Relatif
-            slide2 = Slide(
-                Step(
-                    Config({
-                        "y": ["Category", "Count"],
-                        "x": "Month",
-                        "coordSystem": "cartesian",
-                        "geometry": "rectangle",
-                        "align": "stretch",  # Ini membuatnya jadi 100% stacked
-                        "title": "Proporsi Relatif Setiap Bulan (100% Stacked)"
-                    }),
-                    Style({
-                        "plot": {
-                            "xAxis": {
-                                "label": {
-                                    "angle": "315",
-                                    "fontSize": 10,
-                                    "fontWeight": "bold"
-                                }
-                            },
-                            "marker": {
-                                "colorPalette": "#F44336 #4CAF50 #FF9800"
-                            }
-                        },
-                        "title": {
-                            "fontSize": 18,
-                            "fontWeight": "bold",
-                            "color": "#333333"
-                        }
-                    })
-                )
-            )
-            story.add_slide(slide2)
-
-            # Slide 3: Grouped Column - Perbandingan Berdampingan
-            slide3 = Slide(
-                Step(
-                    Config({
-                        "x": ["Month", "Category"],
-                        "y": "Count",
-                        "color": "Category",
-                        "label": "Count",
-                        "title": "Perbandingan Kategori Per Bulan (Grouped)"
-                    }),
-                    Style({
-                        "plot": {
-                            "xAxis": {
-                                "label": {
-                                    "angle": "315",
-                                    "fontSize": 10,
-                                    "fontWeight": "bold"
-                                }
-                            },
-                            "marker": {
-                                "colorPalette": "#F44336 #4CAF50 #FF9800"
-                            }
-                        },
-                        "title": {
-                            "fontSize": 18,
-                            "fontWeight": "bold",
-                            "color": "#333333"
-                        }
-                    })
-                )
-            )
-            story.add_slide(slide3)
-
-            # Tampilkan story
-            try:
-                # Set ukuran
-                story.set_size(900, 500)
-                
-                # Render menggunakan HTML component
-                import streamlit.components.v1 as components
-                components.html(story.to_html(), height=600, scrolling=False)
-                
-                st.caption("💡 **Navigasi:** ⏪ Previous | ▶️ Play/Pause | ⏩ Next | Gunakan slider di bawah untuk mempercepat/memperlambat animasi.")
-            except Exception as e:
-                st.warning(f"⚠️ Gagal render Vizzu Story: {e}")
-        else:
-            st.info("ℹ️ Install `ipyvizzu` dan `ipyvizzu-story` untuk fitur storytelling animasi:")
-            st.code("pip install ipyvizzu ipyvizzu-story", language="bash")
-
-        # ============================================================
-        # FITUR ASLI: TABEL DENGAN STYLER (TETAP DIPERTAHANKAN)
-        # ============================================================
-        st.markdown("---")
-        with st.expander("🔍 Lihat Tabel Detail Performa Bulanan (Klik untuk Expand)", expanded=False):
-            def highlight_accuracy(val):
-                color = '#d1fae5' if val >= 80 else '#fef3c7' if val >= 70 else '#fee2e2'
-                return f'background-color: {color}; color: #374151; font-weight: bold;'
-
-            # Create Styler Object
-            styler = summary_df.style\
-                .background_gradient(subset=['Under'], cmap='Reds', vmin=0, vmax=summary_df['Under'].max()*1.5)\
-                .background_gradient(subset=['Accurate'], cmap='Greens', vmin=0, vmax=summary_df['Accurate'].max())\
-                .background_gradient(subset=['Over'], cmap='Oranges', vmin=0, vmax=summary_df['Over'].max()*1.5)\
-                .applymap(highlight_accuracy, subset=['Accuracy'])\
-                .format({
-                    'Accuracy': '{:.1f}%',
-                    'MAPE': '{:.1f}%',
-                    'Under': '{:,}',
-                    'Accurate': '{:,}',
-                    'Over': '{:,}',
-                    'Total SKUs': '{:,}'
-                })
-
-            # Render Dataframe
-            st.dataframe(
-                styler,
-                column_order=['Month', 'Status', 'Accuracy', 'MoM', 'Under', 'Accurate', 'Over', 'Total SKUs', 'MAPE'],
-                column_config={
-                    "Month": st.column_config.TextColumn("Period", help="Month of analysis"),
-                    "Status": st.column_config.TextColumn("Health Score"),
-                    "Accuracy": st.column_config.ProgressColumn(
-                        "Accuracy %",
-                        format="%.1f%%",
-                        min_value=0,
-                        max_value=100,
-                    ),
-                    "MoM": st.column_config.TextColumn("Trend (MoM)", help="Change from previous month"),
-                    "Under": st.column_config.NumberColumn("📉 Under", help="Count of Under-forecast SKUs"),
-                    "Accurate": st.column_config.NumberColumn("🎯 Accurate", help="Count of Accurate SKUs"),
-                    "Over": st.column_config.NumberColumn("📈 Over", help="Count of Over-forecast SKUs"),
-                    "Total SKUs": st.column_config.NumberColumn("Total Items"),
-                    "MAPE": st.column_config.NumberColumn("MAPE", help="Mean Absolute Percentage Error")
-                },
-                use_container_width=True,
-                height=500,
-                hide_index=True
-            )
-            
-            # Legend Kecil
-            st.caption("""
-            🎨 **Color Legend:** 
-            - **Accuracy:** 🟩 Hijau (>80%), 🟨 Kuning (70-80%), 🟥 Merah (<70%).
-            - **Under/Over:** Semakin pekat warnanya, semakin banyak SKU yang bermasalah di kategori tersebut.
-            """)
-
-        # ============================================================
-        # FORECAST BIAS ANALYSIS (DIVERGING CHART) - Tetap ada
-        # ============================================================
+        # 3. Render Dataframe
+        st.dataframe(
+            styler,
+            column_order=['Month', 'Status', 'Accuracy', 'MoM', 'Under', 'Accurate', 'Over', 'Total SKUs', 'MAPE'],
+            column_config={
+                "Month": st.column_config.TextColumn("Period", help="Month of analysis"),
+                "Status": st.column_config.TextColumn("Health Score"),
+                "Accuracy": st.column_config.ProgressColumn(
+                    "Accuracy %",
+                    format="%.1f%%",
+                    min_value=0,
+                    max_value=100,
+                ),
+                "MoM": st.column_config.TextColumn("Trend (MoM)", help="Change from previous month"),
+                "Under": st.column_config.NumberColumn("📉 Under", help="Count of Under-forecast SKUs"),
+                "Accurate": st.column_config.NumberColumn("🎯 Accurate", help="Count of Accurate SKUs"),
+                "Over": st.column_config.NumberColumn("📈 Over", help="Count of Over-forecast SKUs"),
+                "Total SKUs": st.column_config.NumberColumn("Total Items"),
+                "MAPE": st.column_config.NumberColumn("MAPE", help="Mean Absolute Percentage Error")
+            },
+            use_container_width=True,
+            height=500,
+            hide_index=True
+        )
+        
+        # Legend Kecil
+        st.caption("""
+        🎨 **Color Legend:** - **Accuracy:** 🟩 Hijau (>80%), 🟨 Kuning (70-80%), 🟥 Merah (<70%).
+        - **Under/Over:** Semakin pekat warnanya, semakin banyak SKU yang bermasalah di kategori tersebut.
+        """)
+        
+        # ==============================================================================
+        # 3. PREMIUM FORECAST BIAS ANALYSIS (Diverging Chart Version)
+        # ==============================================================================
         if not forecast_bias.empty:
-            st.markdown("---")
+            st.divider()
             st.subheader("🎯 Forecast Bias & Health Analysis")
             
             # 1. Hitung Metrics Utama
@@ -3403,59 +3182,82 @@ with tab1:
             # Tentukan Tendency (Kecenderungan)
             if avg_bias_val > 5:
                 tendency = "UNDER-FORECASTING (Demand > Plan)"
-                tendency_icon = "📉"
-                tendency_color = "#3949ab"
+                tendency_icon = "📉" 
+                tendency_color = "#3949ab" 
                 risk_msg = "Risk: Potential Lost Sales (Stockout)"
             elif avg_bias_val < -5:
                 tendency = "OVER-FORECASTING (Demand < Plan)"
-                tendency_icon = "📈"
-                tendency_color = "#ef5350"
+                tendency_icon = "📈" 
+                tendency_color = "#ef5350" 
                 risk_msg = "Risk: Excess Stock & Obsolescence"
             else:
                 tendency = "BALANCED (Good Accuracy)"
                 tendency_icon = "⚖️"
-                tendency_color = "#26a69a"
+                tendency_color = "#26a69a" 
                 risk_msg = "Status: Healthy Forecast"
 
             # Hitung Jumlah Bulan Warning
             critical_months = len(forecast_bias[abs(forecast_bias['Avg_Bias_Percentage']) > 20])
             
-            # Bias Health Cards
+            # --- 2. BIAS HEALTH CARDS (CSS) ---
+            st.markdown(f"""
+            <style>
+                .bias-card {{
+                    background-color: white;
+                    border-radius: 12px;
+                    padding: 1.2rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    border-left: 5px solid {tendency_color};
+                    height: 100%;
+                }}
+                .bias-label {{ font-size: 0.8rem; color: #888; font-weight: 600; text-transform: uppercase; }}
+                .bias-val {{ font-size: 1.8rem; font-weight: 800; color: #333; margin: 5px 0; }}
+                .bias-sub {{ font-size: 0.9rem; color: {tendency_color}; font-weight: 600; }}
+                .bias-desc {{ font-size: 0.8rem; color: #666; margin-top: 5px; }}
+            </style>
+            """, unsafe_allow_html=True)
+            
             bc1, bc2, bc3 = st.columns(3)
-
+            
             with bc1:
-                st.metric(
-                    "Average Bias (YTD)",
-                    f"{avg_bias_val:+.1f}%",
-                    delta=f"{tendency_icon} {tendency}",
-                    delta_color="off"
-                )
-
+                st.markdown(f"""
+                <div class="bias-card">
+                    <div class="bias-label">AVERAGE BIAS (YTD)</div>
+                    <div class="bias-val">{avg_bias_val:+.1f}%</div>
+                    <div class="bias-sub">{tendency_icon} {tendency}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             with bc2:
-                st.metric(
-                    "Impact Analysis",
-                    risk_msg,
-                    delta=None
-                )
-
+                st.markdown(f"""
+                <div class="bias-card" style="border-left-color: #ffa726;">
+                    <div class="bias-label">IMPACT ANALYSIS</div>
+                    <div class="bias-val" style="font-size: 1.2rem; margin-top: 15px;">{risk_msg}</div>
+                    <div class="bias-desc">Based on average deviation direction</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             with bc3:
-                status_color = "🔴" if critical_months > 0 else "🟢"
-                st.metric(
-                    "Volatility Check",
-                    f"{critical_months} Months",
-                    delta=f"{status_color} >20% Deviation",
-                    delta_color="off"
-                )
-
-            # Diverging Bar Chart
+                status_color = "#ef5350" if critical_months > 0 else "#26a69a"
+                st.markdown(f"""
+                <div class="bias-card" style="border-left-color: {status_color};">
+                    <div class="bias-label">VOLATILITY CHECK</div>
+                    <div class="bias-val">{critical_months} <span style="font-size:1rem;">Months</span></div>
+                    <div class="bias-desc">Months with >20% Deviation (Critical)</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # --- 3. DIVERGING BAR CHART (Visualisasi Bias PREMIUM) ---
+            st.write("") # Spacer
+            
             colors = []
             for val in forecast_bias['Avg_Bias_Percentage']:
                 if abs(val) <= 10:
-                    colors.append('#4db6ac')
+                    colors.append('#4db6ac') # Soft Teal (Aman)
                 elif abs(val) <= 20:
-                    colors.append('#ffb74d')
+                    colors.append('#ffb74d') # Soft Orange (Warning)
                 else:
-                    colors.append('#ef5350')
+                    colors.append('#ef5350') # Soft Red (Critical)
 
             fig_bias = go.Figure()
 
@@ -3464,18 +3266,28 @@ with tab1:
                 y=forecast_bias['Avg_Bias_Percentage'],
                 text=[f"{x:+.1f}%" for x in forecast_bias['Avg_Bias_Percentage']],
                 textposition='auto',
-                textfont=dict(color='white', weight='bold'),
+                textfont=dict(color='white', weight='bold'), 
                 marker_color=colors,
                 name='Bias %',
                 hovertemplate='<b>%{x}</b><br>Bias: %{y:+.1f}%<extra></extra>'
             ))
 
-            fig_bias.add_hrect(
-                y0=-10, y1=10,
-                fillcolor="green", opacity=0.05, line_width=0,
-                annotation_text="🟢 SAFE ZONE (±10%)",
-                annotation_position="top left",
-                annotation_font_color="green"
+            fig_bias.add_hrect(y0=-10, y1=10, fillcolor="green", opacity=0.05, line_width=0, annotation_text="🟢 SAFE ZONE (±10%)", annotation_position="top left", annotation_font_color="green")
+            fig_bias.add_hrect(y0=-20, y1=-10, fillcolor="yellow", opacity=0.05, line_width=0)
+            fig_bias.add_hrect(y0=10, y1=20, fillcolor="yellow", opacity=0.05, line_width=0)
+            
+            max_bias = max(forecast_bias['Avg_Bias_Percentage'].max(), 25)
+            min_bias = min(forecast_bias['Avg_Bias_Percentage'].min(), -25)
+            
+            fig_bias.add_annotation(
+                x=0.02, y=0.95, xref="paper", yref="paper",
+                text="⬆️ UNDER FORECAST<br><span style='font-size:10px'>(Risiko Stockout / Lost Sales)</span>",
+                showarrow=False, font=dict(color="#ef5350", size=12, weight="bold"), align="left"
+            )
+            fig_bias.add_annotation(
+                x=0.02, y=0.05, xref="paper", yref="paper",
+                text="⬇️ OVER FORECAST<br><span style='font-size:10px'>(Risiko Dead Stock / Overstock)</span>",
+                showarrow=False, font=dict(color="#ef5350", size=12, weight="bold"), align="left"
             )
 
             fig_bias.update_layout(
@@ -3485,10 +3297,9 @@ with tab1:
                 height=450,
                 hovermode="x unified",
                 yaxis=dict(
-                    zeroline=True,
-                    zerolinewidth=3,
-                    zerolinecolor='rgba(0,0,0,0.5)'
-                ),
+                    zeroline=True, zerolinewidth=3, zerolinecolor='rgba(0,0,0,0.5)', 
+                    range=[min_bias*1.2, max_bias*1.2] 
+                ), 
                 plot_bgcolor='white',
                 margin=dict(t=50, b=20, l=20, r=20)
             )
@@ -3501,10 +3312,9 @@ with tab1:
             - **Bar ke Bawah (-):** Realisasi (PO) < Forecast. Artinya **Over-Forecast** (Plan ketinggian, potensi overstock).
             - **Zona Hijau:** Bias ±10% dianggap sehat.
             """)
-
     else:
         st.warning("⚠️ No monthly performance data available.")
-
+        
 # --- TAB 2: FORECAST PERFORMANCE BY BRAND & TIER ANALYSIS (FINAL FIXED) ---
 with tab2:
     st.subheader("🏷️ Brand & Tier Strategic Analysis")
