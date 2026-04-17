@@ -4778,53 +4778,86 @@ with tab5:
                 st.markdown(render_kpi("GAP (SALES vs PLAN)", f"{gap:+,.0f}", "Units Variance", gap_col), unsafe_allow_html=True)
 
             # ==============================================================================
-            # 3. MAIN COMPARISON CHART (GROUPED BAR) - "MUDAH DIPAHAMI"
+            # 3. MAIN COMPARISON CHART (ANIMATED STORYTELLING DENGAN VIZZU)
             # ==============================================================================
             st.divider()
-            st.subheader("📊 Performance Triad: Plan vs Exec vs Result")
-            st.caption("Grafik ini membandingkan langsung posisi Rencana (Rofo), Pembelian (PO), dan Penjualan (Sales) setiap bulan.")
+            st.subheader("🎬 Performance Triad Story: Plan vs Exec vs Result")
+            st.caption("Klik tombol 'Play' (▶️) di bawah grafik untuk melihat animasi perubahan sudut pandang data.")
 
-            fig_main = go.Figure()
+            if VIZZU_AVAILABLE and not df_trend.empty:
+                # 1. Siapkan Data dalam format Long (Tidy) untuk Vizzu
+                df_vizzu = df_trend[['Month_Txt', 'Rofo', 'PO', 'Sales']].copy()
+                df_vizzu = df_vizzu.melt(id_vars=['Month_Txt'], value_vars=['Rofo', 'PO', 'Sales'], var_name='Metric', value_name='Quantity')
+                
+                # Buat objek Data Vizzu
+                vizzu_data = Data()
+                vizzu_data.add_data_frame(df_vizzu)
+                
+                # Inisialisasi Story
+                story = Story(data=vizzu_data)
+                
+                # Atur warna custom (Rofo=Indigo, PO=Orange, Sales=Teal)
+                custom_style = Style({
+                    "plot": {
+                        "marker": { "colorPalette": "#3949AB #FFB74D #4DB6AC" },
+                        "xAxis": { "label": { "angle": "-45" } }
+                    }
+                })
 
-            # Rofo (Plan) - Garis Putus-putus (sebagai baseline/acuan)
-            fig_main.add_trace(go.Scatter(
-                x=df_trend['Month_Txt'], y=df_trend['Rofo'],
-                name='Plan (Rofo)',
-                mode='lines+markers',
-                line=dict(color='#3949AB', width=3, dash='dash'), # Indigo putus-putus
-                marker=dict(size=8, color='#3949AB')
-            ))
+                # SLIDE 1: OVERALL TOTAL (Bar Chart Biasa)
+                slide1 = Slide(
+                    Step(
+                        Config({
+                            "x": "Metric", "y": "Quantity", "color": "Metric",
+                            "title": "1. Overall Performance Comparison (Total Horizon)",
+                            "label": "Quantity"
+                        }),
+                        custom_style
+                    )
+                )
+                story.add_slide(slide1)
 
-            # PO (Execution) - Bar Kuning
-            fig_main.add_trace(go.Bar(
-                x=df_trend['Month_Txt'], y=df_trend['PO'],
-                name='Execution (PO)',
-                marker_color='#FFB74D', # Soft Orange
-                text=[f"{x:,.0f}" for x in df_trend['PO']],
-                textposition='auto'
-            ))
+                # SLIDE 2: BREAKDOWN PER BULAN (Grouped Bar Chart)
+                slide2 = Slide(
+                    Step(
+                        Config({
+                            "x": ["Month_Txt", "Metric"], "y": "Quantity", "color": "Metric",
+                            "title": "2. Monthly Breakdown (Rofo vs PO vs Sales)",
+                            "label": None # Matikan label agar tidak semrawut
+                        })
+                    )
+                )
+                story.add_slide(slide2)
 
-            # Sales (Result) - Bar Hijau
-            fig_main.add_trace(go.Bar(
-                x=df_trend['Month_Txt'], y=df_trend['Sales'],
-                name='Result (Sales)',
-                marker_color='#4DB6AC', # Soft Teal
-                text=[f"{x:,.0f}" for x in df_trend['Sales']],
-                textposition='auto'
-            ))
+                # SLIDE 3: PERUBAHAN KE TREND (Line Chart)
+                slide3 = Slide(
+                    Step(
+                        Config({
+                            "geometry": "line",
+                            "x": "Month_Txt", "y": "Quantity", "color": "Metric",
+                            "title": "3. Trend Analysis Over Time"
+                        })
+                    )
+                )
+                story.add_slide(slide3)
 
-            fig_main.update_layout(
-                height=450,
-                xaxis_title="Month",
-                yaxis_title="Quantity (Units)",
-                barmode='group', # Grouped bar agar berdampingan
-                hovermode="x unified",
-                legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
-                plot_bgcolor='white',
-                margin=dict(t=50, b=20, l=20, r=20)
-            )
-            
-            st.plotly_chart(fig_main, use_container_width=True)
+                # Render Story di Streamlit menggunakan iframe/HTML
+                story.set_feature("tooltip", True)
+                story.set_size("100%", "450px")
+                
+                import streamlit.components.v1 as components
+                # Tampilkan animasi
+                components.html(story.to_html(), height=500)
+                
+            else:
+                # Fallback ke Plotly biasa jika Vizzu tidak terinstall
+                st.warning("Memuat grafik standar. Install `ipyvizzu-story` untuk melihat animasi presentasi.")
+                fig_main = go.Figure()
+                fig_main.add_trace(go.Scatter(x=df_trend['Month_Txt'], y=df_trend['Rofo'], name='Plan (Rofo)', mode='lines+markers', line=dict(color='#3949AB', width=3, dash='dash')))
+                fig_main.add_trace(go.Bar(x=df_trend['Month_Txt'], y=df_trend['PO'], name='Execution (PO)', marker_color='#FFB74D'))
+                fig_main.add_trace(go.Bar(x=df_trend['Month_Txt'], y=df_trend['Sales'], name='Result (Sales)', marker_color='#4DB6AC'))
+                fig_main.update_layout(height=450, barmode='group', hovermode="x unified", plot_bgcolor='white')
+                st.plotly_chart(fig_main, use_container_width=True)
 
             # ==============================================================================
             # 4. TOP GAP ANALYSIS (VOLUME RISK IMPACT)
