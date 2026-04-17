@@ -39,10 +39,11 @@ except ImportError:
     VIZZU_AVAILABLE = False
 
 try:
-    import streamlit_echarts as st_echarts
+    from streamlit_echarts import st_echarts
     ECHARTS_AVAILABLE = True
 except ImportError:
     ECHARTS_AVAILABLE = False
+    st_echarts = None  # Placeholder
     
 # --- Konfigurasi Halaman ---
 st.set_page_config(
@@ -4091,7 +4092,7 @@ with tab3:
                 "linear-gradient(135deg, #fb8c00 0%, #ef6c00 100%)"), unsafe_allow_html=True)
 
         # ==============================================================================
-        # 3. STOCK COVER & OCCUPANCY DASHBOARD (ECHARTS PREMIUM GAUGE)
+        # 3. STOCK COVER & OCCUPANCY DASHBOARD (FIXED RESPONSIVE GAUGE)
         # ==============================================================================
         st.write("")
         st.subheader("⚡ Inventory Health & Warehouse Utilization")
@@ -4099,112 +4100,143 @@ with tab3:
         col_speed1, col_speed2 = st.columns(2)
         
         with col_speed1:
-            # --- ECHARTS GAUGE: GLOBAL COVERAGE ---
-            cover_color = "#10B981" # Green
-            if global_cover_months < 0.8: cover_color = "#EF4444" # Red
-            elif global_cover_months > 2.0: cover_color = "#F59E0B" # Orange
-
-            option_cover = {
-                "tooltip": {"formatter": "{a} <br/>{b} : {c} Months"},
-                "series": [
-                    {
-                        "name": "Global Coverage",
-                        "type": "gauge",
+            # Gauge: Global Coverage menggunakan ECharts
+            if ECHARTS_AVAILABLE:
+                option_cover = {
+                    "series": [{
+                        "type": 'gauge',
+                        "center": ['50%', '60%'],
+                        "radius": '80%',
+                        "startAngle": 210,
+                        "endAngle": -30,
                         "min": 0,
                         "max": 6,
                         "splitNumber": 6,
                         "progress": {
                             "show": True,
                             "width": 18,
-                            "itemStyle": {"color": cover_color}
+                            "roundCap": True,
+                            "itemStyle": {
+                                "color": {
+                                    "type": 'linear',
+                                    "x": 0, "y": 0, "x2": 1, "y2": 0,
+                                    "colorStops": [
+                                        {"offset": 0, "color": '#EF4444'},
+                                        {"offset": 0.3, "color": '#F59E0B'},
+                                        {"offset": 0.6, "color": '#10B981'},
+                                        {"offset": 1, "color": '#3B82F6'}
+                                    ]
+                                }
+                            }
                         },
-                        "axisLine": {
-                            "lineStyle": {"width": 18}
-                        },
+                        "axisLine": {"lineStyle": {"width": 18, "color": [[0.3, '#EF4444'], [0.6, '#F59E0B'], [1, '#10B981']]}},
                         "axisTick": {"show": False},
-                        "splitLine": {
-                            "length": 15,
-                            "lineStyle": {"width": 2, "color": "#999"}
+                        "splitLine": {"show": False},
+                        "axisLabel": {"show": True, "fontSize": 12, "fontWeight": 'bold', "color": '#4B5563'},
+                        "anchor": {"show": True, "size": 20},
+                        "title": {
+                            "show": True,
+                            "offsetCenter": [0, '25%'],
+                            "fontSize": 14,
+                            "fontWeight": 'bold',
+                            "color": '#4B5563'
                         },
-                        "pointer": {
-                            "icon": 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
-                            "length": '12%',
-                            "width": 20,
-                            "offsetCenter": [0, '-60%'],
-                            "itemStyle": {"color": 'auto'}
-                        },
-                        "axisLabel": {
-                            "distance": 25,
-                            "color": '#999',
-                            "fontSize": 14
-                        },
-                        "title": {"show": False},
                         "detail": {
+                            "show": True,
                             "valueAnimation": True,
-                            "formatter": "{value} Mo",
-                            "color": "#1F2937",
-                            "fontSize": 30,
-                            "fontWeight": "bold",
-                            "offsetCenter": [0, '20%']
+                            "fontSize": 32,
+                            "fontWeight": 'bold',
+                            "offsetCenter": [0, 0],
+                            "color": '#1F2937'
                         },
-                        "data": [{"value": round(global_cover_months, 1), "name": "Coverage"}]
-                    }
-                ]
-            }
+                        "data": [{
+                            "value": global_cover_months,
+                            "name": "Stock Coverage"
+                        }]
+                    }]
+                }
+                
+                try:
+                    st_echarts(
+                        options=option_cover, 
+                        height="350px",
+                        key="gauge_cover"
+                    )
+                except Exception as e:
+                    st.warning(f"⚠️ Gagal render gauge: {str(e)}")
+                    st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo")
+            else:
+                st.metric("Global Stock Cover", f"{global_cover_months:.1f} Mo", help="Total Stock / Total Sales")
             
-            st.markdown("<div style='text-align: center; font-weight: bold; color: #4B5563; margin-bottom: -20px;'>Global Inventory Coverage</div>", unsafe_allow_html=True)
-            st_echarts(options=option_cover, height="300px")
-            st.markdown("<div style='text-align: center; color: #6B7280; font-size: 0.9rem; margin-top: -30px;'>Target: <b>0.8 - 2.0 Bulan</b></div>", unsafe_allow_html=True)
-
+            st.caption("Target: **0.8 - 2.0 Bulan**")
+        
         with col_speed2:
-            # --- ECHARTS GAUGE: WH OCCUPANCY ---
-            occ_color = "#10B981" if occupancy_pct <= 80 else "#EF4444"
-            
-            option_occ = {
-                "tooltip": {"formatter": "{a} <br/>{b} : {c}%"},
-                "series": [
-                    {
-                        "name": "WH Occupancy",
-                        "type": "gauge",
+            # Gauge: WH Occupancy
+            if ECHARTS_AVAILABLE:
+                occ_color = "#10B981" if occupancy_pct < 80 else "#F59E0B" if occupancy_pct < 90 else "#EF4444"
+                
+                option_occ = {
+                    "series": [{
+                        "type": 'gauge',
+                        "center": ['50%', '60%'],
+                        "radius": '80%',
+                        "startAngle": 210,
+                        "endAngle": -30,
+                        "min": 0,
+                        "max": 100,
+                        "splitNumber": 5,
                         "progress": {
                             "show": True,
                             "width": 18,
+                            "roundCap": True,
                             "itemStyle": {"color": occ_color}
                         },
                         "axisLine": {
-                            "lineStyle": {"width": 18}
+                            "lineStyle": {
+                                "width": 18,
+                                "color": [[0.6, '#10B981'], [0.85, '#F59E0B'], [1, '#EF4444']]
+                            }
                         },
                         "axisTick": {"show": False},
-                        "splitLine": {
-                            "length": 15,
-                            "lineStyle": {"width": 2, "color": "#999"}
-                        },
-                        "pointer": {
-                            "length": '50%',
-                            "width": 6,
-                            "itemStyle": {"color": '#4B5563'}
-                        },
-                        "axisLabel": {
-                            "distance": 25,
-                            "color": '#999',
-                            "fontSize": 14
+                        "splitLine": {"show": False},
+                        "axisLabel": {"show": True, "fontSize": 12, "fontWeight": 'bold', "color": '#4B5563'},
+                        "anchor": {"show": True, "size": 20},
+                        "title": {
+                            "show": True,
+                            "offsetCenter": [0, '25%'],
+                            "fontSize": 14,
+                            "fontWeight": 'bold',
+                            "color": '#4B5563'
                         },
                         "detail": {
+                            "show": True,
                             "valueAnimation": True,
-                            "formatter": "{value}%",
-                            "color": "#1F2937",
-                            "fontSize": 30,
-                            "fontWeight": "bold",
-                            "offsetCenter": [0, '40%']
+                            "fontSize": 32,
+                            "fontWeight": 'bold',
+                            "offsetCenter": [0, 0],
+                            "color": '#1F2937',
+                            "formatter": '{value}%'
                         },
-                        "data": [{"value": round(occupancy_pct, 1), "name": "Occupancy"}]
-                    }
-                ]
-            }
+                        "data": [{
+                            "value": occupancy_pct,
+                            "name": "Occupancy"
+                        }]
+                    }]
+                }
+                
+                try:
+                    st_echarts(
+                        options=option_occ, 
+                        height="350px",
+                        key="gauge_occ"
+                    )
+                except Exception as e:
+                    st.warning(f"⚠️ Gagal render gauge: {str(e)}")
+                    st.metric("Warehouse Occupancy", f"{occupancy_pct:.1f}%")
+            else:
+                st.metric("Warehouse Occupancy", f"{occupancy_pct:.1f}%")
             
-            st.markdown("<div style='text-align: center; font-weight: bold; color: #4B5563; margin-bottom: -20px;'>Warehouse Occupancy</div>", unsafe_allow_html=True)
-            st_echarts(options=option_occ, height="300px")
-            st.markdown(f"<div style='text-align: center; color: #6B7280; font-size: 0.9rem; margin-top: -30px;'>Capacity Used: <b>{current_occupancy:,.0f} / {WH_CAPACITY:,.0f} pcs</b></div>", unsafe_allow_html=True)
+            st.caption(f"Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs")
 
         # ==============================================================================
         # 3.5 ACTIONABLE INVENTORY ALERTS (ACTIVE & REGULAR SKU ONLY)
