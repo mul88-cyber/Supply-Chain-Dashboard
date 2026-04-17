@@ -8,6 +8,7 @@ from datetime import datetime, date, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 from dateutil.relativedelta import relativedelta
+from streamlit_echarts import st_echarts
 import warnings
 from tenacity import retry, stop_after_attempt, wait_exponential
 import math
@@ -3896,7 +3897,7 @@ with tab3:
                 "linear-gradient(135deg, #fb8c00 0%, #ef6c00 100%)"), unsafe_allow_html=True)
 
         # ==============================================================================
-        # 3. STOCK COVER & OCCUPANCY DASHBOARD (FIXED RESPONSIVE GAUGE)
+        # 3. STOCK COVER & OCCUPANCY DASHBOARD (ECHARTS PREMIUM GAUGE)
         # ==============================================================================
         st.write("")
         st.subheader("⚡ Inventory Health & Warehouse Utilization")
@@ -3904,60 +3905,112 @@ with tab3:
         col_speed1, col_speed2 = st.columns(2)
         
         with col_speed1:
-            # Gauge: Global Coverage
-            fig_cover = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=global_cover_months, # <--- UBAH DI SINI
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Global Inventory Coverage (Months)", 'font': {'size': 15, 'color': '#4B5563'}}, # <--- UBAH JUDULNYA
-                number={'font': {'size': 36, 'color': '#1F2937'}, 'valueformat': '.1f'}, # <--- Format 1 desimal
-                gauge={
-                    'axis': {'range': [0, 6], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                    'bar': {'color': "#7986cb", 'thickness': 0.3}, # Bar dipertipis sedikit
-                    'steps': [
-                        {'range': [0, 0.8], 'color': "#ef5350"},
-                        {'range': [0.8, 2.0], 'color': "#4db6ac"},
-                        {'range': [2.0, 6], 'color': "#ffb74d"}
-                    ],
-                    'threshold': {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': 2.0}
-                }
-            ))
-            fig_cover.update_layout(
-                height=280, # Tinggi diturunkan sedikit agar presisi
-                margin=dict(t=40, b=10, l=0, r=0), # KUNCI FIX: Margin Kiri (l) dan Kanan (r) dibuat 0
-                autosize=True
-            )
-            st.plotly_chart(fig_cover, use_container_width=True)
-            st.caption("Target: **0.8 - 2.0 Bulan**")
+            # --- ECHARTS GAUGE: GLOBAL COVERAGE ---
+            cover_color = "#10B981" # Green
+            if global_cover_months < 0.8: cover_color = "#EF4444" # Red
+            elif global_cover_months > 2.0: cover_color = "#F59E0B" # Orange
+
+            option_cover = {
+                "tooltip": {"formatter": "{a} <br/>{b} : {c} Months"},
+                "series": [
+                    {
+                        "name": "Global Coverage",
+                        "type": "gauge",
+                        "min": 0,
+                        "max": 6,
+                        "splitNumber": 6,
+                        "progress": {
+                            "show": True,
+                            "width": 18,
+                            "itemStyle": {"color": cover_color}
+                        },
+                        "axisLine": {
+                            "lineStyle": {"width": 18}
+                        },
+                        "axisTick": {"show": False},
+                        "splitLine": {
+                            "length": 15,
+                            "lineStyle": {"width": 2, "color": "#999"}
+                        },
+                        "pointer": {
+                            "icon": 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
+                            "length": '12%',
+                            "width": 20,
+                            "offsetCenter": [0, '-60%'],
+                            "itemStyle": {"color": 'auto'}
+                        },
+                        "axisLabel": {
+                            "distance": 25,
+                            "color": '#999',
+                            "fontSize": 14
+                        },
+                        "title": {"show": False},
+                        "detail": {
+                            "valueAnimation": True,
+                            "formatter": "{value} Mo",
+                            "color": "#1F2937",
+                            "fontSize": 30,
+                            "fontWeight": "bold",
+                            "offsetCenter": [0, '20%']
+                        },
+                        "data": [{"value": round(global_cover_months, 1), "name": "Coverage"}]
+                    }
+                ]
+            }
+            
+            st.markdown("<div style='text-align: center; font-weight: bold; color: #4B5563; margin-bottom: -20px;'>Global Inventory Coverage</div>", unsafe_allow_html=True)
+            st_echarts(options=option_cover, height="300px")
+            st.markdown("<div style='text-align: center; color: #6B7280; font-size: 0.9rem; margin-top: -30px;'>Target: <b>0.8 - 2.0 Bulan</b></div>", unsafe_allow_html=True)
 
         with col_speed2:
-            # Gauge: WH Occupancy
-            occ_color = "#4db6ac" if occupancy_pct < 80 else "#ef5350"
-            fig_occ = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=occupancy_pct,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Warehouse Occupancy (%)", 'font': {'size': 15, 'color': '#4B5563'}},
-                number={'font': {'size': 36, 'color': '#1F2937'}}, # Kunci ukuran font
-                delta={'reference': 80, 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}, 'font': {'size': 20}},
-                gauge={
-                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                    'bar': {'color': occ_color, 'thickness': 0.3},
-                    'steps': [
-                        {'range': [0, 60], 'color': "#e0f2f1"}, 
-                        {'range': [60, 85], 'color': "#fff3e0"}, 
-                        {'range': [85, 100], 'color': "#ffebee"}
-                    ],
-                    'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 85}
-                }
-            ))
-            fig_occ.update_layout(
-                height=280, # Tinggi diturunkan sedikit agar presisi
-                margin=dict(t=40, b=10, l=0, r=0), # KUNCI FIX: Margin Kiri (l) dan Kanan (r) dibuat 0
-                autosize=True
-            )
-            st.plotly_chart(fig_occ, use_container_width=True)
-            st.caption(f"Capacity Used: **{current_occupancy:,.0f}** / **{WH_CAPACITY:,.0f}** pcs")
+            # --- ECHARTS GAUGE: WH OCCUPANCY ---
+            occ_color = "#10B981" if occupancy_pct <= 80 else "#EF4444"
+            
+            option_occ = {
+                "tooltip": {"formatter": "{a} <br/>{b} : {c}%"},
+                "series": [
+                    {
+                        "name": "WH Occupancy",
+                        "type": "gauge",
+                        "progress": {
+                            "show": True,
+                            "width": 18,
+                            "itemStyle": {"color": occ_color}
+                        },
+                        "axisLine": {
+                            "lineStyle": {"width": 18}
+                        },
+                        "axisTick": {"show": False},
+                        "splitLine": {
+                            "length": 15,
+                            "lineStyle": {"width": 2, "color": "#999"}
+                        },
+                        "pointer": {
+                            "length": '50%',
+                            "width": 6,
+                            "itemStyle": {"color": '#4B5563'}
+                        },
+                        "axisLabel": {
+                            "distance": 25,
+                            "color": '#999',
+                            "fontSize": 14
+                        },
+                        "detail": {
+                            "valueAnimation": True,
+                            "formatter": "{value}%",
+                            "color": "#1F2937",
+                            "fontSize": 30,
+                            "fontWeight": "bold",
+                            "offsetCenter": [0, '40%']
+                        },
+                        "data": [{"value": round(occupancy_pct, 1), "name": "Occupancy"}]
+                    }
+                ]
+            }
+            
+            st.markdown("<div style='text-align: center; font-weight: bold; color: #4B5563; margin-bottom: -20px;'>Warehouse Occupancy</div>", unsafe_allow_html=True)
+            st_echarts(options=option_occ, height="300px")
+            st.markdown(f"<div style='text-align: center; color: #6B7280; font-size: 0.9rem; margin-top: -30px;'>Capacity Used: <b>{current_occupancy:,.0f} / {WH_CAPACITY:,.0f} pcs</b></div>", unsafe_allow_html=True)
 
         # ==============================================================================
         # 3.5 ACTIONABLE INVENTORY ALERTS (ACTIVE & REGULAR SKU ONLY)
