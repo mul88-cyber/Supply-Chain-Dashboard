@@ -12,3 +12,4 @@ statsmodels
 prophet
 streamlit-echarts
 streamlit-vizzu
+ipyvizzu-story
