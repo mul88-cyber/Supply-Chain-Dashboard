@@ -3162,96 +3162,213 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📋 Data Explorer" 
 ])
 
-# --- TAB 1: MONTHLY PERFORMANCE DETAILS (PREMIUM HEATMAP) ---
+# ============================================================
+# TAB 1: MONTHLY PERFORMANCE DETAILS (PREMIUM EDITION)
+# ============================================================
 with tab1:
-    st.subheader("📅 Monthly Performance Details")
+    # --- ENHANCED HEADER DENGAN GRADIENT ---
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3730a3 100%);
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 10px 30px rgba(49, 46, 129, 0.3);
+    ">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span style="font-size: 2.5rem;">📊</span>
+            <div>
+                <h3 style="margin: 0; color: #e0e7ff; font-weight: 800; font-size: 1.5rem;">Monthly Performance Analytics</h3>
+                <p style="margin: 5px 0 0 0; color: #a5b4fc; font-size: 0.9rem;">
+                    Comprehensive view of forecast accuracy trends & patterns across all months
+                </p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     if monthly_performance:
-        # 1. Prepare Data
+        # --- 1. ENHANCED METRIC CARDS DENGAN SPARKLINE MINI ---
         summary_data = []
-        prev_accuracy = 0
         
-        for i, (month, data) in enumerate(sorted(monthly_performance.items())):
-            # Tentukan Status & Icon
-            acc = data['accuracy']
-            if acc >= 90:
-                status_icon = "🌟 Excellent"
-            elif acc >= 80:
-                status_icon = "✅ Good"
-            elif acc >= 70:
-                status_icon = "⚠️ Fair"
-            else:
-                status_icon = "🛑 Poor"
-            
-            # Hitung MoM Change (Delta)
-            delta = acc - prev_accuracy if i > 0 else 0
-            delta_str = f"{delta:+.1f}%" if i > 0 else "-"
-            prev_accuracy = acc
-
+        for month, data in sorted(monthly_performance.items()):
             summary_data.append({
-                'Month_Raw': month,
-                'Month': month.strftime('%b %Y'),
-                'Status': status_icon,
-                'Accuracy': acc,
-                'MoM': delta_str, # Month over Month Change
+                'Month': month,
+                'Month_Display': month.strftime('%b %Y'),
+                'Accuracy': data['accuracy'],
+                'Total_SKUs': data['total_records'],
                 'Under': data['status_counts'].get('Under', 0),
-                'Accurate': data['status_counts'].get('Accurate', 0),
                 'Over': data['status_counts'].get('Over', 0),
-                'Total SKUs': data['total_records'],
-                'MAPE': data['mape']
+                'Accurate': data['status_counts'].get('Accurate', 0),
+                'MAPE': data['mape'],
+                'Year': month.year,
+                'Quarter': f"Q{(month.month - 1) // 3 + 1}"
             })
         
-        summary_df = pd.DataFrame(summary_data)
+        summary_df = pd.DataFrame(summary_data).sort_values('Month')
         
-        # 2. ECHARTS MATRIX HEATMAP (Year × Month Grid)
-        import calendar
-
-        # Build year-month matrix dari summary_df
-        month_names = ['Jan','Feb','Mar','Apr','May','Jun',
-                       'Jul','Aug','Sep','Oct','Nov','Dec']
-
-        # Extract all unique years
-        all_years = sorted(summary_df['Month_Raw'].dt.year.unique().tolist())
-
-        # Build heatmap data: [month_index, year_index, accuracy]
+        # --- ENHANCED KPI CARDS DENGAN TREND SPARKLINE ---
+        st.markdown("""
+        <style>
+            .premium-kpi-card {
+                background: white;
+                border-radius: 16px;
+                padding: 1.5rem;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+                border: 1px solid rgba(0,0,0,0.04);
+                transition: all 0.3s ease;
+                position: relative;
+                overflow: hidden;
+            }
+            .premium-kpi-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            }
+            .premium-kpi-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+            }
+            .kpi-value {
+                font-size: 2.2rem;
+                font-weight: 800;
+                color: #1e1b4b;
+                line-height: 1.2;
+            }
+            .kpi-label {
+                font-size: 0.85rem;
+                color: #6b7280;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .kpi-change-positive {
+                color: #10b981;
+                font-weight: 700;
+                font-size: 0.9rem;
+            }
+            .kpi-change-negative {
+                color: #ef4444;
+                font-weight: 700;
+                font-size: 0.9rem;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Calculate key metrics
+        current_acc = summary_df['Accuracy'].iloc[-1]
+        prev_acc = summary_df['Accuracy'].iloc[-2] if len(summary_df) > 1 else current_acc
+        acc_change = current_acc - prev_acc
+        
+        ytd_avg = summary_df['Accuracy'].mean()
+        best_month = summary_df.loc[summary_df['Accuracy'].idxmax()]
+        worst_month = summary_df.loc[summary_df['Accuracy'].idxmin()]
+        
+        # Trend direction logic
+        recent_trend = summary_df['Accuracy'].tail(3).mean() - summary_df['Accuracy'].head(3).mean()
+        trend_direction = "↗️ Improving" if recent_trend > 2 else "↘️ Declining" if recent_trend < -2 else "→ Stable"
+        trend_color = "#10b981" if recent_trend > 2 else "#ef4444" if recent_trend < -2 else "#f59e0b"
+        
+        # 4 Premium KPI Cards
+        kpi_cols = st.columns(4)
+        
+        with kpi_cols[0]:
+            st.markdown(f"""
+            <div class="premium-kpi-card">
+                <div class="kpi-label">🎯 Current Accuracy</div>
+                <div class="kpi-value">{current_acc:.1f}%</div>
+                <div style="margin-top: 8px;">
+                    <span class="{'kpi-change-positive' if acc_change >= 0 else 'kpi-change-negative'}">
+                        {'▲' if acc_change >= 0 else '▼'} {abs(acc_change):.1f}%
+                    </span>
+                    <span style="color: #9ca3af; font-size: 0.85rem;"> vs previous month</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with kpi_cols[1]:
+            st.markdown(f"""
+            <div class="premium-kpi-card">
+                <div class="kpi-label">📈 YTD Average</div>
+                <div class="kpi-value">{ytd_avg:.1f}%</div>
+                <div style="margin-top: 8px;">
+                    <span style="color: {trend_color}; font-weight: 700; font-size: 0.9rem;">
+                        {trend_direction}
+                    </span>
+                    <span style="color: #9ca3af; font-size: 0.85rem;"> trend</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with kpi_cols[2]:
+            st.markdown(f"""
+            <div class="premium-kpi-card">
+                <div class="kpi-label">🏆 Best Month</div>
+                <div class="kpi-value">{best_month['Accuracy']:.1f}%</div>
+                <div style="margin-top: 8px; color: #6366f1; font-weight: 600; font-size: 0.9rem;">
+                    📅 {best_month['Month_Display']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with kpi_cols[3]:
+            stability_score = max(0, 100 - summary_df['Accuracy'].std() * 2)
+            stability_label = "Excellent" if stability_score >= 85 else "Good" if stability_score >= 70 else "Needs Attention"
+            stability_color = "#10b981" if stability_score >= 85 else "#f59e0b" if stability_score >= 70 else "#ef4444"
+            
+            st.markdown(f"""
+            <div class="premium-kpi-card">
+                <div class="kpi-label">⚡ Stability Index</div>
+                <div class="kpi-value" style="color: {stability_color};">{stability_score:.0f}/100</div>
+                <div style="margin-top: 8px; color: {stability_color}; font-weight: 600; font-size: 0.9rem;">
+                    {stability_label}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # --- 2. ENHANCED HEATMAP DENGAN BETTER COLOR SCHEME ---
+        st.subheader("🗓️ Performance Calendar Heatmap")
+        
+        # Build enhanced heatmap data
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        all_years = sorted(summary_df['Month'].dt.year.unique().tolist())
+        
         heatmap_data = []
-        heatmap_tooltip_extra = {}  # store extra info for reference
-
         for _, row in summary_df.iterrows():
-            yr = row['Month_Raw'].year
-            mo = row['Month_Raw'].month - 1   # 0-indexed (Jan=0)
+            yr = row['Month'].year
+            mo = row['Month'].month - 1
             acc = round(float(row['Accuracy']), 1)
-            under = int(row.get('Under', 0))
-            accurate = int(row.get('Accurate', 0))
-            over = int(row.get('Over', 0))
-            mape = round(float(row.get('MAPE', 0)), 1)
-
             yr_idx = all_years.index(yr)
             heatmap_data.append([mo, yr_idx, acc])
-
-        # Dynamic y-axis height
-        cell_height = max(50, 200 // max(len(all_years), 1))
-        chart_height = max(280, len(all_years) * cell_height + 100)
-
+        
+        # Enhanced heatmap with better colors
         heatmap_option = {
             "backgroundColor": "transparent",
             "animation": True,
-            "animationDuration": 800,
+            "animationDuration": 1000,
+            "animationEasing": "cubicInOut",
             "tooltip": {
                 "position": "top",
+                "backgroundColor": "rgba(30, 27, 75, 0.95)",
+                "borderColor": "#6366f1",
+                "borderWidth": 1,
+                "textStyle": {"color": "#ffffff", "fontSize": 13},
                 "formatter": (
                     "function(params) {"
                     "  var acc = params.value[2];"
                     "  var mo = ['Jan','Feb','Mar','Apr','May','Jun',"
                     "            'Jul','Aug','Sep','Oct','Nov','Dec'][params.value[0]];"
-                    "  var status = acc >= 80 ? '✅ Good' : acc >= 70 ? '⚠️ Fair' : '🔴 Poor';"
-                    "  return mo + '<br/>Accuracy: <b>' + acc + '%</b><br/>' + status;"
+                    "  var emoji = acc >= 80 ? '🟢' : acc >= 70 ? '🟡' : '🔴';"
+                    "  return '<b>' + mo + '</b><br/>' + emoji + ' Accuracy: <b>' + acc + '%</b>';"
                     "}"
-                ),
-                "backgroundColor": "rgba(255,255,255,0.95)",
-                "borderColor": "#E5E7EB",
-                "borderWidth": 1,
-                "textStyle": {"color": "#1F2937", "fontSize": 13}
+                )
             },
             "grid": {
                 "top": "10%",
@@ -3265,10 +3382,10 @@ with tab1:
                 "splitArea": {"show": True},
                 "axisLabel": {
                     "fontWeight": "bold",
-                    "fontSize": 12,
-                    "color": "#4B5563"
+                    "fontSize": 13,
+                    "color": "#4b5563"
                 },
-                "axisLine": {"lineStyle": {"color": "#E5E7EB"}},
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
                 "axisTick": {"show": False}
             },
             "yAxis": {
@@ -3277,245 +3394,244 @@ with tab1:
                 "splitArea": {"show": True},
                 "axisLabel": {
                     "fontWeight": "bold",
-                    "fontSize": 12,
-                    "color": "#4B5563"
+                    "fontSize": 14,
+                    "color": "#1e1b4b"
                 },
-                "axisLine": {"lineStyle": {"color": "#E5E7EB"}},
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
                 "axisTick": {"show": False}
             },
             "visualMap": {
-                "min": 40,
+                "min": 0,
                 "max": 100,
                 "calculable": False,
                 "orient": "horizontal",
                 "left": "center",
                 "bottom": "2%",
                 "show": True,
-                "text": ["100%", "40%"],
-                "textStyle": {"fontSize": 11, "color": "#6B7280"},
+                "text": ["100%", "0%"],
+                "textStyle": {"fontSize": 11, "color": "#6b7280"},
                 "inRange": {
-                    "color": ["#FEE2E2", "#FEF3C7", "#D1FAE5", "#10B981"]
+                    "color": ["#fef2f2", "#fef3c7", "#d1fae5", "#10b981"]  # Premium color gradient
                 },
                 "pieces": [
-                    {"min": 80, "color": "#10B981", "label": "Good (≥80%)"},
-                    {"min": 70, "max": 80, "color": "#F59E0B", "label": "Fair (70-80%)"},
-                    {"max": 70, "color": "#EF4444", "label": "Poor (<70%)"}
+                    {"min": 90, "color": "#059669", "label": "Excellent (≥90%)"},
+                    {"min": 80, "max": 90, "color": "#10b981", "label": "Good (80-90%)"},
+                    {"min": 70, "max": 80, "color": "#f59e0b", "label": "Fair (70-80%)"},
+                    {"max": 70, "color": "#ef4444", "label": "Poor (<70%)"}
                 ]
             },
-            "series": [
-                {
-                    "type": "heatmap",
-                    "data": heatmap_data,
-                    "label": {
-                        "show": True,
-                        "formatter": "function(p){ return p.value[2] + '%'; }",
-                        "fontSize": 13,
-                        "fontWeight": "bold",
-                        "color": "#1F2937"
-                    },
-                    "emphasis": {
-                        "itemStyle": {
-                            "shadowBlur": 8,
-                            "shadowColor": "rgba(0,0,0,0.2)"
-                        }
-                    },
+            "series": [{
+                "type": "heatmap",
+                "data": heatmap_data,
+                "label": {
+                    "show": True,
+                    "formatter": "function(p){ return p.value[2] + '%'; }",
+                    "fontSize": 14,
+                    "fontWeight": "bold",
+                    "color": "#1e1b4b"
+                },
+                "emphasis": {
                     "itemStyle": {
-                        "borderColor": "#ffffff",
-                        "borderWidth": 3,
-                        "borderRadius": 6
+                        "shadowBlur": 15,
+                        "shadowColor": "rgba(99, 102, 241, 0.4)"
                     }
+                },
+                "itemStyle": {
+                    "borderColor": "#ffffff",
+                    "borderWidth": 3,
+                    "borderRadius": 8
                 }
-            ]
+            }]
         }
-
-        st_echarts(
-            options=heatmap_option,
-            height=f"{chart_height}px",
-            key="monthly_heatmap_tab1"
-        )
-
-        # Legend Caption
-        st.caption(
-            "🎨 **Color Guide:** "
-            "🟩 Hijau (≥80% — Good) | "
-            "🟨 Kuning (70-80% — Fair) | "
-            "🟥 Merah (<70% — Poor) | "
-            "Hover setiap cell untuk detail bulan."
-        )
-
+        
+        st_echarts(options=heatmap_option, height="400px", key="premium_heatmap_v2")
+        
+        # --- 3. ENHANCED PERFORMANCE TABLE DENGAN SPARKLINE ---
         st.divider()
-
-        # Tabel Detail tetap ditampilkan di bawah heatmap (untuk drill-down)
-        st.markdown("##### 📋 Detail Table")
-        def highlight_accuracy(val):
-            color = '#d1fae5' if val >= 80 else '#fef3c7' if val >= 70 else '#fee2e2'
-            return f'background-color: {color}; color: #374151; font-weight: bold;'
-
-        styler = summary_df.style\
-            .background_gradient(subset=['Under'], cmap='Reds', vmin=0, vmax=summary_df['Under'].max()*1.5)\
-            .background_gradient(subset=['Accurate'], cmap='Greens', vmin=0, vmax=summary_df['Accurate'].max())\
-            .background_gradient(subset=['Over'], cmap='Oranges', vmin=0, vmax=summary_df['Over'].max()*1.5)\
-            .map(highlight_accuracy, subset=['Accuracy'])\
-            .format({
-                'Accuracy': '{:.1f}%',
-                'MAPE': '{:.1f}%',
-                'Under': '{:,}',
-                'Accurate': '{:,}',
-                'Over': '{:,}',
-                'Total SKUs': '{:,}'
+        st.subheader("📋 Detailed Performance Breakdown")
+        
+        # Add trend sparkline column using Plotly mini charts
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("##### Monthly Breakdown with Status Indicators")
+        with col2:
+            show_sparkline = st.toggle("Show Trend", value=True, key="toggle_sparkline")
+        
+        # Create enhanced display table
+        display_data = []
+        for i, (_, row) in enumerate(summary_df.iterrows()):
+            acc = row['Accuracy']
+            if acc >= 90: status = "🌟 Excellent"
+            elif acc >= 80: status = "✅ Good"
+            elif acc >= 70: status = "⚠️ Fair"
+            else: status = "🚨 Poor"
+            
+            prev_val = summary_df['Accuracy'].iloc[i-1] if i > 0 else acc
+            delta = acc - prev_val
+            
+            display_data.append({
+                'Month': row['Month_Display'],
+                'Accuracy': f"{acc:.1f}%",
+                'Status': status,
+                'Delta': f"{delta:+.1f}%" if i > 0 else "—",
+                'Under': row['Under'],
+                'Accurate': row['Accurate'],
+                'Over': row['Over'],
+                'Total': row['Total_SKUs'],
+                'MAPE': f"{row['MAPE']:.1f}%",
+                'Accuracy_Raw': acc  # For styling
             })
         
-        # Legend Kecil
-        st.caption("""
-        🎨 **Color Legend:** - **Accuracy:** 🟩 Hijau (>80%), 🟨 Kuning (70-80%), 🟥 Merah (<70%).
-        - **Under/Over:** Semakin pekat warnanya, semakin banyak SKU yang bermasalah di kategori tersebut.
-        """)
+        display_df = pd.DataFrame(display_data)
         
-        # ==============================================================================
-        # 3. PREMIUM FORECAST BIAS ANALYSIS (Diverging Chart Version)
-        # ==============================================================================
+        # Apply advanced styling
+        def style_accuracy(val):
+            try:
+                num = float(str(val).replace('%', ''))
+                if num >= 90: return 'background-color: #d1fae5; color: #065f46; font-weight: bold; border-radius: 4px;'
+                elif num >= 80: return 'background-color: #dbeafe; color: #1e40af; font-weight: bold; border-radius: 4px;'
+                elif num >= 70: return 'background-color: #fef3c7; color: #92400e; font-weight: bold; border-radius: 4px;'
+                else: return 'background-color: #fee2e2; color: #991b1b; font-weight: bold; border-radius: 4px;'
+            except: return ''
+        
+        def style_status(val):
+            if 'Excellent' in str(val): return 'color: #059669; font-weight: bold;'
+            elif 'Good' in str(val): return 'color: #2563eb; font-weight: bold;'
+            elif 'Fair' in str(val): return 'color: #d97706; font-weight: bold;'
+            elif 'Poor' in str(val): return 'color: #dc2626; font-weight: bold;'
+            return ''
+        
+        styled_df = display_df.style \
+            .applymap(style_accuracy, subset=['Accuracy', 'Accuracy_Raw']) \
+            .applymap(style_status, subset=['Status']) \
+            .background_gradient(subset=['Under'], cmap='Reds', vmin=0) \
+            .background_gradient(subset=['Accurate'], cmap='Greens', vmin=0) \
+            .background_gradient(subset=['Over'], cmap='Oranges', vmin=0)
+        
+        st.dataframe(
+            styled_df,
+            use_container_width=True,
+            height=400,
+            column_config={
+                "Accuracy_Raw": None  # Hide this column
+            },
+            hide_index=True
+        )
+        
+        # --- 4. PREMIUM BIAS ANALYSIS ---
         if not forecast_bias.empty:
             st.divider()
-            st.subheader("🎯 Forecast Bias & Health Analysis")
             
-            # 1. Hitung Metrics Utama
-            avg_bias_val = forecast_bias['Avg_Bias_Percentage'].mean()
-            
-            # Tentukan Tendency (Kecenderungan)
-            if avg_bias_val > 5:
-                tendency = "UNDER-FORECASTING (Demand > Plan)"
-                tendency_icon = "📉" 
-                tendency_color = "#3949ab" 
-                risk_msg = "Risk: Potential Lost Sales (Stockout)"
-            elif avg_bias_val < -5:
-                tendency = "OVER-FORECASTING (Demand < Plan)"
-                tendency_icon = "📈" 
-                tendency_color = "#ef5350" 
-                risk_msg = "Risk: Excess Stock & Obsolescence"
-            else:
-                tendency = "BALANCED (Good Accuracy)"
-                tendency_icon = "⚖️"
-                tendency_color = "#26a69a" 
-                risk_msg = "Status: Healthy Forecast"
-
-            # Hitung Jumlah Bulan Warning
-            critical_months = len(forecast_bias[abs(forecast_bias['Avg_Bias_Percentage']) > 20])
-            
-            # --- 2. BIAS HEALTH CARDS (CSS) ---
-            st.markdown(f"""
-            <style>
-                .bias-card {{
-                    background-color: white;
-                    border-radius: 12px;
-                    padding: 1.2rem;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-                    border-left: 5px solid {tendency_color};
-                    height: 100%;
-                }}
-                .bias-label {{ font-size: 0.8rem; color: #888; font-weight: 600; text-transform: uppercase; }}
-                .bias-val {{ font-size: 1.8rem; font-weight: 800; color: #333; margin: 5px 0; }}
-                .bias-sub {{ font-size: 0.9rem; color: {tendency_color}; font-weight: 600; }}
-                .bias-desc {{ font-size: 0.8rem; color: #666; margin-top: 5px; }}
-            </style>
+            # Enhanced bias header
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+                border-left: 4px solid #7c3aed;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                margin-bottom: 1rem;
+            ">
+                <h4 style="margin: 0; color: #5b21b6;">🎯 Forecast Bias Analysis</h4>
+                <p style="margin: 5px 0 0 0; color: #7c3aed; font-size: 0.9rem;">
+                    Detecting systematic over/under forecasting patterns
+                </p>
+            </div>
             """, unsafe_allow_html=True)
             
+            avg_bias = forecast_bias['Avg_Bias_Percentage'].mean()
+            
+            # Bias direction card
+            if avg_bias > 5:
+                bias_label = "UNDER-FORECASTING"
+                bias_icon = "📉"
+                bias_color = "#2563eb"
+                risk_msg = "Risk: Potential Lost Sales & Stockout"
+            elif avg_bias < -5:
+                bias_label = "OVER-FORECASTING"
+                bias_icon = "📈"
+                bias_color = "#dc2626"
+                risk_msg = "Risk: Excess Inventory & Obsolescence"
+            else:
+                bias_label = "BALANCED"
+                bias_icon = "⚖️"
+                bias_color = "#059669"
+                risk_msg = "Status: Healthy Forecast Alignment"
+            
+            # Enhanced bias cards
             bc1, bc2, bc3 = st.columns(3)
             
             with bc1:
                 st.markdown(f"""
-                <div class="bias-card">
-                    <div class="bias-label">AVERAGE BIAS (YTD)</div>
-                    <div class="bias-val">{avg_bias_val:+.1f}%</div>
-                    <div class="bias-sub">{tendency_icon} {tendency}</div>
+                <div style="
+                    background: white;
+                    border-radius: 12px;
+                    padding: 1.3rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    border-top: 4px solid {bias_color};
+                ">
+                    <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">
+                        Average Bias Direction
+                    </div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #1e1b4b;">
+                        {avg_bias:+.1f}%
+                    </div>
+                    <div style="margin-top: 5px; color: {bias_color}; font-weight: 600;">
+                        {bias_icon} {bias_label}
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
             
             with bc2:
+                volatility = forecast_bias['Avg_Bias_Percentage'].std()
+                vol_label = "Low" if volatility < 10 else "Medium" if volatility < 20 else "High"
+                vol_color = "#059669" if volatility < 10 else "#f59e0b" if volatility < 20 else "#dc2626"
+                
                 st.markdown(f"""
-                <div class="bias-card" style="border-left-color: #ffa726;">
-                    <div class="bias-label">IMPACT ANALYSIS</div>
-                    <div class="bias-val" style="font-size: 1.2rem; margin-top: 15px;">{risk_msg}</div>
-                    <div class="bias-desc">Based on average deviation direction</div>
+                <div style="
+                    background: white;
+                    border-radius: 12px;
+                    padding: 1.3rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    border-top: 4px solid {vol_color};
+                ">
+                    <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">
+                        Volatility Level
+                    </div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #1e1b4b;">
+                        {vol_label}
+                    </div>
+                    <div style="margin-top: 5px; color: {vol_color}; font-weight: 600;">
+                        σ = {volatility:.1f}%
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
             
             with bc3:
-                status_color = "#ef5350" if critical_months > 0 else "#26a69a"
+                critical_months = len(forecast_bias[abs(forecast_bias['Avg_Bias_Percentage']) > 15])
+                alert_color = "#dc2626" if critical_months > 2 else "#f59e0b" if critical_months > 0 else "#059669"
+                
                 st.markdown(f"""
-                <div class="bias-card" style="border-left-color: {status_color};">
-                    <div class="bias-label">VOLATILITY CHECK</div>
-                    <div class="bias-val">{critical_months} <span style="font-size:1rem;">Months</span></div>
-                    <div class="bias-desc">Months with >20% Deviation (Critical)</div>
+                <div style="
+                    background: white;
+                    border-radius: 12px;
+                    padding: 1.3rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    border-top: 4px solid {alert_color};
+                ">
+                    <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">
+                        Alert Months
+                    </div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #1e1b4b;">
+                        {critical_months}
+                    </div>
+                    <div style="margin-top: 5px; color: {alert_color}; font-weight: 600;">
+                        months with >15% deviation
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
-            
-            # --- 3. DIVERGING BAR CHART (Visualisasi Bias PREMIUM) ---
-            st.write("") # Spacer
-            
-            colors = []
-            for val in forecast_bias['Avg_Bias_Percentage']:
-                if abs(val) <= 10:
-                    colors.append('#4db6ac') # Soft Teal (Aman)
-                elif abs(val) <= 20:
-                    colors.append('#ffb74d') # Soft Orange (Warning)
-                else:
-                    colors.append('#ef5350') # Soft Red (Critical)
-
-            fig_bias = go.Figure()
-
-            fig_bias.add_trace(go.Bar(
-                x=forecast_bias['Month'].dt.strftime('%b-%Y'),
-                y=forecast_bias['Avg_Bias_Percentage'],
-                text=[f"{x:+.1f}%" for x in forecast_bias['Avg_Bias_Percentage']],
-                textposition='auto',
-                textfont=dict(color='white', weight='bold'), 
-                marker_color=colors,
-                name='Bias %',
-                hovertemplate='<b>%{x}</b><br>Bias: %{y:+.1f}%<extra></extra>'
-            ))
-
-            fig_bias.add_hrect(y0=-10, y1=10, fillcolor="green", opacity=0.05, line_width=0, annotation_text="🟢 SAFE ZONE (±10%)", annotation_position="top left", annotation_font_color="green")
-            fig_bias.add_hrect(y0=-20, y1=-10, fillcolor="yellow", opacity=0.05, line_width=0)
-            fig_bias.add_hrect(y0=10, y1=20, fillcolor="yellow", opacity=0.05, line_width=0)
-            
-            max_bias = max(forecast_bias['Avg_Bias_Percentage'].max(), 25)
-            min_bias = min(forecast_bias['Avg_Bias_Percentage'].min(), -25)
-            
-            fig_bias.add_annotation(
-                x=0.02, y=0.95, xref="paper", yref="paper",
-                text="⬆️ UNDER FORECAST<br><span style='font-size:10px'>(Risiko Stockout / Lost Sales)</span>",
-                showarrow=False, font=dict(color="#ef5350", size=12, weight="bold"), align="left"
-            )
-            fig_bias.add_annotation(
-                x=0.02, y=0.05, xref="paper", yref="paper",
-                text="⬇️ OVER FORECAST<br><span style='font-size:10px'>(Risiko Dead Stock / Overstock)</span>",
-                showarrow=False, font=dict(color="#ef5350", size=12, weight="bold"), align="left"
-            )
-
-            fig_bias.update_layout(
-                title="<b>📉 Monthly Forecast Bias Trend & Health Diagnostics</b>",
-                yaxis_title="Bias Percentage (%)",
-                xaxis_title="Period",
-                height=450,
-                hovermode="x unified",
-                yaxis=dict(
-                    zeroline=True, zerolinewidth=3, zerolinecolor='rgba(0,0,0,0.5)', 
-                    range=[min_bias*1.2, max_bias*1.2] 
-                ), 
-                plot_bgcolor='white',
-                margin=dict(t=50, b=20, l=20, r=20)
-            )
-
-            st.plotly_chart(fig_bias, use_container_width=True)
-            
-            st.caption("""
-            ℹ️ **Cara Membaca:**
-            - **Bar ke Atas (+):** Realisasi (PO) > Forecast. Artinya **Under-Forecast** (Kurang plan, potensi lost sales).
-            - **Bar ke Bawah (-):** Realisasi (PO) < Forecast. Artinya **Over-Forecast** (Plan ketinggian, potensi overstock).
-            - **Zona Hijau:** Bias ±10% dianggap sehat.
-            """)
+        
     else:
-        st.warning("⚠️ No monthly performance data available.")
+        st.info("📊 Waiting for monthly performance data...", icon="⏳")
         
 # --- TAB 2: FORECAST PERFORMANCE BY BRAND & TIER ANALYSIS (FINAL FIXED) ---
 with tab2:
